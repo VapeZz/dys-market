@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Market Insights · Drive Your Style</title>
+<meta name="description" content="Nightly market prices, biggest movers and set values for Pokémon and One Piece sealed product and cards.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g'%3E%3Cstop offset='0' stop-color='%235ee7ff'/%3E%3Cstop offset='.5' stop-color='%23a78bfa'/%3E%3Cstop offset='1' stop-color='%23ff7ad9'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3C/svg%3E">
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("dys-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
+</head>
+<body data-page="index">
+<header id="top"></header>
+<main>
+
+<section class="hero"><div class="wrap">
+  <span class="eyebrow"><b>●</b> Live market data · Beta</span>
+  <h1>Know the market <span class="holo">before you rip.</span></h1>
+  <p class="lead">We record the going market price for Pokémon and One Piece sealed product and cards every night, so you can see what's moving before you buy, sell or hold.</p>
+  <div class="search" data-search><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input type="search" placeholder="Search products &amp; cards" aria-label="Search products and cards" autocomplete="off"><div class="results"></div></div>
+  <div class="chips" id="game-chips"></div>
+</div></section>
+<div class="wrap"><div class="stats" id="stats"><div class="stat"><div class="skeleton"></div></div><div class="stat"><div class="skeleton"></div></div><div class="stat"><div class="skeleton"></div></div><div class="stat"><div class="skeleton"></div></div></div></div>
+<section class="block"><div class="wrap">
+  <div class="block-head"><div><h2>Biggest sealed movers</h2><p>Sealed products over $5, ranked by market price change.</p></div><a class="more" href="trends.html">Full trends →</a></div>
+  <div id="sealed-movers"></div>
+</div></section>
+<section class="block"><div class="wrap">
+  <div class="block-head"><div><h2>Biggest card movers</h2><p>Single cards over $5, ranked by market price change.</p></div><a class="more" href="cards.html">All card movers →</a></div>
+  <div id="card-movers"></div>
+</div></section>
+<section class="block" id="stock-block"><div class="wrap">
+  <div class="block-head"><div><h2>In stock at Drive Your Style</h2><p>Our price next to today's market price.</p></div><a class="more" href="https://driveyourstyle.net/collections/sealed-product">Shop sealed →</a></div>
+  <div class="grid" id="stock"></div>
+</div></section>
+<section class="block"><div class="wrap">
+  <div class="cta"><div><h2>Get restock &amp; drop alerts</h2><p>Be first to know when new sets, singles and sneakers land at Drive Your Style.</p></div>
+  <a class="btn" href="https://driveyourstyle.net/#newsletter">Sign up at the store →</a></div>
+</div></section>
+<section class="block"><div class="wrap">
+  <div class="block-head"><div><h2>Recent &amp; upcoming sets</h2><p>Booster box market price and 7-day change in total sealed value.</p></div><a class="more" href="sets.html">All sets →</a></div>
+  <div id="recent"></div>
+</div></section>
+</main>
+<footer id="foot"></footer>
+<script src="assets/app.js"></script>
+</body>
+</html>

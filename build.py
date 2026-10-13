@@ -1,0 +1,250 @@
+"""Turn the catalog + snapshots into the small JSON files the website reads."""
+import json
+import os
+import re
+import shutil
+from datetime import date, timedelta
+
+import config
+import snapshots
+
+BOOSTER_BOX = re.compile(r"\bbooster box\b", re.I)
+NOT_BOX = re.compile(r"\b(case|bundle|half|sleeved|display case|lot)\b", re.I)
+
+
+def pct(new, old):
+    return round((new - old) / old * 100, 1)
+
+
+def write(rel, data):
+    path = os.path.join(config.OUT_DIR, rel)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+
+
+def label(products, key):
+    pid, sub = key.split(":", 1)
+    p = products[pid]
+    name = p["n"]
+    if p["t"] == "c" and sub not in ("Normal",):
+        name = f"{name} ({sub})"
+    return pid, name
+
+
+def build(groups, products, stock, log=print):
+    days = snapshots.available()
+    if not days:
+        raise RuntimeError("No price snapshots yet. Run the nightly job first.")
+    latest_day = days[-1]
+    latest = snapshots.load(latest_day)
+    # keep only keys we know about
+    latest = {k: v for k, v in latest.items() if k.split(":", 1)[0] in products}
+    log(f"build: latest snapshot {latest_day}, {len(latest)} prices, {len(days)} snapshots on hand")
+
+    if os.path.isdir(config.OUT_DIR):
+        shutil.rmtree(config.OUT_DIR)
+    os.makedirs(config.OUT_DIR)
+
+    game_of = {gid: g["k"] for gid, g in groups.items()}
+
+    # ---- window anchors -------------------------------------------------
+    anchors = {}
+    for w in config.MOVER_WINDOWS:
+        if w == "all":
+            d = days[0] if days[0] != latest_day else None
+        else:
+            d = snapshots.closest_on_or_before(days, snapshots.minus_days(latest_day, w))
+        anchors[str(w)] = d
+
+    # ---- per-item changes for 7/30/90 (used on set pages) --------------
+    changes = {}  # key -> {"7": pct, ...}
+    for w in ("7", "30", "90"):
+        d = anchors.get(w)
+        if not d:
+            continue
+        old = snapshots.load(d)
+        for k, v in latest.items():
+            o = old.get(k)
+            if o and o >= 50:
+                changes.setdefault(k, {})[w] = pct(v, o)
+        del old
+
+    # ---- movers ---------------------------------------------------------
+    kinds = {"s": "sealed", "c": "cards"}
+    game_slugs = ["all"] + [g["slug"] for g in config.GAMES]
+    movers = {f"{kind}-{gs}": {"anchors": anchors, "windows": {}} for kind in kinds.values() for gs in game_slugs}
+    for w, d in anchors.items():
+        if not d:
+            continue
+        old = snapshots.load(d)
+        buckets = {}
+        for k, v in latest.items():
+            o = old.get(k)
+            if not o or o < 100:  # ignore items that were under $1
+                continue
+            pid = k.split(":", 1)[0]
+            p = products[pid]
+            if v < config.MOVER_THRESHOLDS[0] * 100:
+                continue
+            row = [int(pid), label(products, k)[1], p["g"], v, o, pct(v, o)]
+            for gs in ("all", p["k"]):
+                buckets.setdefault(f"{kinds[p['t']]}-{gs}", []).append(row)
+        del old
+        for name, rows in buckets.items():
+            per_thr = {}
+            for thr in config.MOVER_THRESHOLDS:
+                eligible = [r for r in rows if r[3] >= thr * 100]
+                up = sorted((r for r in eligible if r[5] > 0), key=lambda r: -r[5])[: config.MOVERS_PER_LIST]
+                down = sorted((r for r in eligible if r[5] < 0), key=lambda r: r[5])[: config.MOVERS_PER_LIST]
+                per_thr[str(thr)] = {"up": up, "down": down}
+            movers[name]["windows"][w] = per_thr
+    for name, data in movers.items():
+        write(f"movers/{name}.json", data)
+
+    # ---- sets -----------------------------------------------------------
+    by_set = {}
+    for k, v in latest.items():
+        pid = k.split(":", 1)[0]
+        by_set.setdefault(str(products[pid]["g"]), []).append(k)
+    products_per_set = {}
+    for pid, p in products.items():
+        products_per_set[str(p["g"])] = products_per_set.get(str(p["g"]), 0) + 1
+
+    sealed_change = {}
+    d7 = anchors.get("7")
+    if d7:
+        old = snapshots.load(d7)
+        for gid, keys in by_set.items():
+            now_sum = old_sum = 0
+            for k in keys:
+                if products[k.split(":", 1)[0]]["t"] != "s":
+                    continue
+                o = old.get(k)
+                if o:
+                    now_sum += latest[k]
+                    old_sum += o
+            if old_sum >= 500:
+                sealed_change[gid] = pct(now_sum, old_sum)
+        del old
+
+    sets_out = []
+    for gid, g in groups.items():
+        keys = by_set.get(gid, [])
+        bb_key = None
+        for k in keys:
+            pid = k.split(":", 1)[0]
+            nm = products[pid]["n"]
+            if products[pid]["t"] == "s" and BOOSTER_BOX.search(nm) and not NOT_BOX.search(nm):
+                if bb_key is None or latest[k] > latest[bb_key]:
+                    bb_key = k
+        sets_out.append({
+            "id": int(gid), "n": g["name"], "a": g["abbr"], "k": g["k"], "pub": g["pub"],
+            "np": products_per_set.get(gid, 0),
+            "bb": latest[bb_key] if bb_key else None,
+            "bbId": int(bb_key.split(":")[0]) if bb_key else None,
+            "c7": sealed_change.get(gid),
+        })
+    sets_out.sort(key=lambda s: s["pub"] or "", reverse=True)
+    write("sets.json", sets_out)
+
+    # ---- per-set detail with price history ------------------------------
+    series_days = pick_series_days(days, latest_day)
+    tracked = [k for k, v in latest.items() if v >= 100]
+    idx = {k: i for i, k in enumerate(tracked)}
+    series = [[None] * len(series_days) for _ in tracked]
+    for j, d in enumerate(series_days):
+        snap = latest if d == latest_day else snapshots.load(d)
+        for k, i in idx.items():
+            v = snap.get(k)
+            if v is not None:
+                series[i][j] = v
+        del snap
+
+    for gid, keys in by_set.items():
+        g = groups.get(gid)
+        if not g:
+            continue
+        items = []
+        for k in sorted(keys, key=lambda k: -latest[k]):
+            pid, name = label(products, k)
+            p = products[pid]
+            item = {"id": int(pid), "n": name, "t": p["t"], "p": latest[k]}
+            if p.get("no"):
+                item["no"] = p["no"]
+            if p.get("r"):
+                item["r"] = p["r"]
+            if k in changes:
+                item["ch"] = changes[k]
+            if k in idx:
+                item["s"] = series[idx[k]]
+            if pid in stock:
+                item["dys"] = stock[pid]
+            items.append(item)
+        write(f"set/{gid}.json", {
+            "id": int(gid), "n": g["name"], "a": g["abbr"], "k": g["k"], "pub": g["pub"],
+            "dates": series_days, "items": items,
+        })
+
+    # ---- search index ---------------------------------------------------
+    search = []
+    for k, v in latest.items():
+        pid, name = label(products, k)
+        p = products[pid]
+        if p["t"] == "c" and v < 100:
+            continue
+        search.append([int(pid), name, p["g"], p["t"], v])
+    search.sort(key=lambda r: -r[4])
+    write("search.json", search)
+
+    # ---- in-stock list + meta --------------------------------------------
+    stock_rows = []
+    for pid, s in stock.items():
+        p = products.get(pid)
+        if not p:
+            continue
+        mk = max((v for k, v in latest.items() if k.startswith(pid + ":")), default=None)
+        stock_rows.append({"id": int(pid), "n": p["n"], "g": p["g"], "k": p["k"], "t": p["t"],
+                           "m": mk, **s})
+    stock_rows.sort(key=lambda r: -(r["m"] or 0))
+    write("stock.json", stock_rows)
+
+    sealed_priced = {k.split(":")[0] for k in latest if products[k.split(":")[0]]["t"] == "s"}
+    cards_priced = {k.split(":")[0] for k in latest if products[k.split(":")[0]]["t"] == "c"}
+    today = date.fromisoformat(latest_day)
+    recent = [s for s in sets_out if s["pub"] and s["pub"] <= (today + timedelta(days=120)).isoformat()][:12]
+    meta = {
+        "updated": latest_day,
+        "first": days[0],
+        "sealed": len(sealed_priced),
+        "cards": len(cards_priced),
+        "sets": len(groups),
+        "games": [
+            {"slug": g["slug"], "label": g["label"],
+             "sets": sum(1 for x in groups.values() if x["k"] == g["slug"])}
+            for g in config.GAMES
+        ],
+        "groups": {gid: [g["name"], g["k"]] for gid, g in groups.items()},
+        "recent": [s["id"] for s in recent],
+        "anchors": anchors,
+        "store": config.STORE_URL,
+    }
+    write("meta.json", meta)
+    log(f"build: wrote {len(by_set)} set files, {len(search)} search rows, {len(stock_rows)} in-stock")
+
+
+def pick_series_days(days, latest_day):
+    """Daily for the last 30 days, then about weekly back one year."""
+    t = date.fromisoformat(latest_day)
+    picked, last_weekly = [], None
+    for d in reversed(days):
+        age = (t - date.fromisoformat(d)).days
+        if age > 366:
+            break
+        if age <= 30:
+            picked.append(d)
+            last_weekly = d
+        elif last_weekly is None or (date.fromisoformat(last_weekly) - date.fromisoformat(d)).days >= 7:
+            picked.append(d)
+            last_weekly = d
+    return sorted(picked)
