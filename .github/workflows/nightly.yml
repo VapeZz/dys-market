@@ -1,0 +1,76 @@
+name: Nightly market update
+
+on:
+  schedule:
+    # TCGCSV publishes around 20:00 UTC; run after it (1:30pm PDT / 2:30pm PST).
+    - cron: "30 21 * * *"
+  workflow_dispatch:
+    inputs:
+      backfill:
+        description: "Download past prices (first run only, takes ~10-20 min)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore saved prices (data branch)
+        run: |
+          if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then
+            git clone --depth 1 --branch data "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" /tmp/data-branch
+            rm -rf data && cp -r /tmp/data-branch/data ./data
+            echo "Restored $(ls data/snapshots | wc -l) snapshots"
+          else
+            echo "No saved data yet (first run)."
+            mkdir -p data
+          fi
+          # keep any store overrides committed on main
+          if [ -f store-overrides.json ]; then cp store-overrides.json data/store-overrides.json; fi
+
+      - name: Backfill past prices
+        if: ${{ inputs.backfill }}
+        run: |
+          which 7z || sudo apt-get install -y p7zip-full
+          python pipeline/backfill.py
+
+      - name: Download today's prices and build site data
+        run: python pipeline/run.py
+
+      - name: Save prices (data branch)
+        run: |
+          rm -rf /tmp/data-out && mkdir -p /tmp/data-out
+          cp -r data /tmp/data-out/data
+          cd /tmp/data-out
+          git init -q -b data
+          git config user.name "dys-market-bot"
+          git config user.email "dys-market-bot@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Price data $(date -u +%F)"
+          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" data
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4
