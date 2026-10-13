@@ -13,8 +13,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
   group: nightly
@@ -24,9 +22,6 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -68,9 +63,13 @@ jobs:
           git commit -q -m "Price data $(date -u +%F)"
           git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" data
 
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-      - id: deploy
-        uses: actions/deploy-pages@v4
+      - name: Publish site (gh-pages branch)
+        run: |
+          rm -rf /tmp/site-out && cp -r site /tmp/site-out && touch /tmp/site-out/.nojekyll
+          cd /tmp/site-out
+          git init -q -b gh-pages
+          git config user.name "dys-market-bot"
+          git config user.email "dys-market-bot@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Site $(date -u +%F)"
+          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" gh-pages

@@ -22,7 +22,7 @@ It costs nothing to run. Prices come from the free daily TCGplayer data at [tcgc
    - On a Mac, the `.github` folder is hidden. In Finder, press **Cmd + Shift + .** to show it, and make sure it gets uploaded. Without it, nothing runs nightly.
 
 ### 2. Turn on Pages and the nightly job
-1. Go to **Settings → Pages**. Under **Build and deployment → Source**, choose **GitHub Actions**.
+1. After the first run, go to **Settings → Pages** and make sure the source is **Deploy from a branch → gh-pages / (root)**. GitHub usually sets this automatically.
 2. Go to **Settings → Actions → General**. Under **Workflow permissions**, choose **Read and write permissions** and click **Save**.
 
 ### 3. First run, with price history
