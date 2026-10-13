@@ -334,6 +334,7 @@ async function pageCards() {
   const gl = Object.fromEntries(meta.games.map((g) => [g.slug, g.label]));
   let game = "all", setId = "", win = "7", recent = false;
   const yearAgo = new Date(new Date(meta.updated) - 365 * 864e5).toISOString().slice(0, 10);
+  const pubOf = Object.fromEntries(sets.map((x) => [x.id, x.pub]));
   const setSel = $("#set");
   const fillSets = () => {
     const list = sets.filter((s) => (game === "all" || s.k === game) && (!recent || s.pub >= yearAgo) && s.pub <= meta.updated);
@@ -348,6 +349,12 @@ async function pageCards() {
       const w = win === "365" || win === "all" ? "90" : win;
       const rows = set.items.filter((i) => i.t === "c" && i.p >= 500 && i.ch?.[w] != null)
         .map((i) => [i.id, i.n, set.id, i.p, Math.round(i.p / (1 + i.ch[w] / 100)), i.ch[w]]);
+      if (!rows.length) {  // no history yet: show the set's most valuable cards
+        const top = set.items.filter((i) => i.t === "c" && i.p >= 500).sort((a, b) => b.p - a.p).slice(0, 50).map((i) => [i.id, i.n, set.id, i.p]);
+        showTop(top, `${startsOn(meta, win).trim() || "Not enough price history for this view yet."} Meanwhile, here are this set's most valuable cards.`);
+        return;
+      }
+      setHeads(false);
       up.innerHTML = moverRows(rows.filter((r) => r[5] > 0).sort((a, b) => b[5] - a[5]), meta, 25);
       down.innerHTML = moverRows(rows.filter((r) => r[5] < 0).sort((a, b) => a[5] - b[5]), meta, 25);
       $("#note").textContent = win !== w ? "Single-set view goes back 90 days." : "";
@@ -356,9 +363,27 @@ async function pageCards() {
     $("#note").textContent = recent ? "Showing cards from sets released in the last 12 months." : "";
     const data = await getJSON(`movers/cards-${game}.json`);
     const w = data.windows[win]?.["5"] || {};
-    const keep = (r) => !recent || (sets.find((s) => s.id === r[2])?.pub || "") >= yearAgo;
+    const keep = (r) => !recent || (pubOf[r[2]] || "") >= yearAgo;
+    if (!w.up?.length && !w.down?.length) {  // no history yet: most valuable cards today
+      const top = (await getJSON("search.json"))
+        .filter((r) => r[3] === "c" && r[4] >= 500 && (game === "all" || meta.groups[r[2]]?.[1] === game) && keep(r))
+        .slice(0, 50).map((r) => [r[0], r[1], r[2], r[4]]);
+      showTop(top, `${startsOn(meta, win).trim() || "Not enough price history for this view yet."} Meanwhile, here are today's most valuable cards${recent ? " from the last 12 months" : ""}.`);
+      return;
+    }
+    setHeads(false);
     up.innerHTML = moverRows((w.up || []).filter(keep), meta, 25, win);
     down.innerHTML = moverRows((w.down || []).filter(keep), meta, 25, win);
+  };
+  const setHeads = (fallback) => document.querySelectorAll(".movers .panel h3").forEach((h, i) => {
+    h.innerHTML = fallback ? (i ? "Most valuable (cont.)" : "Most valuable today") : (i ? `<span class="chg down">▼</span> Biggest drops` : `<span class="chg up">▲</span> Biggest gains`);
+  });
+  const showTop = (rows, note) => {
+    setHeads(true);
+    const half = Math.ceil(rows.length / 2);
+    $("[data-up]").innerHTML = rows.length ? `<div class="empty-note" style="padding-bottom:6px">${note}</div>` + topRows(rows.slice(0, half), meta, 0) : `<div class="empty-note">No cards over $5 match these filters yet.</div>`;
+    $("[data-down]").innerHTML = rows.length > half ? topRows(rows.slice(half), meta, half) : `<div class="empty-note">—</div>`;
+    $("#note").textContent = "";
   };
   tabs($("#game"), [["all", "All games"], ...meta.games.map((g) => [g.slug, g.label])], game, (v) => { game = v; fillSets(); draw(); });
   tabs($("#win"), WINDOWS, win, (v) => { win = v; draw(); });
