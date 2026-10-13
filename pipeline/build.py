@@ -47,6 +47,13 @@ def build(groups, products, stock, log=print):
     os.makedirs(config.OUT_DIR)
 
     game_of = {gid: g["k"] for gid, g in groups.items()}
+    # TCGplayer sometimes stamps many old sets with the same "published" date when it
+    # re-imports them. Treat a date shared by 15+ sets as unknown.
+    from collections import Counter
+    bulk = {d for d, n in Counter(g["pub"] for g in groups.values()).items() if d and n >= 15}
+    for g in groups.values():
+        if g["pub"] in bulk:
+            g["pub"] = ""
 
     # ---- window anchors -------------------------------------------------
     anchors = {}
@@ -138,11 +145,19 @@ def build(groups, products, stock, log=print):
             if products[pid]["t"] == "s" and BOOSTER_BOX.search(nm) and not NOT_BOX.search(nm):
                 if bb_key is None or latest[k] > latest[bb_key]:
                     bb_key = k
+        if bb_key is None:  # no booster box: show the set's main sealed product instead
+            for k in keys:
+                pid = k.split(":", 1)[0]
+                nm = products[pid]["n"]
+                if products[pid]["t"] == "s" and not re.search(r"\bcase\b", nm, re.I):
+                    if bb_key is None or latest[k] > latest[bb_key]:
+                        bb_key = k
         sets_out.append({
             "id": int(gid), "n": g["name"], "a": g["abbr"], "k": g["k"], "pub": g["pub"],
             "np": products_per_set.get(gid, 0),
             "bb": latest[bb_key] if bb_key else None,
             "bbId": int(bb_key.split(":")[0]) if bb_key else None,
+            "bbN": products[bb_key.split(":")[0]]["n"] if bb_key else None,
             "c7": sealed_change.get(gid),
         })
     sets_out.sort(key=lambda s: s["pub"] or "", reverse=True)

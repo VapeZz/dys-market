@@ -59,7 +59,7 @@ PAGES = {
   <a class="btn" href="https://driveyourstyle.net/#newsletter">Sign up at the store →</a></div>
 </div></section>
 <section class="block"><div class="wrap">
-  <div class="block-head"><div><h2>Recent &amp; upcoming sets</h2><p>Booster box market price and 7-day change in total sealed value.</p></div><a class="more" href="sets.html">All sets →</a></div>
+  <div class="block-head"><div><h2>Recent &amp; upcoming sets</h2><p>Booster box price (or the main sealed product when there is no booster box) and 7-day change in total sealed value.</p></div><a class="more" href="sets.html">All sets →</a></div>
   <div id="recent"></div>
 </div></section>'''),
 "sets": ("All sets · Drive Your Style Market Insights",
@@ -67,7 +67,7 @@ PAGES = {
 <div class="wrap"><section class="block">
   <div class="block-head"><div><h1 style="font-size:36px">Sets</h1><p id="count"></p></div></div>
   <div class="controls"><div id="game"></div><input class="field" id="q" type="search" placeholder="Filter sets" aria-label="Filter sets">
-    <select class="select" id="sort" aria-label="Sort"><option value="pub">Newest first</option><option value="bb">Booster box price</option><option value="up">7D gainers</option><option value="down">7D decliners</option></select></div>
+    <select class="select" id="sort" aria-label="Sort"><option value="pub">Newest first</option><option value="bb">Main sealed price</option><option value="up">7D gainers</option><option value="down">7D decliners</option></select></div>
   <div id="table"><div class="skeleton" style="height:300px"></div></div>
 </section></div>'''),
 "set": ("Set prices · Drive Your Style Market Insights", "Sealed and card market prices for this set.", '''

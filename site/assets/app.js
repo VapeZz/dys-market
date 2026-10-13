@@ -151,9 +151,9 @@ function moversPanel(container, { kind, meta, limit = 10, thresholds = false, de
 function setsTable(rows, meta, opts = {}) {
   const gl = Object.fromEntries(meta.games.map((g) => [g.slug, g.label]));
   const today = meta.updated;
-  return `<div class="table-wrap"><table><thead><tr><th>Set</th><th class="hide-sm">Game</th><th class="hide-sm">Released</th><th class="num hide-sm">Products</th><th class="num">Booster box</th><th class="num">7D</th></tr></thead><tbody>
-    ${rows.map((s) => `<tr><td class="title"><a href="set.html?id=${s.id}">${s.bbId ? imgTag(s.bbId, "") : ""}<span>${esc(s.n)}${s.pub > today ? ` <span class="badge up-next">Upcoming</span>` : ""}</span></a></td>
-      <td class="hide-sm">${esc(gl[s.k] || s.k)}</td><td class="hide-sm">${fmtDate(s.pub)}</td><td class="num hide-sm">${s.np}</td><td class="num">${money(s.bb)}</td><td class="num">${chg(s.c7)}</td></tr>`).join("")}
+  return `<div class="table-wrap"><table><thead><tr><th>Set</th><th class="hide-sm">Game</th><th class="hide-sm">Released</th><th class="num hide-sm">Products</th><th class="num">Main sealed</th><th class="num">7D</th></tr></thead><tbody>
+    ${rows.map((s) => `<tr><td class="title"><a href="set.html?id=${s.id}">${s.bbId ? imgTag(s.bbId, "") : ""}<span>${esc(s.n)}${s.pub && s.pub > today ? ` <span class="badge up-next">Upcoming</span>` : ""}</span></a></td>
+      <td class="hide-sm">${esc(gl[s.k] || s.k)}</td><td class="hide-sm">${s.pub ? fmtDate(s.pub) : "—"}</td><td class="num hide-sm">${s.np}</td><td class="num" title="${esc(s.bbN || "")}">${money(s.bb)}${s.bbN && !/booster box/i.test(s.bbN) ? `<span class="muted" style="display:block;font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;margin-left:auto">${esc(s.bbN.replace(s.n, "").trim() || s.bbN)}</span>` : ""}</td><td class="num">${chg(s.c7)}</td></tr>`).join("")}
     </tbody></table></div>`;
 }
 
