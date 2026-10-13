@@ -117,8 +117,13 @@ function tabs(el, options, value, onChange) {
     onChange(b.dataset.v);
   });
 }
-function moverRows(list, meta, limit) {
-  if (!list || !list.length) return `<div class="empty-note">Not enough price history for this view yet.</div>`;
+function startsOn(meta, win) {
+  if (!meta.first || win === "all") return "";
+  const d = new Date(new Date(meta.first + "T12:00:00Z").getTime() + Number(win) * 864e5).toISOString().slice(0, 10);
+  return d > meta.updated ? ` Price tracking began ${fmtDate(meta.first)}, so this view fills in around ${fmtDate(d)}.` : "";
+}
+function moverRows(list, meta, limit, win) {
+  if (!list || !list.length) return `<div class="empty-note">Not enough price history for this view yet.${win ? startsOn(meta, win) : ""}</div>`;
   return list.slice(0, limit).map((r, i) => {
     const [id, name, gid, now, old, p] = r;
     return `<a class="row" href="${prodUrl(id, gid)}"><span class="rank">${i + 1}</span>${imgTag(id)}
@@ -135,8 +140,8 @@ function moversPanel(container, { kind, meta, limit = 10, thresholds = false, de
   const draw = async () => {
     const data = await getJSON(`movers/${kind}-${game}.json`);
     const w = data.windows[win]?.[thr];
-    $("[data-up]", container).innerHTML = moverRows(w?.up, meta, limit);
-    $("[data-down]", container).innerHTML = moverRows(w?.down, meta, limit);
+    $("[data-up]", container).innerHTML = moverRows(w?.up, meta, limit, win);
+    $("[data-down]", container).innerHTML = moverRows(w?.down, meta, limit, win);
   };
   tabs($("[data-g]", container), games, game, (v) => { game = v; draw(); });
   tabs($("[data-w]", container), WINDOWS, win, (v) => { win = v; draw(); });
@@ -333,8 +338,8 @@ async function pageCards() {
     const data = await getJSON(`movers/cards-${game}.json`);
     const w = data.windows[win]?.["5"] || {};
     const keep = (r) => !recent || (sets.find((s) => s.id === r[2])?.pub || "") >= yearAgo;
-    up.innerHTML = moverRows((w.up || []).filter(keep), meta, 25);
-    down.innerHTML = moverRows((w.down || []).filter(keep), meta, 25);
+    up.innerHTML = moverRows((w.up || []).filter(keep), meta, 25, win);
+    down.innerHTML = moverRows((w.down || []).filter(keep), meta, 25, win);
   };
   tabs($("#game"), [["all", "All games"], ...meta.games.map((g) => [g.slug, g.label])], game, (v) => { game = v; fillSets(); draw(); });
   tabs($("#win"), WINDOWS, win, (v) => { win = v; draw(); });
