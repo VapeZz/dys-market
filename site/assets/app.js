@@ -131,6 +131,7 @@ function moverRows(list, meta, limit, win) {
       <span class="figs"><b>${money(now)}</b>${chg(p)}<span class="muted" style="font-size:12px;display:block">from ${money(old)}</span></span></a>`;
   }).join("");
 }
+const BAND_TOP = { "5": 2000, "20": 10000 };
 function topRows(list, meta, offset) {
   return list.map((r, i) => `<a class="row" href="${prodUrl(r[0], r[2])}"><span class="rank">${offset + i + 1}</span>${imgTag(r[0])}
     <span class="name"><b>${esc(r[1])}</b><span>${esc(meta.groups[r[2]]?.[0] || "")}</span></span>
@@ -148,12 +149,13 @@ function moversPanel(container, { kind, meta, limit = 10, thresholds = false, de
     if (!w?.up?.length && !w?.down?.length) {
       // No history for this window yet: show today's most valuable items so the section isn't empty.
       const rows = (await getJSON("search.json"))
-        .filter((r) => r[3] === (kind === "sealed" ? "s" : "c") && (game === "all" || meta.groups[r[2]]?.[1] === game) && r[4] >= Number(thr) * 100)
+        .filter((r) => r[3] === (kind === "sealed" ? "s" : "c") && (game === "all" || meta.groups[r[2]]?.[1] === game) && r[4] >= Number(thr) * 100 && (!thresholds || r[4] < (BAND_TOP[thr] || Infinity)))
         .slice(0, limit)
         .map((r) => [r[0], r[1], r[2], r[4], null, null]);
       $("[data-up]", container).innerHTML = `<div class="empty-note" style="padding-bottom:6px">${startsOn(meta, win).trim() || "Not enough price history for this view yet."} Meanwhile, here are today's highest market prices.</div>` + topRows(rows.slice(0, Math.ceil(limit / 2)), meta, 0);
       $("[data-down]", container).innerHTML = `<div class="empty-note" style="padding-bottom:6px">Highest market prices, continued.</div>` + topRows(rows.slice(Math.ceil(limit / 2)), meta, Math.ceil(limit / 2));
-      container.querySelectorAll(".panel h3").forEach((h, i) => { h.innerHTML = i ? "Most valuable (cont.)" : "Most valuable today"; });
+      const band = thresholds ? (BAND_TOP[thr] ? ` · $${thr}–$${BAND_TOP[thr] / 100}` : ` · $${thr}+`) : "";
+      container.querySelectorAll(".panel h3").forEach((h, i) => { h.innerHTML = (i ? "Most valuable (cont.)" : "Most valuable today") + band; });
       return;
     }
     container.querySelectorAll(".panel h3").forEach((h, i) => { h.innerHTML = i ? `<span class="chg down">▼</span> Biggest drops` : `<span class="chg up">▲</span> Biggest gains`; });
