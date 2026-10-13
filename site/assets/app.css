@@ -192,3 +192,7 @@ footer a:hover{color:var(--ink)}
   .hide-sm{display:none}
   .tabs button{padding:7px 10px}
 }
+table.cmp{table-layout:fixed}
+table.cmp th,table.cmp td{white-space:normal;overflow-wrap:anywhere}
+table.cmp th:first-child,table.cmp td:first-child{width:32%}
+@media(max-width:600px){table.cmp th{font-size:11px;letter-spacing:.02em;text-transform:none}}

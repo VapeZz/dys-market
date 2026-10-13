@@ -42,7 +42,7 @@ document.documentElement.dataset.theme = getTheme();
 /* ---------- shell ---------- */
 const SEARCH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>`;
 function shell() {
-  const links = [["index", "Overview"], ["sets", "Sets"], ["trends", "Trends"], ["cards", "Cards"], ["about", "About the data"]];
+  const links = [["index", "Overview"], ["sets", "Sets"], ["trends", "Trends"], ["cards", "Cards"], ["compare", "Compare"], ["about", "About the data"]];
   $("#top").outerHTML = `<header class="top"><div class="wrap">
     <a class="brand" href="index.html"><span class="brand-mark">DYS</span><span>Drive Your Style<small>Market Insights</small></span></a>
     <nav class="nav" id="nav">${links.map(([p, l]) => `<a href="${p}.html"${p === PAGE ? ' aria-current="page"' : ""}>${l}</a>`).join("")}
@@ -263,7 +263,8 @@ async function pageProduct() {
         <div class="muted" style="margin-top:14px">Market price</div><div class="price-big">${money(v.p)}</div>
         <div class="kpis">${[["7", "7 days"], ["30", "30 days"], ["90", "90 days"]].map(([k, l]) => `<div class="kpi"><div class="l">${l}</div>${chg(v.ch?.[k])}</div>`).join("")}</div>
         <div class="btns">${v.dys ? `<a class="btn primary" href="${esc(v.dys.u)}">In stock at Drive Your Style · ${money(v.dys.p)}</a>` : `<a class="btn primary" href="${STORE}">Shop Drive Your Style</a>`}
-          <a class="btn" href="https://www.tcgplayer.com/product/${id}" target="_blank" rel="noopener">View on TCGplayer ↗</a></div>
+          <a class="btn" href="https://www.tcgplayer.com/product/${id}" target="_blank" rel="noopener">View on TCGplayer ↗</a>
+          <a class="btn" href="compare.html?a=${id}:${set.id}">Compare ⇄</a></div>
         <div class="chart-card"><div class="chart-head"><b>Price history</b><div id="range"></div></div><div class="chart" id="chart"></div>
           <p class="muted" style="font-size:12px;margin:6px 0 4px">Nightly TCGplayer market price. Gaps mean no market price was recorded that day.</p></div>
       </div>`;
@@ -392,10 +393,129 @@ async function pageCards() {
   fillSets(); draw();
 }
 
+
+/* ---------- compare ---------- */
+function picker(box, onPick) {
+  const input = $("input", box), out = $(".results", box);
+  let rows = null, meta = null;
+  const load = async () => { if (!rows) [rows, meta] = await Promise.all([getJSON("search.json"), getJSON("meta.json")]); };
+  input.addEventListener("focus", load);
+  input.addEventListener("input", async () => {
+    await load();
+    const q = input.value.trim().toLowerCase().replace(/é/g, "e");
+    if (q.length < 2) { out.classList.remove("open"); return; }
+    const terms = q.split(/\s+/), hits = [];
+    for (const r of rows) {
+      const hay = alias((r[1] + " " + (meta.groups[r[2]]?.[0] || "")).toLowerCase());
+      if (terms.every((t) => hay.includes(t))) { hits.push(r); if (hits.length >= 10) break; }
+    }
+    out.innerHTML = hits.length ? hits.map((r) => `<a href="#" data-id="${r[0]}" data-g="${r[2]}">${imgTag(r[0])}
+      <span class="name"><b>${esc(r[1])}</b><span>${esc(meta.groups[r[2]]?.[0] || "")}</span></span><span class="figs" style="margin-left:auto"><b>${money(r[4])}</b></span></a>`).join("")
+      : `<div class="empty">No matches</div>`;
+    out.classList.add("open");
+  });
+  out.addEventListener("click", (e) => {
+    const a = e.target.closest("a[data-id]"); if (!a) return;
+    e.preventDefault(); out.classList.remove("open"); input.value = "";
+    onPick(Number(a.dataset.id), a.dataset.g);
+  });
+  document.addEventListener("click", (e) => { if (!box.contains(e.target)) out.classList.remove("open"); });
+}
+
+async function pageCompare() {
+  const meta = await getJSON("meta.json");
+  const gl = Object.fromEntries(meta.games.map((g) => [g.slug, g.label]));
+  const parse = (v) => { const [id, g] = (v || "").split(":"); return id && g ? { id: Number(id), g } : null; };
+  const picks = [parse(params.get("a")), parse(params.get("b"))];
+  const COLORS = ["var(--accent)", "var(--accent-2)"];
+  let range = "90";
+  const sync = () => {
+    const u = new URL(location.href);
+    ["a", "b"].forEach((k, i) => picks[i] ? u.searchParams.set(k, `${picks[i].id}:${picks[i].g}`) : u.searchParams.delete(k));
+    history.replaceState(null, "", u);
+  };
+  const load = async (p) => {
+    if (!p) return null;
+    const set = await getJSON(`set/${p.g}.json`).catch(() => null);
+    const item = set?.items.find((i) => i.id === p.id);
+    return item ? { set, item } : null;
+  };
+  const draw = async () => {
+    const data = await Promise.all(picks.map(load));
+    $("#slots").innerHTML = data.map((d, i) => d ? `<div class="panel" style="padding:16px;display:flex;gap:14px;align-items:center">
+        <span style="width:12px;height:12px;border-radius:3px;background:${COLORS[i]};flex:0 0 12px"></span>
+        ${imgTag(d.item.id, "thumb")}
+        <div class="name" style="flex:1"><b><a href="${prodUrl(d.item.id, d.set.id)}">${esc(d.item.n)}</a></b><span>${esc(gl[d.set.k] || "")} · ${esc(d.set.n)}</span></div>
+        <div class="figs"><b>${money(d.item.p)}</b>${chg(d.item.ch?.["7"])}</div>
+        <button class="btn" data-clear="${i}" aria-label="Remove" style="padding:6px 10px">✕</button></div>`
+      : `<div class="panel" style="padding:16px"><div class="muted" style="font-size:13px;margin-bottom:8px">Product ${i + 1}</div>
+        <div class="search" data-pick="${i}">${SEARCH_ICON}<input type="search" placeholder="Search a product or card" autocomplete="off"><div class="results"></div></div></div>`).join("");
+    document.querySelectorAll("[data-pick]").forEach((box) => picker(box, (id, g) => { picks[Number(box.dataset.pick)] = { id, g }; sync(); draw(); }));
+    document.querySelectorAll("[data-clear]").forEach((b) => b.addEventListener("click", () => { picks[Number(b.dataset.clear)] = null; sync(); draw(); }));
+    const ready = data.filter(Boolean);
+    if (ready.length < 2) {
+      $("#result").innerHTML = `<div class="panel empty-note">Pick two products to compare their prices and history.</div>`;
+      return;
+    }
+    const rows = [["Market price", (d) => `<b>${money(d.item.p)}</b>`], ["7 days", (d) => chg(d.item.ch?.["7"])], ["30 days", (d) => chg(d.item.ch?.["30"])], ["90 days", (d) => chg(d.item.ch?.["90"])],
+      ["Set", (d) => esc(d.set.n)], ["Released", (d) => fmtDate(d.set.pub)], ["Type", (d) => d.item.t === "s" ? "Sealed" : "Card"],
+      ["At Drive Your Style", (d) => d.item.dys ? `<a class="more" href="${esc(d.item.dys.u)}">In stock · ${money(d.item.dys.p)}</a>` : `<span class="muted">—</span>`]];
+    $("#result").innerHTML = `<div class="table-wrap"><table class="cmp"><thead><tr><th></th>${ready.map((d, i) => `<th class="num"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${COLORS[i]};margin-right:6px"></span>${esc(d.item.n.length > 28 ? d.item.n.slice(0, 27) + "…" : d.item.n)}</th>`).join("")}</tr></thead>
+      <tbody>${rows.map(([l, f]) => `<tr><td class="muted">${l}</td>${ready.map((d) => `<td class="num">${f(d)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+      <div class="chart-card" style="margin-top:16px"><div class="chart-head"><b>Price change (%) over time</b><div id="range"></div></div>
+      <div class="legend" style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;margin:0 0 6px">${ready.map((d, i) => `<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:14px;height:3px;border-radius:2px;background:${COLORS[i]}"></span>${esc(d.item.n)}</span>`).join("")}</div>
+      <div class="chart" id="chart"></div><p class="muted" style="font-size:12px;margin:6px 0 4px">Both lines start at 0% on the first day both have a price, so products at different prices can be compared.</p></div>`;
+    const plot = () => compareChart($("#chart"), ready.map((d, i) => ({ dates: d.set.dates, values: d.item.s || [], color: COLORS[i], name: d.item.n })), Number(range));
+    tabs($("#range"), [["30", "1M"], ["90", "3M"], ["180", "6M"], ["365", "1Y"]], range, (r) => { range = r; plot(); });
+    plot();
+  };
+  draw();
+}
+
+function compareChart(el, series, rangeDays) {
+  const allDates = [...new Set(series.flatMap((s) => s.dates))].sort();
+  const end = allDates[allDates.length - 1];
+  const cutoff = new Date(new Date(end + "T00:00:00Z") - rangeDays * 864e5).toISOString().slice(0, 10);
+  const maps = series.map((s) => new Map(s.dates.map((d, i) => [d, s.values[i]]).filter(([d, v]) => v != null && d >= cutoff)));
+  const common = allDates.filter((d) => d >= cutoff && maps.every((m) => m.has(d)));
+  if (common.length < 2) { el.innerHTML = `<div class="empty-note">Not enough shared price history yet. Check back in a few days.</div>`; return; }
+  const base = maps.map((m) => m.get(common[0]));
+  const lines = maps.map((m, i) => common.map((d) => ({ d, v: (m.get(d) / base[i] - 1) * 100, p: m.get(d) })));
+  const W = el.clientWidth || 600, H = el.clientHeight || 280, L = 52, R = 12, T = 12, B = 28;
+  const t0 = Date.parse(common[0]), t1 = Date.parse(common[common.length - 1]);
+  let lo = Math.min(0, ...lines.flat().map((p) => p.v)), hi = Math.max(0, ...lines.flat().map((p) => p.v));
+  const pad = (hi - lo) * 0.12 || 2; lo -= pad; hi += pad;
+  const x = (d) => L + (Date.parse(d) - t0) / (t1 - t0 || 1) * (W - L - R);
+  const y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+  let grid = "";
+  for (let i = 0; i <= 4; i++) { const v = lo + (hi - lo) * i / 4; grid += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--ink-3)">${v > 0 ? "+" : ""}${v.toFixed(0)}%</text>`; }
+  grid += `<line x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}" stroke="var(--line-strong)"/>`;
+  const xl = [common[0], common[Math.floor(common.length / 2)], common[common.length - 1]].map((d, i) => `<text x="${x(d)}" y="${H - 8}" text-anchor="${["start", "middle", "end"][i]}" font-size="11" fill="var(--ink-3)">${new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</text>`).join("");
+  const paths = lines.map((ln, i) => `<path d="${ln.map((p, j) => `${j ? "L" : "M"}${x(p.d).toFixed(1)},${y(p.v).toFixed(1)}`).join("")}" fill="none" stroke="${series[i].color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`).join("");
+  const dots = series.map((s, i) => `<circle class="dot${i}" r="5" fill="${s.color}" stroke="var(--surface)" stroke-width="2" visibility="hidden"/>`).join("");
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Price change comparison chart">${grid}${xl}${paths}
+    <line class="xh" y1="${T}" y2="${H - B}" stroke="var(--line-strong)" visibility="hidden"/>${dots}
+    <rect class="hit" x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent"/></svg><div class="tip"></div>`;
+  const svg = $("svg", el), tip = $(".tip", el), xh = $(".xh", el), hit = $(".hit", el);
+  const move = (ev) => {
+    const r = svg.getBoundingClientRect();
+    const px = ((ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left) * (W / r.width);
+    let j = 0; common.forEach((d, k) => { if (Math.abs(x(d) - px) < Math.abs(x(common[j]) - px)) j = k; });
+    const cx = x(common[j]);
+    xh.setAttribute("x1", cx); xh.setAttribute("x2", cx); xh.setAttribute("visibility", "visible");
+    lines.forEach((ln, i) => { const c = $(".dot" + i, el); c.setAttribute("cx", cx); c.setAttribute("cy", y(ln[j].v)); c.setAttribute("visibility", "visible"); });
+    tip.style.display = "block"; tip.style.left = (cx / W * r.width) + "px"; tip.style.top = (Math.min(...lines.map((ln) => y(ln[j].v))) / H * r.height) + "px";
+    tip.innerHTML = `<div class="muted" style="font-size:12px">${fmtDate(common[j])}</div>` + lines.map((ln, i) => `<div><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${series[i].color};margin-right:6px"></span>${money(ln[j].p)} <span class="muted">(${ln[j].v >= 0 ? "+" : ""}${ln[j].v.toFixed(1)}%)</span></div>`).join("");
+  };
+  const leave = () => { tip.style.display = "none"; xh.setAttribute("visibility", "hidden"); lines.forEach((_, i) => $(".dot" + i, el).setAttribute("visibility", "hidden")); };
+  hit.addEventListener("mousemove", move); hit.addEventListener("touchmove", move, { passive: true });
+  hit.addEventListener("mouseleave", leave); hit.addEventListener("touchend", leave);
+}
+
 /* ---------- boot ---------- */
 shell();
 document.querySelectorAll("[data-search]").forEach(initSearch);
-const pages = { index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards };
+const pages = { index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare };
 (pages[PAGE] || (async () => {}))().catch((err) => {
   console.error(err);
   const main = $("main");

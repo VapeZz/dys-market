@@ -10,6 +10,19 @@ HEAD = '''<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>@@TITLE@@</title>
 <meta name="description" content="@@DESC@@">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Drive Your Style Market Insights">
+<meta property="og:title" content="@@TITLE@@">
+<meta property="og:description" content="@@DESC@@">
+<meta property="og:image" content="https://market.driveyourstyle.net/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="@@TITLE@@">
+<meta name="twitter:description" content="@@DESC@@">
+<meta name="twitter:image" content="https://market.driveyourstyle.net/assets/og.png">
+<link rel="canonical" href="https://market.driveyourstyle.net/@@CANON@@">
+<meta name="theme-color" content="#0b0d14">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/app.css">
@@ -93,6 +106,12 @@ PAGES = {
   <p class="muted" id="note" style="margin:-6px 0 12px;font-size:13px"></p>
   {MOVERS}
 </section></div>'''),
+"compare": ("Compare prices · Drive Your Style Market Insights", "Compare two Pokémon or One Piece products side by side: market price, recent change and price history.", '''
+<div class="wrap"><section class="block">
+  <div class="block-head"><div><h1 style="font-size:36px">Compare</h1><p>Pick any two sealed products or cards to compare price, recent change and price history.</p></div></div>
+  <div id="slots" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin:8px 0 18px"></div>
+  <div id="result"></div>
+</section></div>'''),
 "about": ("About the data · Drive Your Style Market Insights", "Where Drive Your Style market prices come from.", '''
 <div class="wrap"><article class="prose">
   <h1>Where this data comes from</h1>
@@ -110,7 +129,8 @@ PAGES = {
 }
 
 for page, (title, desc, body) in PAGES.items():
-    html = HEAD.replace("@@TITLE@@", title).replace("@@DESC@@", desc).replace("@@PAGE@@", page).replace("@@BODY@@", body)
+    canon = "" if page == "index" else f"{page}.html"
+    html = HEAD.replace("@@CANON@@", canon).replace("@@TITLE@@", title).replace("@@DESC@@", desc).replace("@@PAGE@@", page).replace("@@BODY@@", body)
     with open(os.path.join(ROOT, "site", f"{page}.html"), "w", encoding="utf-8") as f:
         f.write(html)
 print("pages written:", ", ".join(PAGES))

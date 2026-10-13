@@ -245,6 +245,7 @@ def build(groups, products, stock, log=print):
         "store": config.STORE_URL,
     }
     write("meta.json", meta)
+    write_sitemap(groups, products, latest, latest_day)
     log(f"build: wrote {len(by_set)} set files, {len(search)} search rows, {len(stock_rows)} in-stock")
 
 
@@ -263,3 +264,20 @@ def pick_series_days(days, latest_day):
             picked.append(d)
             last_weekly = d
     return sorted(picked)
+
+
+def write_sitemap(groups, products, latest, day, base="https://market.driveyourstyle.net/"):
+    """Static pages, every set page and every priced sealed product page."""
+    from xml.sax.saxutils import escape
+    urls = [base] + [base + p for p in ("sets.html", "trends.html", "cards.html", "compare.html", "about.html")]
+    urls += [f"{base}set.html?id={gid}" for gid in groups]
+    seen = set()
+    for k in latest:
+        pid = k.split(":", 1)[0]
+        p = products[pid]
+        if p["t"] == "s" and pid not in seen:
+            seen.add(pid)
+            urls.append(f"{base}product.html?id={pid}&set={p['g']}")
+    body = "".join(f"<url><loc>{escape(u)}</loc><lastmod>{day}</lastmod></url>" for u in urls[:50000])
+    with open(os.path.join(config.SITE_DIR, "sitemap.xml"), "w", encoding="utf-8") as f:
+        f.write('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + body + "</urlset>")
