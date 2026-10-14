@@ -210,3 +210,14 @@ table.cmp th:first-child,table.cmp td:first-child{width:32%}
 .cal-name{font-weight:600}
 .cal-meta{font-size:13px;margin-top:2px}
 @media (max-width:520px){.cal-img{display:none}}
+
+/* deals, chase cards */
+.badge.deal{background:rgba(245,185,66,.16);color:#f5b942}
+[data-theme="light"] .badge.deal{background:rgba(183,121,31,.12);color:#9a6412}
+.chase-row{display:grid;grid-auto-flow:column;grid-auto-columns:150px;gap:12px;overflow-x:auto;padding-bottom:8px;scroll-snap-type:x mandatory}
+.chase{position:relative;display:flex;flex-direction:column;gap:6px;padding:10px;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:inherit;text-decoration:none;scroll-snap-align:start}
+.chase:hover{border-color:var(--accent)}
+.chase img{width:100%;aspect-ratio:5/7;object-fit:contain;border-radius:8px;background:var(--surface-2)}
+.chase .rank{position:absolute;top:6px;left:6px;background:var(--bg);border:1px solid var(--line);border-radius:999px;font-size:12px;font-weight:700;padding:2px 8px}
+.chase .t{font-size:13px;font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.chase .p{display:flex;justify-content:space-between;align-items:center;font-size:13px;margin-top:auto}

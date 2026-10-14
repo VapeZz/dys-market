@@ -33,6 +33,8 @@ def label(products, key):
 
 
 def build(groups, products, stock, log=print):
+    matched = stock
+    stock = {k: {"u": v["u"], "p": v["p"]} for k, v in matched.items() if v.get("a", True)}
     days = snapshots.available()
     if not days:
         raise RuntimeError("No price snapshots yet. Run the nightly job first.")
@@ -224,6 +226,18 @@ def build(groups, products, stock, log=print):
     stock_rows.sort(key=lambda r: -(r["m"] or 0))
     write("stock.json", stock_rows)
 
+    # ---- market price by store handle (for the Shopify product-page widget)
+    by_handle = {}
+    for pid, s in matched.items():
+        p = products.get(pid)
+        keys = [k for k in latest if k.startswith(pid + ":")]
+        if not p or not keys:
+            continue
+        k = max(keys, key=lambda k: latest[k])
+        handle = s["u"].rsplit("/products/", 1)[-1]
+        by_handle[handle] = {"id": int(pid), "g": p["g"], "m": latest[k], "c7": (changes.get(k) or {}).get("7")}
+    write("store-prices.json", by_handle)
+
     sealed_priced = {k.split(":")[0] for k in latest if products[k.split(":")[0]]["t"] == "s"}
     cards_priced = {k.split(":")[0] for k in latest if products[k.split(":")[0]]["t"] == "c"}
     today = date.fromisoformat(latest_day)
@@ -269,7 +283,7 @@ def pick_series_days(days, latest_day):
 def write_sitemap(groups, products, latest, day, base="https://market.driveyourstyle.net/"):
     """Static pages, every set page and every priced sealed product page."""
     from xml.sax.saxutils import escape
-    urls = [base] + [base + p for p in ("sets.html", "trends.html", "cards.html", "compare.html", "calendar.html", "about.html")]
+    urls = [base] + [base + p for p in ("sets.html", "trends.html", "cards.html", "compare.html", "calendar.html", "watchlist.html", "about.html")]
     urls += [f"{base}set.html?id={gid}" for gid in groups]
     seen = set()
     for k in latest:

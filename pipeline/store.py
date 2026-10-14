@@ -60,12 +60,12 @@ def match_in_stock(products, store_rows, log=print):
     stock = {}
     for row in store_rows:
         variants = row.get("variants") or []
-        if not any(v.get("available") for v in variants):
-            continue
-        prices = [float(v["price"]) for v in variants if v.get("available") and v.get("price")]
+        available = any(v.get("available") for v in variants)
+        prices = [float(v["price"]) for v in variants if (v.get("available") or not available) and v.get("price")]
         entry = {
             "u": f"{config.STORE_URL}/products/{row['handle']}",
             "p": int(round(min(prices) * 100)) if prices else None,
+            "a": available,
         }
         pid = None
         if row.get("handle") in overrides:
@@ -80,5 +80,5 @@ def match_in_stock(products, store_rows, log=print):
             pid = by_name.get(norm(row.get("title", "")))
         if pid:
             stock[pid] = entry
-    log(f"store: {len(stock)} products matched to market data")
+    log(f"store: {len(stock)} products matched to market data ({sum(1 for v in stock.values() if v['a'])} in stock)")
     return stock

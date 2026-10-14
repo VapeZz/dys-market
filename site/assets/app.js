@@ -28,6 +28,11 @@ const imgTag = (id, cls = "thumb", size = 200) =>
   `<img class="${cls}" src="${img(id, size)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`;
 const prodUrl = (id, gid) => `product.html?id=${id}&set=${gid}`;
 const fmtDate = (d) => d ? new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
+const below = (ours, mkt) => ours != null && mkt != null && ours < mkt;
+const BELOW = `<span class="badge deal">Below market</span>`;
+const WKEY = "dys-watch";
+const watchGet = () => { try { return JSON.parse(localStorage.getItem(WKEY) || "[]"); } catch { return []; } };
+const watchSet = (list) => { try { localStorage.setItem(WKEY, JSON.stringify(list)); } catch {} };
 const WINDOWS = [["7", "7D"], ["30", "30D"], ["90", "90D"], ["365", "1Y"], ["all", "All"]];
 
 /* ---------- theme ---------- */
@@ -42,7 +47,7 @@ document.documentElement.dataset.theme = getTheme();
 /* ---------- shell ---------- */
 const SEARCH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>`;
 function shell() {
-  const links = [["index", "Overview"], ["sets", "Sets"], ["trends", "Trends"], ["cards", "Cards"], ["compare", "Compare"], ["calendar", "Calendar"], ["about", "About the data"]];
+  const links = [["index", "Overview"], ["sets", "Sets"], ["trends", "Trends"], ["cards", "Cards"], ["compare", "Compare"], ["calendar", "Calendar"], ["watchlist", "Watchlist"], ["about", "About the data"]];
   $("#top").outerHTML = `<header class="top"><div class="wrap">
     <a class="brand" href="index.html"><span class="brand-mark">DYS</span><span>Drive Your Style<small>Market Insights</small></span></a>
     <nav class="nav" id="nav">${links.map(([p, l]) => `<a href="${p}.html"${p === PAGE ? ' aria-current="page"' : ""}>${l}</a>`).join("")}
@@ -193,7 +198,7 @@ async function pageIndex() {
   const stock = await getJSON("stock.json").catch(() => []);
   if (stock.length) {
     $("#stock").innerHTML = stock.slice(0, 10).map((s) => `<a class="card" href="${esc(s.u)}">${imgTag(s.id, "", 1000)}
-      <span class="badge">In stock</span><span class="t">${esc(s.n)}</span>
+      <span class="badge">In stock</span>${below(s.p, s.m) ? BELOW : ""}<span class="t">${esc(s.n)}</span>
       <span class="p"><span>Our price <b style="color:var(--ink)">${money(s.p)}</b></span><span>Mkt ${money(s.m)}</span></span></a>`).join("");
   } else {
     $("#stock-block").hidden = true;
@@ -232,10 +237,14 @@ async function pageSet() {
   const table = (items, isCard, limit) => {
     if (!items.length) return `<div class="panel empty-note">No ${isCard ? "card" : "sealed"} prices for this set yet.</div>`;
     return `<div class="table-wrap"><table><thead><tr><th>${isCard ? "Card" : "Product"}</th>${isCard ? "<th class=\"hide-sm\">Rarity</th>" : ""}<th class="num">Market</th><th class="num">7D</th><th class="num hide-sm">30D</th><th class="num hide-sm">90D</th></tr></thead><tbody>
-      ${items.slice(0, limit).map((i) => `<tr><td class="title"><a href="${prodUrl(i.id, set.id)}">${imgTag(i.id, "")}<span>${esc(i.n)}${i.dys ? ` <span class="badge">In stock</span>` : ""}</span></a></td>
+      ${items.slice(0, limit).map((i) => `<tr><td class="title"><a href="${prodUrl(i.id, set.id)}">${imgTag(i.id, "")}<span>${esc(i.n)}${i.dys ? ` <span class="badge">In stock</span>` : ""}${i.dys && below(i.dys.p, i.p) ? " " + BELOW : ""}</span></a></td>
         ${isCard ? `<td class="hide-sm">${esc(i.r || "")}</td>` : ""}<td class="num"><b>${money(i.p)}</b></td><td class="num">${chg(i.ch?.["7"])}</td><td class="num hide-sm">${chg(i.ch?.["30"])}</td><td class="num hide-sm">${chg(i.ch?.["90"])}</td></tr>`).join("")}
       </tbody></table></div>`;
   };
+  const chase = cards.filter((c) => c.p >= 500).slice(0, 10);
+  $("#chase-wrap").hidden = !chase.length;
+  $("#chase").innerHTML = chase.map((c, i) => `<a class="chase" href="${prodUrl(c.id, set.id)}"><span class="rank">${i + 1}</span>${imgTag(c.id, "", 1000)}
+    <span class="t">${esc(c.n)}</span><span class="p"><b>${money(c.p)}</b>${chg(c.ch?.["7"])}</span></a>`).join("");
   $("#sealed").innerHTML = table(sealed, false, 999);
   let lim = 50;
   const drawCards = () => {
@@ -261,13 +270,23 @@ async function pageProduct() {
         <h1 style="font-size:clamp(26px,3.4vw,38px);margin-top:6px">${esc(base)}</h1>
         ${variants.length > 1 ? `<div id="var" style="margin-top:12px"></div>` : ""}
         <div class="muted" style="margin-top:14px">Market price</div><div class="price-big">${money(v.p)}</div>
+        ${v.dys && below(v.dys.p, v.p) ? `<p style="margin:6px 0 0">${BELOW} <span class="muted">Our price ${money(v.dys.p)} is ${Math.round((1 - v.dys.p / v.p) * 100)}% under market</span></p>` : ""}
         <div class="kpis">${[["7", "7 days"], ["30", "30 days"], ["90", "90 days"]].map(([k, l]) => `<div class="kpi"><div class="l">${l}</div>${chg(v.ch?.[k])}</div>`).join("")}</div>
         <div class="btns">${v.dys ? `<a class="btn primary" href="${esc(v.dys.u)}">In stock at Drive Your Style · ${money(v.dys.p)}</a>` : `<a class="btn primary" href="${STORE}">Shop Drive Your Style</a>`}
           <a class="btn" href="https://www.tcgplayer.com/product/${id}" target="_blank" rel="noopener">View on TCGplayer ↗</a>
-          <a class="btn" href="compare.html?a=${id}:${set.id}">Compare ⇄</a></div>
+          <a class="btn" href="compare.html?a=${id}:${set.id}">Compare ⇄</a>
+          <button class="btn" id="watch" type="button"></button></div>
         <div class="chart-card"><div class="chart-head"><b>Price history</b><div id="range"></div></div><div class="chart" id="chart"></div>
           <p class="muted" style="font-size:12px;margin:6px 0 4px">Nightly TCGplayer market price. Gaps mean no market price was recorded that day.</p></div>
       </div>`;
+    const key = `${id}:${set.id}`;
+    const paint = () => { const on = watchGet().some((w) => w.k === key); const b = $("#watch"); b.textContent = on ? "★ Watching" : "☆ Watch"; b.setAttribute("aria-pressed", on); };
+    $("#watch").addEventListener("click", () => {
+      let list = watchGet();
+      list = list.some((w) => w.k === key) ? list.filter((w) => w.k !== key) : [...list, { k: key, id, g: set.id, n: base, at: v.p, d: meta.updated }];
+      watchSet(list); paint();
+    });
+    paint();
     if (variants.length > 1) tabs($("#var"), variants.map((x, i) => [String(i), (x.n.match(/\(([^)]+)\)$/) || [, "Normal"])[1]]), String(variants.indexOf(v)), (i) => { v = variants[+i]; draw(); });
     let range = "365";
     const plot = () => lineChart($("#chart"), set.dates, v.s || [], range);
@@ -542,10 +561,33 @@ async function pageCalendar() {
   draw();
 }
 
+async function pageWatchlist() {
+  const draw = async () => {
+    const list = watchGet();
+    if (!list.length) {
+      $("#list").innerHTML = `<div class="panel empty-note">Nothing saved yet. Open any product or card and tap <b>☆ Watch</b> to track it here.</div>`;
+      return;
+    }
+    const sets = {};
+    await Promise.all([...new Set(list.map((w) => w.g))].map((g) => getJSON(`set/${g}.json`).then((d) => { sets[g] = d; }).catch(() => {})));
+    $("#list").innerHTML = `<div class="table-wrap"><table><thead><tr><th>Product</th><th class="num">Market</th><th class="num hide-sm">Since saved</th><th class="num">7D</th><th class="num hide-sm">30D</th><th></th></tr></thead><tbody>
+      ${list.map((w) => {
+        const set = sets[w.g];
+        const it = set && (set.items.find((i) => i.id === w.id && i.n.startsWith(w.n)) || set.items.find((i) => i.id === w.id));
+        const since = it && w.at ? (it.p - w.at) / w.at * 100 : null;
+        return `<tr><td class="title"><a href="${prodUrl(w.id, w.g)}">${imgTag(w.id, "")}<span>${esc(w.n)}${set ? `<span class="muted" style="display:block;font-size:12px">${esc(set.n)}</span>` : ""}</span></a></td>
+          <td class="num"><b>${money(it?.p)}</b></td><td class="num hide-sm">${chg(since)}</td><td class="num">${chg(it?.ch?.["7"])}</td><td class="num hide-sm">${chg(it?.ch?.["30"])}</td>
+          <td class="num"><button class="btn" data-rm="${esc(w.k)}" type="button" aria-label="Remove">✕</button></td></tr>`;
+      }).join("")}</tbody></table></div>`;
+    $("#list").querySelectorAll("[data-rm]").forEach((b) => b.addEventListener("click", () => { watchSet(watchGet().filter((w) => w.k !== b.dataset.rm)); draw(); }));
+  };
+  draw();
+}
+
 /* ---------- boot ---------- */
 shell();
 document.querySelectorAll("[data-search]").forEach(initSearch);
-const pages = { index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar };
+const pages = { index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, watchlist: pageWatchlist };
 (pages[PAGE] || (async () => {}))().catch((err) => {
   console.error(err);
   const main = $("main");

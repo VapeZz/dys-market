@@ -86,6 +86,7 @@ PAGES = {
 "set": ("Set prices · Drive Your Style Market Insights", "Sealed and card market prices for this set.", '''
 <div class="wrap"><div class="crumbs" id="crumbs"></div>
 <section class="block" style="padding-top:12px"><h1 id="title" style="font-size:clamp(28px,4vw,42px)"></h1><p class="muted" id="sub"></p>
+  <div id="chase-wrap" hidden><h2 style="font-size:22px;margin:24px 0 12px">Top chase cards</h2><div class="chase-row" id="chase"></div></div>
   <h2 style="font-size:22px;margin:24px 0 12px">Sealed product</h2><div id="sealed"><div class="skeleton" style="height:200px"></div></div>
   <h2 style="font-size:22px;margin:32px 0 12px">Cards</h2><div id="cards"></div>
 </section></div>'''),
@@ -119,6 +120,11 @@ PAGES = {
   <h2 style="font-size:24px;margin:18px 0 0">Upcoming</h2><div id="upcoming"><div class="skeleton" style="height:160px"></div></div>
   <div class="cta" style="margin:28px 0"><div><h2>Want it on release day?</h2><p>Pre-orders and new drops land at Drive Your Style first.</p></div><a class="btn" href="https://driveyourstyle.net/collections/pre-orders">Shop pre-orders →</a></div>
   <h2 style="font-size:24px;margin:18px 0 0">Recently released</h2><div id="released"></div>
+</section></div>'''),
+"watchlist": ("Watchlist · Drive Your Style Market Insights", "Your saved Pokémon and One Piece products and cards with today's market price.", '''
+<div class="wrap"><section class="block">
+  <div class="block-head"><div><h1 style="font-size:36px">Watchlist</h1><p>Products and cards you've saved, with today's market price and how much they've moved since you saved them. Saved on this device only.</p></div></div>
+  <div id="list"><div class="skeleton" style="height:200px"></div></div>
 </section></div>'''),
 "about": ("About the data · Drive Your Style Market Insights", "Where Drive Your Style market prices come from.", '''
 <div class="wrap"><article class="prose">
