@@ -42,7 +42,7 @@ document.documentElement.dataset.theme = getTheme();
 /* ---------- shell ---------- */
 const SEARCH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>`;
 function shell() {
-  const links = [["index", "Overview"], ["sets", "Sets"], ["trends", "Trends"], ["cards", "Cards"], ["compare", "Compare"], ["about", "About the data"]];
+  const links = [["index", "Overview"], ["sets", "Sets"], ["trends", "Trends"], ["cards", "Cards"], ["compare", "Compare"], ["calendar", "Calendar"], ["about", "About the data"]];
   $("#top").outerHTML = `<header class="top"><div class="wrap">
     <a class="brand" href="index.html"><span class="brand-mark">DYS</span><span>Drive Your Style<small>Market Insights</small></span></a>
     <nav class="nav" id="nav">${links.map(([p, l]) => `<a href="${p}.html"${p === PAGE ? ' aria-current="page"' : ""}>${l}</a>`).join("")}
@@ -512,10 +512,40 @@ function compareChart(el, series, rangeDays) {
   hit.addEventListener("mouseleave", leave); hit.addEventListener("touchend", leave);
 }
 
+async function pageCalendar() {
+  const [meta, sets] = await Promise.all([getJSON("meta.json"), getJSON("sets.json")]);
+  const gl = Object.fromEntries(meta.games.map((g) => [g.slug, g.label]));
+  const today = meta.updated;
+  const back = new Date(today + "T12:00:00"); back.setDate(back.getDate() - 90);
+  const from = back.toISOString().slice(0, 10);
+  let game = params.get("game") || "all";
+  const draw = () => {
+    const rows = sets.filter((s) => s.pub && s.pub >= from && (game === "all" || s.k === game))
+      .sort((a, b) => a.pub.localeCompare(b.pub) || a.n.localeCompare(b.n));
+    const up = rows.filter((s) => s.pub > today), past = rows.filter((s) => s.pub <= today).reverse();
+    const month = (d) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    const group = (list) => {
+      const out = []; let cur = null;
+      for (const s of list) { const m = month(s.pub); if (m !== cur) { cur = m; out.push([m, []]); } out[out.length - 1][1].push(s); }
+      return out.map(([m, items]) => `<h3 class="cal-month">${esc(m)}</h3><div class="cal-list">${items.map((s) => {
+        const d = new Date(s.pub + "T12:00:00");
+        return `<a class="cal-item" href="set.html?id=${s.id}"><div class="cal-date"><b>${d.getDate()}</b><span>${d.toLocaleDateString("en-US", { month: "short" })}</span></div>
+          ${s.bbId ? imgTag(s.bbId, "cal-img") : `<span class="cal-img"></span>`}
+          <div class="cal-body"><div class="cal-name">${esc(s.n)}${s.pub > today ? ` <span class="badge up-next">Upcoming</span>` : ""}</div>
+          <div class="muted cal-meta">${esc(gl[s.k] || s.k)}${s.np ? ` · ${s.np} products` : ""}${s.bb ? ` · ${esc(/booster box/i.test(s.bbN || "") ? "Booster box" : "Main sealed")} ${money(s.bb)}` : ""}</div></div></a>`;
+      }).join("")}</div>`).join("");
+    };
+    $("#upcoming").innerHTML = up.length ? group(up) : `<div class="panel empty-note">No upcoming release dates announced yet for this game.</div>`;
+    $("#released").innerHTML = past.length ? group(past) : `<div class="panel empty-note">No releases in the last 90 days.</div>`;
+  };
+  tabs($("#game"), [["all", "All games"], ...meta.games.map((g) => [g.slug, g.label])], game, (v) => { game = v; draw(); });
+  draw();
+}
+
 /* ---------- boot ---------- */
 shell();
 document.querySelectorAll("[data-search]").forEach(initSearch);
-const pages = { index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare };
+const pages = { index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar };
 (pages[PAGE] || (async () => {}))().catch((err) => {
   console.error(err);
   const main = $("main");
