@@ -68,7 +68,12 @@ def match_in_stock(products, store_rows, log=print):
             "a": available,
         }
         pid = None
-        if row.get("handle") in overrides:
+        for v in variants:  # products added by our importer carry SKU TCGP-<id>
+            m = re.match(r"^TCGP-(\d+)", v.get("sku") or "")
+            if m and m.group(1) in products:
+                pid = m.group(1)
+                break
+        if pid is None and row.get("handle") in overrides:
             pid = str(overrides[row["handle"]])
         if pid is None:
             for img in row.get("images") or []:

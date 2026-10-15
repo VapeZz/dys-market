@@ -632,6 +632,7 @@ async function pageImporter() {
   const [meta, sets, stockMap, report] = await Promise.all([getJSON("meta.json"), getJSON("sets.json"),
     getJSON("store-prices.json").catch(() => ({})), getJSON("sync-report.json").catch(() => null)]);
   const handleOf = {}; for (const [h, r] of Object.entries(stockMap)) handleOf[r.id] = h;
+  const justAdded = new Set(); // imported this session; re-adding them restocks (matched by SKU)
   const gl = Object.fromEntries(meta.games.map((g) => [g.slug, g.label]));
   let game = "pokemon", kind = "s", minP = 0, q = "", set = null;
   const picks = new Map();
@@ -675,7 +676,7 @@ async function pageImporter() {
     if (!set) return;
     const items = set.items.filter((i) => i.t === kind && i.p >= minP * 100 && (!q || i.n.toLowerCase().includes(q)));
     $("#rows").innerHTML = items.length ? `<div class="table-wrap"><table><thead><tr><th style="width:36px"><input type="checkbox" id="all" aria-label="Select all"></th><th>${kind === "s" ? "Product" : "Card"}</th><th class="num">Market</th><th class="num">Qty</th></tr></thead><tbody>
-      ${items.map((i, ix) => { const k = keyOf(i), on = picks.get(k), have = handleOf[i.id];
+      ${items.map((i, ix) => { const k = keyOf(i), on = picks.get(k), have = handleOf[i.id] || justAdded.has(i.id);
         return `<tr><td><input type="checkbox" data-ix="${ix}" ${on ? "checked" : ""} aria-label="Select ${esc(i.n)}"></td>
         <td class="title"><span style="display:flex;align-items:center;gap:10px">${imgTag(i.id, "")}<span>${esc(i.n)}${i.r ? `<span class="muted" style="display:block;font-size:12px">${esc(i.r)}</span>` : ""}${have ? ` <span class="badge">In store · restock</span>` : ""}</span></span></td>
         <td class="num"><b>${money(i.p)}</b></td>
@@ -727,6 +728,7 @@ async function pageImporter() {
     const r = await gh("/actions/workflows/import.yml/dispatches", { method: "POST",
       body: JSON.stringify({ ref: "main", inputs: { items: JSON.stringify(items), status: $("#status").value.toUpperCase() } }) }).catch(() => null);
     if (!r || r.status !== 204) { status(`<b class="chg down">Couldn't start the import.</b> ${r ? `GitHub said ${r.status}.` : "Check your connection."} Try again or reconnect.`); $("#add").disabled = false; return; }
+    const sentNew = all.filter((p) => !p.handle);
     picks.clear(); draw(); summary();
     for (let t = 0; t < 120; t++) {
       await new Promise((res) => setTimeout(res, 5000));
@@ -734,6 +736,7 @@ async function pageImporter() {
       const run = latest && latest.id > before ? latest : null;
       if (!run) { status(`<b>Waiting for the import to start…</b>`); continue; }
       if (run.status !== "completed") { status(`<b>Adding products to your store…</b> <span class="muted">This usually takes about a minute.</span>`); continue; }
+      if (run.conclusion === "success") { sentNew.forEach((p) => justAdded.add(p.id)); draw(); }
       status(run.conclusion === "success"
         ? `<b class="chg up">Done. Your products are in the store.</b> <a href="${esc(run.html_url)}" target="_blank" rel="noopener" style="color:var(--accent)">See exactly what was added →</a>`
         : `<b class="chg down">The import hit a problem.</b> <a href="${esc(run.html_url)}" target="_blank" rel="noopener" style="color:var(--accent)">See details →</a>`);

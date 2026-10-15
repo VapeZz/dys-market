@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: shopify-import
@@ -44,3 +45,9 @@ jobs:
           SHOPIFY_CLIENT_ID: ${{ secrets.SHOPIFY_CLIENT_ID }}
           SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
         run: python pipeline/shopify_import.py
+
+      - name: Refresh market site (In store tags)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run nightly.yml --ref main -f backfill=false
