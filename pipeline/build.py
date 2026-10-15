@@ -161,6 +161,27 @@ def build(groups, products, stock, log=print):
                 sealed_change[gid] = pct(now_sum, old_sum)
         del old
 
+    ptcg = {}
+    for gid, g in groups.items():
+        m = re.match(r"https://images\.pokemontcg\.io/([^/]+)/logo\.png", g.get("lg") or "")
+        if m and g.get("k") == "pokemon":
+            ptcg[gid] = m.group(1)
+    cards_in = {}
+    for pid, p in products.items():
+        if p["t"] == "c":
+            cards_in.setdefault(str(p["g"]), []).append(pid)
+
+    def top_cards(gid, keys):
+        """Up to 3 of the set's most valuable cards, for a picture when the set has no logo or box."""
+        best = {}
+        for k in keys:
+            pid = k.split(":", 1)[0]
+            if products[pid]["t"] == "c":
+                best[pid] = max(best.get(pid, 0), latest[k])
+        ids = sorted(best, key=lambda x: -best[x])[:3]
+        ids += [x for x in cards_in.get(gid, []) if x not in ids][: 3 - len(ids)]
+        return [[int(x), ptcg_img(ptcg[gid], products[x].get("no")) if gid in ptcg else None] for x in ids]
+
     sets_out = []
     has_products = {str(p["g"]) for p in products.values()}
     for gid, g in groups.items():
@@ -189,6 +210,7 @@ def build(groups, products, stock, log=print):
             "bbN": products[bb_key.split(":")[0]]["n"] if bb_key else None,
             "c7": sealed_change.get(gid),
             **({"lg": g["lg"]} if g.get("lg") else {}),
+            **({"tc": top_cards(gid, keys)} if not g.get("lg") and not bb_key else {}),
         })
     sets_out.sort(key=lambda s: s["pub"] or "", reverse=True)
     write("sets.json", sets_out)
@@ -211,12 +233,6 @@ def build(groups, products, stock, log=print):
         by_group.setdefault(str(p["g"]), []).append((pid, p))
     for gid in by_group:
         by_set.setdefault(gid, [])
-    ptcg = {}
-    for gid, g in groups.items():
-        m = re.match(r"https://images\.pokemontcg\.io/([^/]+)/logo\.png", g.get("lg") or "")
-        if m and g.get("k") == "pokemon":
-            ptcg[gid] = m.group(1)
-
     set_files = {}
     for gid, keys in by_set.items():
         g = groups.get(gid)
