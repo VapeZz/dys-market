@@ -849,7 +849,90 @@ async function pageImporter() {
 /* ---------- My Collection ---------- */
 const CKEY = "dys-collection";
 const colGet = () => { try { return JSON.parse(localStorage.getItem(CKEY)) || { name: "", items: [] }; } catch { return { name: "", items: [] }; } };
-const colSet = (c) => { try { localStorage.setItem(CKEY, JSON.stringify(c)); } catch {} };
+const colSet = (c, stamp = true) => { if (stamp) c.updated = Date.now(); try { localStorage.setItem(CKEY, JSON.stringify(c)); } catch {} if (stamp) acct.push(c); };
+
+/* ---------- customer accounts (Shopify Customer Account API, public client + PKCE) ---------- */
+const ACCT = {
+  clientId: "",                 // Headless channel > Customer Account API > Client ID
+  shopId: "73346351331",
+  apiVersion: "2026-01",
+  redirect: "https://market.driveyourstyle.net/collection.html",
+};
+const acct = (() => {
+  const auth = `https://shopify.com/authentication/${ACCT.shopId}`;
+  const api = `https://shopify.com/${ACCT.shopId}/account/customer/api/${ACCT.apiVersion}/graphql`;
+  const K = "dys-acct";
+  const get = () => { try { return JSON.parse(localStorage.getItem(K)) || null; } catch { return null; } };
+  const put = (v) => { try { v ? localStorage.setItem(K, JSON.stringify(v)) : localStorage.removeItem(K); } catch {} };
+  const rnd = (n = 32) => { const a = new Uint8Array(n); crypto.getRandomValues(a); return btoa(String.fromCharCode(...a)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
+  const sha = async (v) => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v))))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const form = (o) => new URLSearchParams(o).toString();
+  const tokenReq = async (body) => {
+    const r = await fetch(`${auth}/oauth/token`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form(body) });
+    if (!r.ok) throw new Error(`token ${r.status}`);
+    const t = await r.json();
+    const cur = get() || {};
+    put({ ...cur, access: t.access_token, refresh: t.refresh_token || cur.refresh, idToken: t.id_token || cur.idToken, exp: Date.now() + (t.expires_in || 3600) * 1000 - 60000 });
+  };
+  const token = async () => {
+    const a = get(); if (!a) return null;
+    if (a.exp > Date.now()) return a.access;
+    if (!a.refresh) { put(null); return null; }
+    try { await tokenReq({ grant_type: "refresh_token", client_id: ACCT.clientId, refresh_token: a.refresh }); return get().access; }
+    catch { put(null); return null; }
+  };
+  const gql = async (query, variables = {}) => {
+    const t = await token(); if (!t) throw new Error("signed out");
+    const r = await fetch(api, { method: "POST", headers: { "Content-Type": "application/json", Authorization: t }, body: JSON.stringify({ query, variables }) });
+    const j = await r.json(); if (j.errors) throw new Error(JSON.stringify(j.errors).slice(0, 200)); return j.data;
+  };
+  let pushTimer = null;
+  return {
+    enabled: () => !!ACCT.clientId,
+    signedIn: () => !!get(),
+    info: () => get(),
+    async signIn() {
+      const verifier = rnd(48), state = rnd(16), nonce = rnd(16);
+      try { sessionStorage.setItem("dys-pkce", JSON.stringify({ verifier, state })); } catch {}
+      const u = new URL(`${auth}/oauth/authorize`);
+      Object.entries({ scope: "openid email customer-account-api:full", client_id: ACCT.clientId, response_type: "code", redirect_uri: ACCT.redirect,
+        state, nonce, code_challenge: await sha(verifier), code_challenge_method: "S256" }).forEach(([k, v]) => u.searchParams.set(k, v));
+      location.href = u.toString();
+    },
+    async finish() {   // returns true if this page load completed a sign-in
+      const qs = new URLSearchParams(location.search), code = qs.get("code");
+      if (!code) return false;
+      let saved = {}; try { saved = JSON.parse(sessionStorage.getItem("dys-pkce") || "{}"); sessionStorage.removeItem("dys-pkce"); } catch {}
+      history.replaceState(null, "", location.pathname + location.hash);
+      if (!saved.verifier || qs.get("state") !== saved.state) throw new Error("Sign-in expired. Please try again.");
+      await tokenReq({ grant_type: "authorization_code", client_id: ACCT.clientId, redirect_uri: ACCT.redirect, code, code_verifier: saved.verifier });
+      const d = await gql(`query { customer { id firstName emailAddress { emailAddress } } }`);
+      put({ ...get(), id: d.customer.id, name: d.customer.firstName || "", email: d.customer.emailAddress?.emailAddress || "" });
+      return true;
+    },
+    signOut() {
+      const a = get(); put(null);
+      if (a?.idToken) location.href = `${auth}/logout?id_token_hint=${encodeURIComponent(a.idToken)}&post_logout_redirect_uri=${encodeURIComponent(ACCT.redirect)}`;
+      else location.reload();
+    },
+    async pull() {
+      const d = await gql(`query { customer { id metafield(namespace: "dys", key: "binder") { value } } }`);
+      try { return d.customer.metafield ? JSON.parse(d.customer.metafield.value) : null; } catch { return null; }
+    },
+    push(c) {
+      if (!ACCT.clientId || !get()) return;
+      clearTimeout(pushTimer);
+      pushTimer = setTimeout(async () => {
+        try {
+          const a = get();
+          const r = await gql(`mutation($m: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $m) { userErrors { message } } }`,
+            { m: [{ ownerId: a.id, namespace: "dys", key: "binder", type: "json", value: JSON.stringify({ name: c.name || "", updated: c.updated || Date.now(), items: c.items }) }] });
+          const e = r.metafieldsSet.userErrors; document.dispatchEvent(new CustomEvent("dys-sync", { detail: e.length ? "error" : "ok" }));
+        } catch { document.dispatchEvent(new CustomEvent("dys-sync", { detail: "error" })); }
+      }, 800);
+    },
+  };
+})();
 const subOf = (n) => (n.match(/ \(([^)]+)\)$/) || [, "Normal"])[1];
 const b64e = (o) => btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const b64d = (t) => JSON.parse(decodeURIComponent(escape(atob(t.replace(/-/g, "+").replace(/_/g, "/")))));
@@ -939,6 +1022,37 @@ async function pageCollection() {
       try { const d = JSON.parse(await f.text()); if (!Array.isArray(d.items)) throw 0; col = { name: d.name || "", items: d.items.filter((i) => i && i.id && i.g).map((i) => ({ id: i.id, g: i.g, n: i.n, qty: Math.max(1, i.qty | 0), paid: i.paid ?? null })) }; save(); $("#name").value = col.name; await loadChanges(); draw(); $("#added").textContent = "Collection restored"; }
       catch { $("#added").textContent = "That file isn't a collection backup."; }
     });
+  }
+  if (!shared && acct.enabled()) {
+    const bar = $("#acct");
+    const paint = (msg) => {
+      bar.hidden = false;
+      const a = acct.info();
+      bar.innerHTML = a ? `<span><b>Saved to your account</b>${a.email ? ` · ${esc(a.email)}` : ""}${msg ? ` · <span class="muted">${esc(msg)}</span>` : ""}</span><button class="btn" id="acct-out" type="button">Sign out</button>`
+        : `<span><b>Save your binder to your Drive Your Style account</b><span class="muted" style="display:block;font-size:13px">Sign in with the email you shop with. Your binder syncs to every phone and computer.</span></span><button class="btn primary" id="acct-in" type="button">Sign in</button>`;
+      $("#acct-in")?.addEventListener("click", () => acct.signIn());
+      $("#acct-out")?.addEventListener("click", () => acct.signOut());
+    };
+    document.addEventListener("dys-sync", (e) => paint(e.detail === "ok" ? "Synced" : "Couldn't sync, will retry"));
+    try {
+      const justSignedIn = await acct.finish();
+      if (acct.signedIn()) {
+        paint("Syncing…");
+        const remote = await acct.pull();
+        const local = colGet();
+        if (remote && (!local.items.length || (!justSignedIn && (remote.updated || 0) > (local.updated || 0)))) {
+          col = { name: remote.name || local.name || "", items: remote.items || [], updated: remote.updated };
+          colSet(col, false);
+        } else if (remote && justSignedIn) {          // first sign-in on this device: combine both
+          const key = (x) => `${x.id}|${printCode(subOf(x.n || ""))}`, m = new Map(remote.items.map((x) => [key(x), x]));
+          for (const x of local.items) { const r = m.get(key(x)); m.set(key(x), r ? { ...r, qty: Math.max(r.qty, x.qty), paid: r.paid ?? x.paid } : x); }
+          col = { name: local.name || remote.name || "", items: [...m.values()] };
+          colSet(col);
+        } else { col = local; acct.push(local); }
+        $("#name").value = col.name || ""; await loadChanges();
+        paint(remote ? "Synced" : "Saved");
+      } else paint();
+    } catch (err) { paint(); $("#added").textContent = String(err.message || err).startsWith("Sign-in") ? err.message : "Couldn't reach your account. Your binder is still saved on this device."; }
   }
   draw(); await loadChanges(); draw();
 }
