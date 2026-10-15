@@ -121,6 +121,8 @@ def build_map(api, groups, log):
     if not mp["sets"]:
         for g in data(api.get("/games")):
             gid = g.get("slug") or g.get("id")
+            if gid not in ("pokemon", "pokemon-japan", "one-piece-card-game"):
+                continue
             page = 1
             while True:
                 body = api.get("/sets", {"game": gid, "page": page, "per_page": 200})
@@ -167,6 +169,20 @@ def full(api, log=print):
         if p and (p["t"] == "s" or cents >= MIN_CENTS):
             want[pid] = max(want.get(pid, 0), cents)
     cards = build_map(api, groups, log)
+    # anything the set lists didn't cover: resolve one by one (biggest first)
+    missing = sorted((p for p in want if p not in cards), key=lambda p: -want[p])
+    tried = set(load(MAP_PATH, {}).get("unresolved", []))
+    try:
+        for n, pid in enumerate(m for m in missing if m not in tried):
+            try:
+                cards[pid] = data(api.get(f"/cards/tcgplayer/{pid}"))["id"]
+            except RuntimeError:
+                tried.add(pid)
+            if n % 200 == 0:
+                mp = load(MAP_PATH, {"sets": {}, "cards": {}}); mp["cards"].update(cards); mp["unresolved"] = sorted(tried); save(MAP_PATH, mp)
+    except QuotaHit as e:
+        note("warning", "Daily limit reached", f"Stopped while matching products ({e}). Run again tomorrow.")
+    mp = load(MAP_PATH, {"sets": {}, "cards": {}}); mp["cards"].update(cards); mp["unresolved"] = sorted(tried); save(MAP_PATH, mp)
     done = set(load(DONE_PATH, []))
     todo = sorted((pid for pid in want if pid in cards and pid not in done), key=lambda p: -want[p])
     log(f"tcgapi: {len(want)} wanted, {len(todo)} still to fetch, {len(want) - sum(1 for p in want if p in cards)} not in TCG API")
