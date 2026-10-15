@@ -15,6 +15,20 @@ import config
 API = "https://api.pokemontcg.io/v2/sets?pageSize=250&page={page}&select=id,name,series,releaseDate,images"
 CACHE = os.path.join(config.DATA_DIR, "catalog", "ptcg-sets.json")
 
+# TCGplayer name -> Pokémon TCG API name, where the two differ
+ALIASES = {
+    "SV: Scarlet & Violet 151": "151",
+    "SM Base Set": "Sun & Moon",
+    "SV: Scarlet & Violet Promo Cards": "Scarlet & Violet Black Star Promos",
+    "SWSH: Sword & Shield Promo Cards": "SWSH Black Star Promos",
+    "SM Promos": "SM Black Star Promos",
+    "XY Promos": "XY Black Star Promos",
+    "Black and White Promos": "BW Black Star Promos",
+    "ME: Mega Evolution Promo": "Mega Evolution Black Star Promos",
+    "Generations: Radiant Collection": "Generations",
+    "Trading Card Game Classic": "Pokémon TCG Classic",
+}
+
 
 def norm(name):
     n = name.lower().replace("pokémon", "pokemon").replace("&", "and")
@@ -34,7 +48,7 @@ def fetch(log=print):
         with open(CACHE, encoding="utf-8") as f:
             fresh = json.load(f)
         age = datetime.now(timezone.utc) - datetime.fromisoformat(fresh.get("fetched", "2000-01-01T00:00:00+00:00"))
-        if age < timedelta(days=7):
+        if age < timedelta(days=2):
             return fresh["sets"]
     rows, page = [], 1
     try:
@@ -69,7 +83,11 @@ def attach(groups, log=print):
         g.pop("lg", None)
         if g.get("k") != "pokemon":
             continue
-        cands = by_name.get(norm(g["name"]), [])
+        name = ALIASES.get(g["name"], g["name"])
+        m = re.match(r"McDonald's (?:Promos|Collection) (\d{4})", name)
+        if m:
+            name = f"McDonald's Collection {m.group(1)}"
+        cands = by_name.get(norm(name), [])
         if len(cands) > 1 and g.get("pub"):
             cands = sorted(cands, key=lambda s: abs((date.fromisoformat(s["d"]) - date.fromisoformat(g["pub"])).days) if s["d"] else 9999)
         pick = cands[0] if cands else None
