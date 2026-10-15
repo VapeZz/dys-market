@@ -120,6 +120,17 @@ PAGES = {
   <p class="muted" id="note" style="margin:-6px 0 12px;font-size:13px"></p>
   {MOVERS}
 </section></div>'''),
+"search": ("Card search · Drive Your Style Market Insights", "Search every Pokémon, Pokémon Japan and One Piece card and sealed product by name, set, number or rarity, with today's market price.", '''
+<div class="wrap"><section class="block">
+  <div class="block-head"><div><h1 style="font-size:36px">Card search</h1><p>Every card and sealed product we track. Search by name, set, card number or rarity.</p></div></div>
+  <div class="search big-q">''' + SEARCH + '''<input id="sq" type="search" placeholder="e.g. Charizard ex 199, Umbreon VMAX, 25/102" aria-label="Search cards" autocomplete="off" enterkeyhint="search"></div>
+  <div class="controls" style="margin-top:12px"><div id="sgame"></div><div id="stype"></div>
+    <select class="select" id="srar" aria-label="Rarity"><option value="">Any rarity</option></select>
+    <select class="select" id="ssort" aria-label="Sort"><option value="price">Price: high to low</option><option value="low">Price: low to high</option><option value="name">Name A–Z</option><option value="num">Card number</option></select>
+    <label class="toggle"><input type="checkbox" id="spriced"> Only with a price</label></div>
+  <p class="muted" id="scount" style="margin:4px 0 12px;font-size:13px">Loading every card…</p>
+  <div id="sres" class="cgrid"></div>
+</section></div>'''),
 "compare": ("Compare prices · Drive Your Style Market Insights", "Compare two Pokémon or One Piece products side by side: market price, recent change and price history.", '''
 <div class="wrap"><section class="block">
   <div class="block-head"><div><h1 style="font-size:36px">Compare</h1><p>Pick any two sealed products or cards to compare price, recent change and price history.</p></div></div>

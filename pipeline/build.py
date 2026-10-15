@@ -296,6 +296,22 @@ def build(groups, products, stock, log=print):
     search.sort(key=lambda r: -r[4])
     write("search.json", search)
 
+    # full index for the Search page: every card and sealed product, priced or not
+    rar_ix, rows_all, seen_pid = {}, [], set()
+    for k, v in latest.items():
+        pid, name = label(products, k)
+        p = products[pid]
+        seen_pid.add(pid)
+        r = p.get("r")
+        rows_all.append([int(pid), name, p["g"], p["t"], v, p.get("no", ""), rar_ix.setdefault(r, len(rar_ix)) if r else -1])
+    for pid, p in products.items():
+        if pid in seen_pid or str(p["g"]) not in groups:
+            continue
+        r = p.get("r")
+        rows_all.append([int(pid), p["n"], p["g"], p["t"], None, p.get("no", ""), rar_ix.setdefault(r, len(rar_ix)) if r else -1])
+    rows_all.sort(key=lambda r: -(r[4] or 0))
+    write("search-all.json", {"r": list(rar_ix), "rows": rows_all})
+
     # ---- in-stock list + meta --------------------------------------------
     stock_rows = []
     for pid, s in stock.items():
@@ -365,7 +381,7 @@ def pick_series_days(days, latest_day):
 def write_sitemap(groups, products, latest, day, base="https://market.driveyourstyle.net/"):
     """Static pages, every set page and every priced sealed product page."""
     from xml.sax.saxutils import escape
-    urls = [base] + [base + p for p in ("sets.html", "trends.html", "cards.html", "compare.html", "calendar.html", "watchlist.html", "about.html")]
+    urls = [base] + [base + p for p in ("sets.html", "trends.html", "cards.html", "search.html", "compare.html", "calendar.html", "watchlist.html", "about.html")]
     urls += [f"{base}set.html?id={gid}" for gid in groups]
     seen = set()
     for k in latest:

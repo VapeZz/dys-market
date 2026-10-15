@@ -384,3 +384,10 @@ tr.grp td{background:var(--surface-2);font-size:13px;padding-top:8px;padding-bot
 .stile .simg.fan .fc:nth-child(2){left:10%;transform:rotate(-10deg);z-index:2}
 .stile .simg.fan .fc:nth-child(3){left:52%;transform:rotate(10deg);z-index:1}
 .stile .simg.fan .fc:only-child{left:31%}
+
+/* search page */
+.big-q input{font-size:17px;padding-top:14px;padding-bottom:14px}
+.results .all-res{justify-content:center;border-top:1px solid var(--line);font-size:13px}
+.ctile .cp em{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#sres .ctile .cn{align-items:flex-start}
+#sres .ctile .cn b{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:clip}

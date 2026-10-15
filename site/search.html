@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Card search · Drive Your Style Market Insights</title>
+<meta name="description" content="Search every Pokémon, Pokémon Japan and One Piece card and sealed product by name, set, number or rarity, with today's market price.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Drive Your Style Market Insights">
+<meta property="og:title" content="Card search · Drive Your Style Market Insights">
+<meta property="og:description" content="Search every Pokémon, Pokémon Japan and One Piece card and sealed product by name, set, number or rarity, with today's market price.">
+<meta property="og:image" content="https://market.driveyourstyle.net/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Card search · Drive Your Style Market Insights">
+<meta name="twitter:description" content="Search every Pokémon, Pokémon Japan and One Piece card and sealed product by name, set, number or rarity, with today's market price.">
+<meta name="twitter:image" content="https://market.driveyourstyle.net/assets/og.png">
+<link rel="canonical" href="https://market.driveyourstyle.net/search.html">
+<meta name="theme-color" content="#0b0d14">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g'%3E%3Cstop offset='0' stop-color='%235ee7ff'/%3E%3Cstop offset='.5' stop-color='%23a78bfa'/%3E%3Cstop offset='1' stop-color='%23ff7ad9'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3C/svg%3E">
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("dys-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
+</head>
+<body data-page="search">
+<header id="top"></header>
+<main>
+
+<div class="wrap"><section class="block">
+  <div class="block-head"><div><h1 style="font-size:36px">Card search</h1><p>Every card and sealed product we track. Search by name, set, card number or rarity.</p></div></div>
+  <div class="search big-q"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="sq" type="search" placeholder="e.g. Charizard ex 199, Umbreon VMAX, 25/102" aria-label="Search cards" autocomplete="off" enterkeyhint="search"></div>
+  <div class="controls" style="margin-top:12px"><div id="sgame"></div><div id="stype"></div>
+    <select class="select" id="srar" aria-label="Rarity"><option value="">Any rarity</option></select>
+    <select class="select" id="ssort" aria-label="Sort"><option value="price">Price: high to low</option><option value="low">Price: low to high</option><option value="name">Name A–Z</option><option value="num">Card number</option></select>
+    <label class="toggle"><input type="checkbox" id="spriced"> Only with a price</label></div>
+  <p class="muted" id="scount" style="margin:4px 0 12px;font-size:13px">Loading every card…</p>
+  <div id="sres" class="cgrid"></div>
+</section></div>
+</main>
+<footer id="foot"></footer>
+<script src="assets/app.js"></script>
+</body>
+</html>

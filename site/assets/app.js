@@ -51,7 +51,7 @@ document.documentElement.dataset.theme = getTheme();
 /* ---------- shell ---------- */
 const SEARCH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>`;
 function shell() {
-  const links = [["index", "Overview"], ["sets", "Sets"], ["trends", "Trends"], ["cards", "Cards"], ["compare", "Compare"], ["calendar", "Calendar"], ["watchlist", "Watchlist"], ["collection", "My Collection"], ["about", "About the data"]];
+  const links = [["index", "Overview"], ["sets", "Sets"], ["trends", "Trends"], ["cards", "Movers"], ["search", "Search"], ["compare", "Compare"], ["calendar", "Calendar"], ["watchlist", "Watchlist"], ["collection", "My Collection"], ["about", "About the data"]];
   $("#top").outerHTML = `<header class="top"><div class="wrap">
     <a class="brand" href="index.html"><span class="brand-mark">DYS</span><span>Drive Your Style<small>Market Insights</small></span></a>
     <nav class="nav" id="nav">${links.map(([p, l]) => `<a href="${p}.html"${p === PAGE ? ' aria-current="page"' : ""}>${l}</a>`).join("")}
@@ -110,6 +110,7 @@ function initSearch(box) {
       <span class="name"><b>${esc(r[1])}</b><span>${esc(meta.groups[r[2]]?.[0] || "")} · ${r[3] === "s" ? "Sealed" : "Card"}</span></span>
       <span class="figs" style="margin-left:auto"><b>${money(r[4])}</b></span></a>`).join("")
       : `<div class="empty">No matches for "${esc(input.value)}"</div>`;
+    out.innerHTML += `<a class="all-res" href="search.html?q=${encodeURIComponent(input.value.trim())}"><b>Search every card for "${esc(input.value.trim())}" →</b></a>`;
     out.classList.add("open");
   };
   input.addEventListener("input", async () => { await load(); render(); });
@@ -120,7 +121,7 @@ function initSearch(box) {
       e.preventDefault();
       sel = (sel + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
       items.forEach((a, i) => a.classList.toggle("active", i === sel));
-    } else if (e.key === "Enter") { (items[sel] || items[0]).click(); }
+    } else if (e.key === "Enter") { (items[sel] || items[items.length - 1]).click(); }
   });
   document.addEventListener("click", (e) => { if (!box.contains(e.target)) out.classList.remove("open"); });
 }
@@ -1135,7 +1136,65 @@ async function pageCollection() {
 /* ---------- boot ---------- */
 shell();
 document.querySelectorAll("[data-search]").forEach(initSearch);
-const pages = { index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, watchlist: pageWatchlist, importer: pageImporter, collection: pageCollection };
+const normNum = (t) => t.replace(/\b0+(\d)/g, "$1");
+const ptcgFromLogo = (lg) => (lg || "").match(/^https:\/\/images\.pokemontcg\.io\/([^/]+)\/logo\.png/)?.[1];
+const ptcgImg = (setId, no) => { if (!setId || !no) return ""; let n = no.split("/")[0].trim(); if (/^\d+$/.test(n)) n = String(Number(n)); return `https://images.pokemontcg.io/${setId}/${n}.png`; };
+
+async function pageSearch() {
+  const [meta, sets] = await Promise.all([getJSON("meta.json"), getJSON("sets.json")]);
+  const setById = new Map(sets.map((x) => [x.id, x]));
+  let q = (params.get("q") || "").trim(), game = params.get("game") || "all", type = "c", rar = "", sort = "price", priced = false, lim = 60;
+  $("#sq").value = q;
+  tabs($("#sgame"), [["all", "All games"], ...meta.games.map((g) => [g.slug, g.label])], game, (v) => { game = v; lim = 60; draw(); });
+  tabs($("#stype"), [["c", "Cards"], ["s", "Sealed"], ["all", "Both"]], type, (v) => { type = v; lim = 60; draw(); });
+  const data = await getJSON("search-all.json");
+  const R = data.r;
+  $("#srar").innerHTML += R.map((r, i) => [r, i]).sort((a, b) => a[0].localeCompare(b[0])).map(([r, i]) => `<option value="${i}">${esc(r)}</option>`).join("");
+  const hay = data.rows.map((r) => alias(normNum(`${r[1]} ${setById.get(r[2])?.n || ""} ${r[5]} ${r[6] >= 0 ? R[r[6]] : ""}`.toLowerCase().replace(/é/g, "e"))));
+  const numOf = (r) => { const m = (r[5] || "").match(/\d+/); return m ? Number(m[0]) : 1e9; };
+  const draw = () => {
+    const terms = normNum(q.toLowerCase().replace(/é/g, "e")).split(/\s+/).filter(Boolean);
+    const out = [];
+    data.rows.forEach((r, i) => {
+      if (type !== "all" && r[3] !== type) return;
+      if (game !== "all" && setById.get(r[2])?.k !== game) return;
+      if (rar !== "" && String(r[6]) !== rar) return;
+      if (priced && r[4] == null) return;
+      if (terms.length && !terms.every((t) => hay[i].includes(t))) return;
+      out.push(r);
+    });
+    if (sort === "low") out.sort((a, b) => (a[4] ?? 1e12) - (b[4] ?? 1e12));
+    else if (sort === "name") out.sort((a, b) => a[1].localeCompare(b[1]));
+    else if (sort === "num") out.sort((a, b) => numOf(a) - numOf(b) || a[1].localeCompare(b[1]));
+    $("#scount").textContent = !terms.length && game === "all" && rar === "" ? `${out.length.toLocaleString()} items. Type a name, set or card number to narrow it down.` : `${out.length.toLocaleString()} results`;
+    const own = new Map(colGet().items.map((x) => [`${x.id}|${printCode(subOf(x.n || ""))}`, x.qty]));
+    $("#sres").innerHTML = out.slice(0, lim).map((r) => {
+      const st = setById.get(r[2]), k = `${r[0]}|${printCode(subOf(r[1]))}`, qty = own.get(k) || 0;
+      const alt = r[3] === "c" && st?.k === "pokemon" ? ptcgImg(ptcgFromLogo(st.lg), r[5]) : "";
+      return `<div class="ctile${r[3] === "s" ? " sealed" : ""}${qty ? " owned" : ""}"><a href="${prodUrl(r[0], r[2])}" class="cimg">${imgTag(r[0], "", 1000, alt)}</a>
+        <button class="cadd" type="button" data-add="${esc(k)}" data-i="${r[0]}" aria-label="Add ${esc(r[1])} to My Collection">${qty ? `✓${qty > 1 ? qty : ""}` : "+"}</button>
+        <a href="${prodUrl(r[0], r[2])}" class="cinfo"><span class="cn"><b>${esc(r[1])}</b>${r[5] ? `<small>${esc(r[5])}</small>` : ""}</span>
+        <span class="cp">${r[4] == null ? `<small class="muted">No price yet</small>` : `<b>${money(r[4])}</b>`}<em>${esc((st?.n || "").replace(/^(ME|SV|SWSH|SM|M)\d*[a-z]?:\s*/i, ""))}</em></span></a></div>`;
+    }).join("") + (out.length > lim ? `<div class="cmore"><button class="btn" id="smore" type="button">Show more (${(out.length - lim).toLocaleString()} left)</button></div>` : "")
+      + (!out.length ? `<div class="panel empty-note" style="grid-column:1/-1">No matches. Try fewer words, or just the card number like 199/165.</div>` : "");
+    $("#smore")?.addEventListener("click", () => { lim += 120; draw(); });
+    $("#sres").querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => {
+      const r = out.find((x) => `${x[0]}|${printCode(subOf(x[1]))}` === b.dataset.add); if (!r) return;
+      const col = colGet(), ex = col.items.find((x) => `${x.id}|${printCode(subOf(x.n || ""))}` === b.dataset.add);
+      ex ? ex.qty++ : col.items.push({ id: r[0], g: r[2], n: r[1], qty: 1, paid: null });
+      colSet(col); toast(`Added ${r[1]} to My Collection`); draw();
+    }));
+  };
+  let t = 0;
+  $("#sq").addEventListener("input", (e) => { q = e.target.value.trim(); lim = 60; clearTimeout(t); t = setTimeout(() => { draw(); history.replaceState(null, "", q ? `?q=${encodeURIComponent(q)}` : "search.html"); }, 180); });
+  $("#srar").addEventListener("change", (e) => { rar = e.target.value; lim = 60; draw(); });
+  $("#ssort").addEventListener("change", (e) => { sort = e.target.value; draw(); });
+  $("#spriced").addEventListener("change", (e) => { priced = e.target.checked; lim = 60; draw(); });
+  draw();
+  if (!q) $("#sq").focus();
+}
+
+const pages = { search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, watchlist: pageWatchlist, importer: pageImporter, collection: pageCollection };
 (pages[PAGE] || (async () => {}))().catch((err) => {
   console.error(err);
   const main = $("main");
