@@ -47,7 +47,7 @@ document.documentElement.dataset.theme = getTheme();
 /* ---------- shell ---------- */
 const SEARCH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>`;
 function shell() {
-  const links = [["index", "Overview"], ["sets", "Sets"], ["trends", "Trends"], ["cards", "Cards"], ["compare", "Compare"], ["calendar", "Calendar"], ["watchlist", "Watchlist"], ["about", "About the data"]];
+  const links = [["index", "Overview"], ["sets", "Sets"], ["trends", "Trends"], ["cards", "Cards"], ["compare", "Compare"], ["calendar", "Calendar"], ["watchlist", "Watchlist"], ["collection", "My Collection"], ["about", "About the data"]];
   $("#top").outerHTML = `<header class="top"><div class="wrap">
     <a class="brand" href="index.html"><span class="brand-mark">DYS</span><span>Drive Your Style<small>Market Insights</small></span></a>
     <nav class="nav" id="nav">${links.map(([p, l]) => `<a href="${p}.html"${p === PAGE ? ' aria-current="page"' : ""}>${l}</a>`).join("")}
@@ -748,10 +748,107 @@ async function pageImporter() {
   paintConn(); fillSets(); summary();
 }
 
+/* ---------- My Collection ---------- */
+const CKEY = "dys-collection";
+const colGet = () => { try { return JSON.parse(localStorage.getItem(CKEY)) || { name: "", items: [] }; } catch { return { name: "", items: [] }; } };
+const colSet = (c) => { try { localStorage.setItem(CKEY, JSON.stringify(c)); } catch {} };
+const subOf = (n) => (n.match(/ \(([^)]+)\)$/) || [, "Normal"])[1];
+const b64e = (o) => btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const b64d = (t) => JSON.parse(decodeURIComponent(escape(atob(t.replace(/-/g, "+").replace(/_/g, "/")))));
+
+async function pageCollection() {
+  const [meta, rows] = await Promise.all([getJSON("meta.json"), getJSON("search.json")]);
+  const byKey = new Map(rows.map((r) => [`${r[0]}|${printCode(subOf(r[1]))}`, r]));
+  const setName = (g) => meta.groups[g]?.[0] || "";
+  const shared = location.hash.startsWith("#c=");
+  let col = colGet();
+  if (shared) {
+    try { const d = b64d(location.hash.slice(3)); col = { name: d.n || "", items: (d.i || []).map(([id, g, qty, code]) => ({ id, g, qty, code })) }; }
+    catch { col = { name: "", items: [] }; }
+    $("#mine").hidden = true; $("#shared-note").hidden = false;
+  }
+  const keyOf = (it) => `${it.id}|${it.code ?? printCode(subOf(it.n || ""))}`;
+  const changes = {};
+  const loadChanges = async () => {
+    const gids = [...new Set(col.items.map((i) => i.g))].slice(0, 40);
+    await Promise.all(gids.map((g) => getJSON(`set/${g}.json`).then((d) => d.items.forEach((x) => { changes[`${x.id}|${printCode(subOf(x.n))}`] = x.ch; })).catch(() => {})));
+  };
+  const save = () => { if (!shared) colSet(col); };
+
+  const draw = () => {
+    const items = col.items.map((it) => { const r = byKey.get(keyOf(it)); return { ...it, name: it.n || r?.[1] || `#${it.id}`, mkt: r?.[4] ?? null, ch: changes[keyOf(it)] }; })
+      .sort((a, b) => (b.mkt || 0) * b.qty - (a.mkt || 0) * a.qty);
+    const value = items.reduce((a, i) => a + (i.mkt || 0) * i.qty, 0);
+    const paidItems = items.filter((i) => i.paid != null);
+    const paid = paidItems.reduce((a, i) => a + i.paid * i.qty, 0);
+    const paidValue = paidItems.reduce((a, i) => a + (i.mkt || 0) * i.qty, 0);
+    const count = items.reduce((a, i) => a + i.qty, 0);
+    $("#title").textContent = col.name || (shared ? "Shared collection" : "My collection");
+    $("#stats").innerHTML = [
+      [money(value), "Market value"],
+      [count.toLocaleString(), "Items"],
+      [paidItems.length ? money(paid) : "—", "You paid"],
+      [paidItems.length ? `${paidValue - paid >= 0 ? "+" : "−"}${money(Math.abs(paidValue - paid))}` : "—", paidItems.length && paid ? `Gain ${((paidValue - paid) / paid * 100).toFixed(1)}%` : "Gain / loss"],
+    ].map(([v, l]) => `<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+    $("#list").innerHTML = items.length ? `<div class="table-wrap"><table><thead><tr><th>Item</th><th class="num">Qty${shared ? "" : " · paid"}</th><th class="num">Market</th><th class="num">Value</th><th class="num hide-sm">7D</th>${shared ? "" : "<th></th>"}</tr></thead><tbody>
+      ${items.map((i, ix) => `<tr><td class="title"><a href="${prodUrl(i.id, i.g)}">${imgTag(i.id, "")}<span>${esc(i.name)}<span class="muted" style="display:block;font-size:12px;font-weight:400">${esc(setName(i.g))}</span></span></a></td>
+        <td class="num">${shared ? i.qty : `<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><input class="field" type="number" min="1" max="9999" value="${i.qty}" data-qty="${esc(keyOf(i))}" aria-label="Quantity" style="width:72px"><input class="field" type="number" min="0" step="0.01" placeholder="paid $" value="${i.paid != null ? (i.paid / 100).toFixed(2) : ""}" data-paid="${esc(keyOf(i))}" aria-label="Paid each" style="width:72px"></div>`}</td>
+        <td class="num">${money(i.mkt)}</td>
+        <td class="num"><b>${money(i.mkt == null ? null : i.mkt * i.qty)}</b></td>
+        <td class="num hide-sm">${chg(i.ch?.["7"])}</td>
+        ${shared ? "" : `<td class="num"><button class="btn" type="button" data-rm="${esc(keyOf(i))}" aria-label="Remove ${esc(i.name)}">✕</button></td>`}</tr>`).join("")}
+      </tbody></table></div>` : `<div class="panel empty-note">${shared ? "This shared collection is empty." : "Your collection is empty. Search above to add your first card or sealed product."}</div>`;
+    if (shared) return;
+    const find = (k) => col.items.find((x) => keyOf(x) === k);
+    $("#list").querySelectorAll("[data-qty]").forEach((el) => el.addEventListener("change", () => { const it = find(el.dataset.qty); it.qty = Math.max(1, Number(el.value) || 1); save(); setTimeout(draw); }));
+    $("#list").querySelectorAll("[data-paid]").forEach((el) => el.addEventListener("change", () => { const it = find(el.dataset.paid); it.paid = el.value === "" ? null : Math.round(Number(el.value) * 100); save(); setTimeout(draw); }));
+    $("#list").querySelectorAll("[data-rm]").forEach((el) => el.addEventListener("click", () => { col.items = col.items.filter((x) => keyOf(x) !== el.dataset.rm); save(); draw(); }));
+  };
+
+  if (!shared) {
+    const input = $("#add-q"), out = $("#add-results");
+    $("#name").value = col.name || "";
+    $("#name").addEventListener("input", (e) => { col.name = e.target.value.slice(0, 60); save(); $("#title").textContent = col.name || "My collection"; });
+    input.addEventListener("input", () => {
+      const q = input.value.trim().toLowerCase().replace(/é/g, "e");
+      if (q.length < 2) { out.classList.remove("open"); return; }
+      const terms = q.split(/\s+/), hits = [];
+      for (const r of rows) { const hay = alias((r[1] + " " + setName(r[2])).toLowerCase()); if (terms.every((t) => hay.includes(t))) { hits.push(r); if (hits.length >= 12) break; } }
+      out.innerHTML = hits.length ? hits.map((r, i) => `<a href="#" data-hit="${i}">${imgTag(r[0])}<span class="name"><b>${esc(r[1])}</b><span>${esc(setName(r[2]))} · ${r[3] === "s" ? "Sealed" : "Card"}</span></span><span class="figs" style="margin-left:auto"><b>+ ${money(r[4])}</b></span></a>`).join("") : `<div class="empty">No matches</div>`;
+      out.classList.add("open");
+      out.querySelectorAll("[data-hit]").forEach((a) => a.addEventListener("click", async (e) => {
+        e.preventDefault(); const r = hits[+a.dataset.hit];
+        const it = { id: r[0], g: r[2], n: r[1], qty: 1, paid: null };
+        const ex = col.items.find((x) => keyOf(x) === keyOf(it));
+        ex ? ex.qty++ : col.items.push(it);
+        save(); input.value = ""; out.classList.remove("open"); await loadChanges(); draw();
+        $("#added").textContent = `Added ${r[1]}`; setTimeout(() => { $("#added").textContent = ""; }, 2500);
+      }));
+    });
+    document.addEventListener("click", (e) => { if (!$("#add-box").contains(e.target)) out.classList.remove("open"); });
+    $("#share").addEventListener("click", async () => {
+      const url = `${location.origin}${location.pathname}#c=${b64e({ n: col.name, i: col.items.map((i) => [i.id, i.g, i.qty, printCode(subOf(i.n || ""))]) })}`;
+      try { if (navigator.share) { await navigator.share({ title: col.name || "My collection", url }); return; } } catch { return; }
+      try { await navigator.clipboard.writeText(url); $("#added").textContent = "Share link copied"; } catch { prompt("Copy your share link:", url); }
+    });
+    $("#backup").addEventListener("click", () => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(col, null, 1)], { type: "application/json" }));
+      a.download = `dys-collection-${meta.updated}.json`; a.click();
+    });
+    $("#restore").addEventListener("change", async (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      try { const d = JSON.parse(await f.text()); if (!Array.isArray(d.items)) throw 0; col = { name: d.name || "", items: d.items.filter((i) => i && i.id && i.g).map((i) => ({ id: i.id, g: i.g, n: i.n, qty: Math.max(1, i.qty | 0), paid: i.paid ?? null })) }; save(); $("#name").value = col.name; await loadChanges(); draw(); $("#added").textContent = "Collection restored"; }
+      catch { $("#added").textContent = "That file isn't a collection backup."; }
+    });
+  }
+  draw(); await loadChanges(); draw();
+}
+
 /* ---------- boot ---------- */
 shell();
 document.querySelectorAll("[data-search]").forEach(initSearch);
-const pages = { index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, watchlist: pageWatchlist, importer: pageImporter };
+const pages = { index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, watchlist: pageWatchlist, importer: pageImporter, collection: pageCollection };
 (pages[PAGE] || (async () => {}))().catch((err) => {
   console.error(err);
   const main = $("main");

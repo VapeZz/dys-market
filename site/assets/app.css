@@ -223,3 +223,5 @@ table.cmp th:first-child,table.cmp td:first-child{width:32%}
 .chase .p{display:flex;justify-content:space-between;align-items:center;font-size:13px;margin-top:auto}
 /* importer on phones */
 @media (max-width:560px){#set{max-width:100%;width:100%}#rows td.title{min-width:0}#rows th,#rows td{padding-left:6px;padding-right:6px}#rows td.title img{width:30px;height:42px;flex:0 0 30px}#rows input.field{padding:6px 6px;font-size:13px}}
+@media (max-width:560px){#list td.title{min-width:0}#list td.title img{width:30px;height:42px;flex:0 0 30px}#list th,#list td{padding-left:6px;padding-right:6px}#list input.field{padding:6px;font-size:13px}}
+@media (max-width:560px){#list .btn[data-rm]{padding:6px 9px;min-width:0}#list td.title{width:34%}}
