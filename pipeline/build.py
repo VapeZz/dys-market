@@ -23,6 +23,11 @@ def write(rel, data):
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
 
 
+def is_code_card(p):
+    """Online code cards (TCG Live codes) clutter set lists and movers; leave them out of the site."""
+    return p.get("r") == "Code Card" or p.get("n", "").lower().startswith("code card")
+
+
 def label(products, key):
     pid, sub = key.split(":", 1)
     p = products[pid]
@@ -33,6 +38,7 @@ def label(products, key):
 
 
 def build(groups, products, stock, log=print):
+    products = {k: v for k, v in products.items() if not is_code_card(v)}
     matched = stock
     stock = {k: {"u": v["u"], "p": v["p"]} for k, v in matched.items() if v.get("a", True)}
     days = snapshots.available()
