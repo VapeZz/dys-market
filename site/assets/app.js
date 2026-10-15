@@ -243,7 +243,7 @@ async function pageSets() {
   let game = params.get("game") || "pokemon", q = "", era = "all";
   const today = meta.updated;
   const tile = (s) => `<a class="stile" href="set.html?id=${s.id}">
-      <span class="simg">${s.bbId ? imgTag(s.bbId, "", 1000) : `<span class="sph">${esc((s.a || s.n).slice(0, 8))}</span>`}${s.pub && s.pub > today ? `<span class="badge up-next">Upcoming</span>` : ""}</span>
+      <span class="simg${s.lg ? " logo" : ""}">${s.lg ? `<img src="${esc(s.lg)}" alt="${esc(s.n)} logo" loading="lazy">` : s.bbId ? imgTag(s.bbId, "", 1000) : `<span class="sph">${esc((s.a || s.n).slice(0, 8))}</span>`}${s.pub && s.pub > today ? `<span class="badge up-next">Upcoming</span>` : ""}</span>
       <span class="sname">${esc(s.n.replace(/^(ME|SV|SWSH|SM|M)\d*[a-z]?:\s*/i, ""))}</span>
       <span class="smeta">${s.pub ? new Date(s.pub + "T12:00:00").toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "—"}${s.bb ? ` · ${money(s.bb)}` : ""}</span></a>`;
   const draw = () => {

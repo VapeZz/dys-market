@@ -161,6 +161,7 @@ def build(groups, products, stock, log=print):
             "bbId": int(bb_key.split(":")[0]) if bb_key else None,
             "bbN": products[bb_key.split(":")[0]]["n"] if bb_key else None,
             "c7": sealed_change.get(gid),
+            **({"lg": g["lg"]} if g.get("lg") else {}),
         })
     sets_out.sort(key=lambda s: s["pub"] or "", reverse=True)
     write("sets.json", sets_out)

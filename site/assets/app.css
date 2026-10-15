@@ -308,3 +308,5 @@ table.cmp th:first-child,table.cmp td:first-child{width:32%}
 .stile .simg .sph{position:absolute;inset:0}
 .stile .simg .badge{background:#0b0d14;color:#fff;z-index:1}
 .acct-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 16px;margin:0 0 16px}
+.stile .simg.logo{background:radial-gradient(120% 90% at 50% 40%,#232838,#121520)}
+.stile .simg.logo img{padding:14px 16px;object-fit:contain}

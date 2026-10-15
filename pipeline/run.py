@@ -6,6 +6,7 @@
 import sys
 
 import build
+import logos
 import config  # noqa: F401  (loads settings / env overrides)
 import snapshots
 import store
@@ -26,6 +27,7 @@ def main(argv):
         removed = snapshots.prune(day)
         if removed:
             print(f"snapshots: pruned {removed} old files")
+    logos.attach(groups)
     stock = store.match_in_stock(products, store.fetch_store_products())
     build.build(groups, products, stock)
 
