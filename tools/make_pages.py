@@ -83,12 +83,19 @@ PAGES = {
     <select class="select" id="sort" aria-label="Sort"><option value="pub">Newest first</option><option value="bb">Main sealed price</option><option value="up">7D gainers</option><option value="down">7D decliners</option></select></div>
   <div id="table"><div class="skeleton" style="height:300px"></div></div>
 </section></div>'''),
-"set": ("Set prices · Drive Your Style Market Insights", "Sealed and card market prices for this set.", '''
+"set": ("Set prices · Drive Your Style Market Insights", "Every card and sealed product in this set with today's market price.", '''
 <div class="wrap"><div class="crumbs" id="crumbs"></div>
-<section class="block" style="padding-top:12px"><h1 id="title" style="font-size:clamp(28px,4vw,42px)"></h1><p class="muted" id="sub"></p>
-  <div id="chase-wrap" hidden><h2 style="font-size:22px;margin:24px 0 12px">Top chase cards</h2><div class="chase-row" id="chase"></div></div>
-  <h2 style="font-size:22px;margin:24px 0 12px">Sealed product</h2><div id="sealed"><div class="skeleton" style="height:200px"></div></div>
-  <h2 style="font-size:22px;margin:32px 0 12px">Cards</h2><div id="cards"></div>
+<section class="block" style="padding-top:12px">
+  <h1 id="title" style="font-size:clamp(26px,4vw,40px)"></h1><p class="muted" id="sub" style="margin-top:4px"></p>
+  <div class="set-bar">
+    <div class="search set-q">''' + SEARCH + '''<input id="q" type="search" placeholder="Search…" aria-label="Search this set" autocomplete="off"></div>
+    <select class="select" id="sort" aria-label="Sort"><option value="price">Price ↓</option><option value="low">Price ↑</option><option value="num">Card number</option><option value="name">Name</option></select>
+    <button class="btn icon" id="view" type="button" aria-label="Switch grid or list view"></button>
+  </div>
+  <div class="set-tabs"><div id="tab"></div><div id="rar" class="chips-row"></div></div>
+  <div class="set-stats" id="set-stats"></div>
+  <p class="muted" id="count-line" style="font-size:13px;margin:6px 0 10px"></p>
+  <div id="grid"><div class="skeleton" style="height:400px"></div></div>
 </section></div>'''),
 "product": ("Price history · Drive Your Style Market Insights", "Market price history.", '''
 <div class="wrap"><div class="crumbs" id="crumbs"></div><div class="prod" id="prod"><div class="skeleton" style="height:320px"></div></div></div>'''),
