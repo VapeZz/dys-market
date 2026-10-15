@@ -23,6 +23,12 @@ def write(rel, data):
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
 
 
+# collection set id -> (set id where TCGplayer lists its cards, first card number, last card number)
+LINKED_CARDS = {
+    "24584": ("24451", 37, 63),  # First Partner Collection 2026 -> ME promos 037-063 (the 27 starters)
+}
+
+
 def is_code_card(p):
     """Online code cards (TCG Live codes) clutter set lists and movers; leave them out of the site."""
     return p.get("r") == "Code Card" or p.get("n", "").lower().startswith("code card")
@@ -211,6 +217,7 @@ def build(groups, products, stock, log=print):
         if m and g.get("k") == "pokemon":
             ptcg[gid] = m.group(1)
 
+    set_files = {}
     for gid, keys in by_set.items():
         g = groups.get(gid)
         if not g:
@@ -246,10 +253,21 @@ def build(groups, products, stock, log=print):
             if p["t"] == "c" and gid in ptcg:
                 item["im"] = ptcg_img(ptcg[gid], p.get("no"))
             items.append(item)
-        write(f"set/{gid}.json", {
+        set_files[gid] = {
             "id": int(gid), "n": g["name"], "a": g["abbr"], "k": g["k"], "pub": g["pub"],
             "dates": series_days, "items": items,
-        })
+        }
+    # Some collections' cards are catalogued by TCGplayer under a promo set; show them in both places.
+    for gid, (src, lo, hi) in LINKED_CARDS.items():
+        if gid in set_files and src in set_files:
+            have = {i["id"] for i in set_files[gid]["items"]}
+            for i in set_files[src]["items"]:
+                m = re.match(r"\d+", i.get("no") or "")
+                if i["t"] == "c" and m and lo <= int(m.group()) <= hi and i["id"] not in have:
+                    set_files[gid]["items"].append(dict(i))
+            set_files[gid]["items"].sort(key=lambda i: (i["t"] != "s", -(i["p"] or -1)))
+    for gid, data in set_files.items():
+        write(f"set/{gid}.json", data)
 
     # ---- search index ---------------------------------------------------
     search = []
