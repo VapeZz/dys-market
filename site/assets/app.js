@@ -223,6 +223,8 @@ const ERAS = {
   "pokemon-jp": [["2025-08-01", "Mega (M)"], ["2023-01-15", "Scarlet & Violet (SV)"], ["2019-12-01", "Sword & Shield (S)"], ["2016-12-01", "Sun & Moon (SM)"], ["2013-12-01", "XY"],
     ["2010-09-15", "Black & White (BW)"], ["2009-12-01", "LEGEND"], ["2006-09-01", "Diamond & Pearl / Platinum"], ["2001-01-01", "ADV, PCG & e-Series"], ["1990-01-01", "Classic"]],
 };
+const PROMO_GROUP = "Promos & Special Sets";
+const SPECIAL = /promo|mcdonald|trainer kit|battle academy|trick or trade|prize pack|league|championship|jumbo|deck kit|exclusive|first partner|my first battle|trading card game classic|tcg classic|starter (set|deck)|start deck|deck set|battle deck|theme deck|deck build box|gift box|special box|world championship|play! pokemon|kids|placement/i;
 function eraOf(s) {
   if (s.k === "one-piece") {
     const a = (s.a || "").toUpperCase(), n = s.n.toLowerCase();
@@ -233,6 +235,7 @@ function eraOf(s) {
     if (a.startsWith("ST") || a.startsWith("SD")) return "Starter Decks";
     return "Other";
   }
+  if (SPECIAL.test(s.n)) return PROMO_GROUP;
   if (!s.pub) return "Other";
   const e = (ERAS[s.k] || []).find(([d]) => s.pub >= d);
   return e ? e[1] : "Other";
@@ -252,7 +255,7 @@ async function pageSets() {
     const groups = new Map();
     for (const s of list) { const e = eraOf(s); if (!groups.has(e)) groups.set(e, []); groups.get(e).push(s); }
     if (game === "one-piece") for (const k of ["Promos & Events", "Other"]) if (groups.has(k)) { const v = groups.get(k); groups.delete(k); groups.set(k, v); }
-    if (groups.has("Other") && game !== "one-piece") { const v = groups.get("Other"); groups.delete("Other"); groups.set("Other", v); }
+    if (game !== "one-piece") for (const k of [PROMO_GROUP, "Other"]) if (groups.has(k)) { const v = groups.get(k); groups.delete(k); groups.set(k, v); }
     const eras = [...groups.keys()];
     if (era !== "all" && !groups.has(era)) era = "all";
     $("#eras").innerHTML = [["all", "All"], ...eras.map((e) => [e, e])].map(([v, l]) => `<button type="button" class="chip${v === era ? " on" : ""}" data-e="${esc(v)}">${esc(l)}</button>`).join("");
