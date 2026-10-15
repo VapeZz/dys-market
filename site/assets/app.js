@@ -367,6 +367,17 @@ function pullsHtml(set) {
     <div class="chase-row">${cards.slice(0, 18).map((c, i) => `<a class="chase" href="${prodUrl(c.id, set.id)}"><span class="rank">${i + 1}</span>${imgTag(c.id, "", 1000)}<span class="t">${esc(c.n)}</span><span class="p"><b>${money(c.p)}</b>${chg(c.ch?.["7"])}</span></a>`).join("")}</div></section>`;
 }
 
+function gradedHtml(base, set, v) {
+  const setName = set.n.replace(/^[A-Z0-9]+[a-z]?\s*[:\-–]\s*/, "");
+  const q = `${set.k === "one-piece" ? "One Piece" : "Pokemon"} ${base.replace(/ - /, " ")} ${base.includes(v.no || "~") ? "" : v.no || ""} ${setName}`.replace(/\s+/g, " ").trim();
+  const ebay = (g) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q + " " + g)}&LH_Sold=1&LH_Complete=1&_sop=13`;
+  const link = (h, t, s) => `<a class="glink" href="${h}" target="_blank" rel="noopener"><b>${t}</b><span>${s}</span></a>`;
+  return `<section class="graded"><h2 style="font-size:24px">Graded prices &amp; gem rate</h2>
+    <p class="muted">Live graded data isn't built in yet. These links search recent graded sales for this card, and GemRate for its population and gem rate.</p>
+    <div class="glinks">${link(ebay("PSA 10"), "PSA 10 sold ↗", "eBay sold listings")}${link(ebay("PSA 9"), "PSA 9 sold ↗", "eBay sold listings")}${link(ebay("CGC 10"), "CGC 10 sold ↗", "eBay sold listings")}${link(`https://www.pricecharting.com/search-products?q=${encodeURIComponent(q)}&type=prices`, "All grades ↗", "PriceCharting")}${link("https://www.gemrate.com/", "Gem rate &amp; pop ↗", "Search it on GemRate")}</div>
+  </section>`;
+}
+
 async function pageProduct() {
   const id = Number(params.get("id")), gid = params.get("set");
   const [meta, set] = await Promise.all([getJSON("meta.json"), getJSON(`set/${gid}.json`)]);
@@ -393,7 +404,7 @@ async function pageProduct() {
           <button class="btn" id="watch" type="button"></button></div>
         <div class="chart-card"><div class="chart-head"><b>Price history</b><div id="range"></div></div><div class="chart" id="chart"></div>
           <p class="muted" style="font-size:12px;margin:6px 0 4px">Nightly TCGplayer market price. Gaps mean no market price was recorded that day.</p></div>
-      </div>${v.t === "s" ? pullsHtml(set) : moreHtml(set, id)}`;
+      </div>${v.t === "c" ? gradedHtml(base, set, v) : ""}${v.t === "s" ? pullsHtml(set) : moreHtml(set, id)}`;
     const ck = `${id}|${printCode(subOf(v.n))}`;
     const paintCol = () => { const x = colGet().items.find((y) => `${y.id}|${printCode(subOf(y.n || ""))}` === ck); $("#addcol").textContent = x ? `✓ In collection (${x.qty}) · add 1` : "＋ Add to collection"; };
     $("#addcol").addEventListener("click", () => {
