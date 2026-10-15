@@ -17,15 +17,18 @@ import os
 import re
 import sys
 import time
-import urllib.request
 
 import config
 import snapshots
+from shopify_api import Shopify
 
-API_VERSION = os.environ.get("SHOPIFY_API_VERSION", "2026-01")
 SKU_PREFIX = "TCGP-"
-# Skip a price move bigger than this in one night (bad data protection).
-MAX_CHANGE = float(os.environ.get("SYNC_MAX_CHANGE", "0.5"))
+# Safety net. A price is HELD (left as is) instead of changed when:
+#  - market dropped more than MAX_DROP since the current price (one night), or
+#  - market jumped more than MAX_RISE (usually bad data).
+# Prices also never go below the item's "Cost per item" in Shopify.
+MAX_DROP = float(os.environ.get("SYNC_MAX_DROP", "0.15"))
+MAX_RISE = float(os.environ.get("SYNC_MAX_RISE", "0.50"))
 
 PRINTING_CODES = {"Normal": "", "Holofoil": "H", "Reverse Holofoil": "RH"}
 
@@ -51,42 +54,25 @@ def market_cents(latest, pid, code):
     return None
 
 
-class Shopify:
-    def __init__(self, shop):
-        self.shop = shop
-        self.token = os.environ.get("SHOPIFY_ADMIN_TOKEN") or self._client_credentials()
-
-    def _post(self, url, body, headers):
-        req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json", **headers})
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            return json.loads(resp.read().decode())
-
-    def _client_credentials(self):
-        cid, secret = os.environ.get("SHOPIFY_CLIENT_ID"), os.environ.get("SHOPIFY_CLIENT_SECRET")
-        if not (cid and secret):
-            print("sync: no Shopify credentials set; skipping")
-            raise SystemExit(0)
-        out = self._post(f"https://{self.shop}/admin/oauth/access_token",
-                         {"grant_type": "client_credentials", "client_id": cid, "client_secret": secret}, {})
-        return out["access_token"]
-
-    def gql(self, query, variables=None):
-        for attempt in range(4):
-            out = self._post(f"https://{self.shop}/admin/api/{API_VERSION}/graphql.json",
-                             {"query": query, "variables": variables or {}}, {"X-Shopify-Access-Token": self.token})
-            errs = out.get("errors")
-            if errs and any("THROTTLED" in json.dumps(e) for e in errs):
-                time.sleep(2 * (attempt + 1))
-                continue
-            if errs:
-                raise RuntimeError(f"Shopify error: {errs}")
-            return out["data"]
-        raise RuntimeError("Shopify: throttled too many times")
+def decide(have, market, cost=None):
+    """Return (new_price_cents or None, note). None means leave the price alone."""
+    target, note = market, ""
+    if cost and target < cost:
+        target, note = cost, "at your cost (market is lower)"
+    if target == have:
+        return None, "unchanged"
+    if have > 0:
+        move = (target - have) / have
+        if move < -MAX_DROP:
+            return None, f"held: market dropped {-move:.0%} (limit {MAX_DROP:.0%})"
+        if move > MAX_RISE:
+            return None, f"held: market jumped {move:.0%} (limit {MAX_RISE:.0%})"
+    return target, note
 
 
 VARIANTS_Q = """query($after: String) {
   productVariants(first: 250, after: $after, query: "sku:TCGP-*") {
-    nodes { id sku price product { id title } }
+    nodes { id sku price product { id title } inventoryItem { unitCost { amount } } }
     pageInfo { hasNextPage endCursor }
   }
 }"""
@@ -119,36 +105,45 @@ def main(argv):
             break
         after = data["pageInfo"]["endCursor"]
 
-    by_product, unchanged, missing, skipped = {}, 0, [], []
+    by_product, unchanged, missing, skipped, floored, held = {}, 0, [], [], 0, []
     for v in variants:
         pid, code = parse_sku(v["sku"])
-        want = market_cents(latest, pid, code) if pid else None
-        if want is None:
+        market = market_cents(latest, pid, code) if pid else None
+        if market is None:
             missing.append(v["sku"])
             continue
         have = int(round(float(v["price"]) * 100))
-        if have == want:
-            unchanged += 1
+        cost_amt = ((v.get("inventoryItem") or {}).get("unitCost") or {}).get("amount")
+        cost = int(round(float(cost_amt) * 100)) if cost_amt else None
+        new, note = decide(have, market, cost)
+        if new is None:
+            if note == "unchanged":
+                unchanged += 1
+            else:
+                skipped.append(f"{v['product']['title']}: ${have / 100:.2f}, market ${market / 100:.2f} -> {note}")
+                held.append({"t": v["product"]["title"], "pid": v["product"]["id"].rsplit("/", 1)[-1],
+                             "have": have, "mkt": market, "why": note.split(": ", 1)[-1]})
             continue
-        if have > 0 and abs(want - have) / have > MAX_CHANGE:
-            skipped.append(f"{v['product']['title']} ({v['sku']}): ${have / 100:.2f} -> ${want / 100:.2f}")
-            continue
-        by_product.setdefault(v["product"]["id"], []).append({"id": v["id"], "price": f"{want / 100:.2f}"})
+        floored += note.startswith("at your cost")
+        by_product.setdefault(v["product"]["id"], []).append({"id": v["id"], "price": f"{new / 100:.2f}"})
 
     changed = sum(len(x) for x in by_product.values())
-    print(f"sync: {len(variants)} synced variants, {changed} to update, {unchanged} already at market, "
-          f"{len(missing)} without a market price, {len(skipped)} skipped (moved more than {MAX_CHANGE:.0%})")
+    print(f"sync: {len(variants)} synced variants, {changed} updated ({floored} kept at cost), {unchanged} unchanged, "
+          f"{len(missing)} without a market price, {len(skipped)} held by the safety net")
     for s in skipped:
-        print("  skipped:", s)
+        print("  held:", s)
     if dry:
         return
+    os.makedirs(config.OUT_DIR, exist_ok=True)
+    with open(os.path.join(config.OUT_DIR, "sync-report.json"), "w", encoding="utf-8") as f:
+        json.dump({"day": days[-1], "synced": len(variants), "updated": changed, "held": held}, f, ensure_ascii=False)
     for product_id, vs in by_product.items():
         errs = api.gql(UPDATE_M, {"productId": product_id, "variants": vs})["productVariantsBulkUpdate"]["userErrors"]
         if errs:
             print(f"  error on {product_id}: {errs}")
         time.sleep(0.3)
     with open(os.path.join(config.DATA_DIR, "sync-log.txt"), "a", encoding="utf-8") as f:
-        f.write(f"{days[-1]}: {changed} updated, {unchanged} unchanged, {len(missing)} no price, {len(skipped)} skipped\n")
+        f.write(f"{days[-1]}: {changed} updated, {unchanged} unchanged, {len(missing)} no price, {len(skipped)} held\n")
 
 
 if __name__ == "__main__":

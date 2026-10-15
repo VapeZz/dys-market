@@ -4,17 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Shopify importer · Drive Your Style Market Insights</title>
-<meta name="description" content="Pick TCG products and download a Shopify import file.">
+<meta name="description" content="Add TCG products straight to the Drive Your Style Shopify store.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Drive Your Style Market Insights">
 <meta property="og:title" content="Shopify importer · Drive Your Style Market Insights">
-<meta property="og:description" content="Pick TCG products and download a Shopify import file.">
+<meta property="og:description" content="Add TCG products straight to the Drive Your Style Shopify store.">
 <meta property="og:image" content="https://market.driveyourstyle.net/assets/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Shopify importer · Drive Your Style Market Insights">
-<meta name="twitter:description" content="Pick TCG products and download a Shopify import file.">
+<meta name="twitter:description" content="Add TCG products straight to the Drive Your Style Shopify store.">
 <meta name="twitter:image" content="https://market.driveyourstyle.net/assets/og.png">
 <meta name="robots" content="noindex">
 <link rel="canonical" href="https://market.driveyourstyle.net/importer.html">
@@ -30,15 +30,28 @@
 <main>
 
 <div class="wrap"><section class="block">
-  <div class="block-head"><div><h1 style="font-size:36px">Shopify importer</h1><p>Pick sealed products or singles, set quantities, then download a file to import in Shopify (Products → Import). Prices are set to today's TCGplayer market price and sync nightly.</p></div></div>
+  <div class="block-head"><div><h1 style="font-size:36px">Shopify importer</h1><p>Pick sealed products or singles, set quantities and tap <b>Add to store</b>. New products go live at today's TCGplayer market price; items already in your store get restocked. Prices then follow the market every night, with a safety net.</p></div><div id="conn-state"></div></div>
+  <details class="panel" id="conn" style="padding:14px 16px;margin-bottom:16px"><summary style="cursor:pointer;font-weight:600">Store connection &amp; price safety net</summary>
+    <div id="conn-form" style="margin-top:12px"><p class="muted" style="font-size:14px;margin:0 0 8px">Paste your GitHub key (fine-grained, <b>Actions: Read and write</b> on dys-market). It stays on this device only.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><input class="field" id="conn-token" type="password" placeholder="github_pat_…" aria-label="GitHub key" style="flex:1;min-width:220px"><button class="btn primary" id="conn-save" type="button">Connect</button></div>
+      <p class="muted" id="conn-msg" style="font-size:13px;color:var(--down)"></p></div>
+    <button class="btn" id="conn-off" type="button" style="margin-top:12px" hidden>Disconnect this device</button>
+    <ul class="muted" style="font-size:14px;margin:14px 0 0;padding-left:18px">
+      <li>Prices update nightly to the market price.</li>
+      <li>If the market drops more than <b>15%</b> in one night, the price is held and listed below for you to review.</li>
+      <li>Prices never go below <b>Your cost</b> (Shopify's "Cost per item").</li>
+      <li>Jumps over 50% in one night are held too (usually bad data).</li></ul>
+  </details>
+  <div class="panel" id="held" hidden style="padding:14px 16px;margin-bottom:16px;border-color:var(--down)"><b>Held by the safety net</b><ul id="held-list" style="margin:8px 0 0;padding-left:18px;font-size:14px"></ul><p class="muted" style="font-size:13px;margin:8px 0 0">Change these by hand in Shopify if the drop is real.</p></div>
   <div class="controls"><div id="game"></div><select class="select" id="set" aria-label="Set"></select><div id="kind"></div></div>
   <div class="controls"><label class="muted" style="font-size:14px">Min market $ <input class="field" id="min" type="number" min="0" value="0" style="width:80px"></label>
     <input class="field" id="q" type="search" placeholder="Filter by name" aria-label="Filter by name"></div>
   <div id="rows"><div class="skeleton" style="height:240px"></div></div>
+  <div class="panel" id="run" hidden style="margin-top:16px;padding:14px 16px"></div>
   <div class="panel" style="position:sticky;bottom:12px;margin-top:16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:14px 16px">
     <b id="count"></b>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label class="muted" style="font-size:14px">Status <select class="select" id="status"><option value="Active">Active (live)</option><option value="Draft">Draft (review first)</option></select></label>
-      <button class="btn" id="clear" type="button">Clear</button><button class="btn primary" id="dl" type="button">Download Shopify CSV</button></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label class="muted" style="font-size:14px">New items <select class="select" id="status"><option value="Active">Go live</option><option value="Draft">Save as draft</option></select></label>
+      <button class="btn" id="clear" type="button">Clear</button><button class="btn" id="dl" type="button">CSV</button><button class="btn primary" id="add" type="button">Add to store</button></div>
   </div>
 </section></div>
 </main>

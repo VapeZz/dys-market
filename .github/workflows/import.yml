@@ -1,0 +1,46 @@
+name: Add to store
+
+on:
+  workflow_dispatch:
+    inputs:
+      items:
+        description: "Products to add (JSON from the importer page)"
+        required: true
+        type: string
+      status:
+        description: "ACTIVE or DRAFT"
+        required: false
+        default: "ACTIVE"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shopify-import
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Load catalog and today's prices
+        run: |
+          git clone --depth 1 --branch data "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" /tmp/data-branch
+          rm -rf data && cp -r /tmp/data-branch/data ./data
+
+      - name: Add products to Shopify
+        env:
+          ITEMS: ${{ inputs.items }}
+          STATUS: ${{ inputs.status }}
+          SHOPIFY_SHOP: ${{ secrets.SHOPIFY_SHOP }}
+          SHOPIFY_CLIENT_ID: ${{ secrets.SHOPIFY_CLIENT_ID }}
+          SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
+        run: python pipeline/shopify_import.py

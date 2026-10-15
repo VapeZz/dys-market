@@ -598,7 +598,7 @@ const htmlEsc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").re
 
 function shopifyRows(picks, status) {
   const head = ["Title", "URL handle", "Description", "Vendor", "Type", "Tags", "Published on online store", "Status", "SKU",
-    "Option1 name", "Option1 value", "Price", "Charge tax", "Inventory tracker", "Inventory quantity", "Continue selling when out of stock",
+    "Option1 name", "Option1 value", "Price", "Cost per item", "Charge tax", "Inventory tracker", "Inventory quantity", "Continue selling when out of stock",
     "Requires shipping", "Fulfillment service", "Product image URL", "Image position", "Image alt text", "SEO title", "SEO description"];
   const rows = [head];
   const used = new Set();
@@ -616,19 +616,49 @@ function shopifyRows(picks, status) {
     const tags = [gm.tag, gm.extra, sealed ? "Sealed" : "Singles", "TCG", p.setName].filter(Boolean).join(", ");
     const seoDesc = sealed ? `Shop factory-sealed ${title} at Drive Your Style. Ships fast from Las Vegas.` : `Shop ${title} (${p.setName}), Near Mint, at Drive Your Style. Ships fast from Las Vegas.`;
     rows.push([title, handle, desc, gm.vendor, sealed ? gm.sealed : gm.single, tags, "TRUE", status, sku,
-      "Condition", sealed ? "Unopened" : "Near Mint", (p.p / 100).toFixed(2), "TRUE", "shopify", p.qty, "DENY",
+      "Condition", sealed ? "Unopened" : "Near Mint", (Math.max(p.p, p.cost ? Math.round(p.cost * 100) : 0) / 100).toFixed(2), p.cost != null ? p.cost.toFixed(2) : "", "TRUE", "shopify", p.qty, "DENY",
       "TRUE", "manual", img(p.id, 1000), "1", title, `${title} | Drive Your Style`, seoDesc.slice(0, 320)]);
   }
   return rows.map((r) => r.map(csvCell).join(",")).join("\r\n");
 }
 
+const GH_REPO = "VapeZz/dys-market";
+const ghToken = { get() { try { return localStorage.getItem("dys-gh-token") || ""; } catch { return ""; } },
+  set(v) { try { v ? localStorage.setItem("dys-gh-token", v) : localStorage.removeItem("dys-gh-token"); } catch {} } };
+const gh = (path, opts = {}) => fetch(`https://api.github.com/repos/${GH_REPO}${path}`, { ...opts,
+  headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${ghToken.get()}`, "Content-Type": "application/json" } });
+
 async function pageImporter() {
-  const [meta, sets, stockMap] = await Promise.all([getJSON("meta.json"), getJSON("sets.json"), getJSON("store-prices.json").catch(() => ({}))]);
-  const inStore = new Set(Object.values(stockMap).map((r) => r.id));
+  const [meta, sets, stockMap, report] = await Promise.all([getJSON("meta.json"), getJSON("sets.json"),
+    getJSON("store-prices.json").catch(() => ({})), getJSON("sync-report.json").catch(() => null)]);
+  const handleOf = {}; for (const [h, r] of Object.entries(stockMap)) handleOf[r.id] = h;
   const gl = Object.fromEntries(meta.games.map((g) => [g.slug, g.label]));
   let game = "pokemon", kind = "s", minP = 0, q = "", set = null;
-  const picks = new Map(); // key -> pick
+  const picks = new Map();
   const keyOf = (i) => `${i.id}|${i.n}`;
+
+  /* connection */
+  const paintConn = () => {
+    const on = !!ghToken.get();
+    $("#conn-state").innerHTML = on ? `<span class="chg up">● Connected</span>` : `<span class="chg down">● Not connected</span>`;
+    $("#conn-form").hidden = on; $("#conn-off").hidden = !on;
+    $("#add").textContent = on ? "Add to store" : "Connect to add to store";
+  };
+  $("#conn-save").addEventListener("click", async () => {
+    const v = $("#conn-token").value.trim(); if (!v) return;
+    ghToken.set(v); const r = await gh("/actions/workflows/import.yml").catch(() => null);
+    if (!r || !r.ok) { ghToken.set(""); $("#conn-msg").textContent = "That key didn't work. Check it has Actions: read and write on dys-market."; }
+    else { $("#conn-msg").textContent = ""; $("#conn-token").value = ""; }
+    paintConn();
+  });
+  $("#conn-off").addEventListener("click", () => { ghToken.set(""); paintConn(); });
+
+  /* held report */
+  if (report && report.held && report.held.length) {
+    $("#held").hidden = false;
+    $("#held-list").innerHTML = report.held.map((h) => `<li><a href="https://admin.shopify.com/store/s11bjx-1e/products/${esc(h.pid)}" target="_blank" rel="noopener">${esc(h.t)}</a>: yours ${money(h.have)}, market ${money(h.mkt)}. ${esc(h.why)}</li>`).join("");
+  }
+
   const fillSets = () => {
     const list = sets.filter((s) => s.k === game);
     $("#set").innerHTML = list.map((s) => `<option value="${s.id}">${esc(s.n)}${s.pub ? " · " + s.pub.slice(0, 7) : ""}</option>`).join("");
@@ -636,31 +666,37 @@ async function pageImporter() {
   };
   const loadSet = async (gid) => { if (!gid) return; set = await getJSON(`set/${gid}.json`); draw(); };
   const summary = () => {
-    const n = picks.size, total = [...picks.values()].reduce((a, p) => a + p.p * p.qty, 0);
-    $("#count").textContent = n ? `${n} product${n === 1 ? "" : "s"} selected · ${money(total)} at market` : "Nothing selected yet";
-    $("#dl").disabled = !n; $("#clear").disabled = !n;
+    const all = [...picks.values()], n = all.length, re = all.filter((p) => p.handle).length;
+    const total = all.reduce((a, p) => a + p.p * p.qty, 0);
+    $("#count").textContent = n ? `${n - re} new · ${re} restock · ${money(total)} at market` : "Nothing selected yet";
+    $("#add").disabled = !n && !!ghToken.get(); $("#dl").hidden = !n || !!all.find((p) => p.handle); $("#clear").disabled = !n;
   };
   const draw = () => {
     if (!set) return;
     const items = set.items.filter((i) => i.t === kind && i.p >= minP * 100 && (!q || i.n.toLowerCase().includes(q)));
-    $("#rows").innerHTML = items.length ? `<div class="table-wrap"><table><thead><tr><th style="width:36px"><input type="checkbox" id="all" aria-label="Select all"></th><th>${kind === "s" ? "Product" : "Card"}</th>${kind === "c" ? `<th class="hide-sm">Rarity</th>` : ""}<th class="num">Market</th><th class="num">Qty</th></tr></thead><tbody>
-      ${items.map((i, ix) => { const k = keyOf(i), on = picks.has(k), have = inStore.has(i.id);
-        return `<tr><td><input type="checkbox" data-ix="${ix}" ${on ? "checked" : ""} ${have ? "disabled" : ""} aria-label="Select ${esc(i.n)}"></td>
-        <td class="title"><span style="display:flex;align-items:center;gap:10px">${imgTag(i.id, "")}<span>${esc(i.n)}${i.no ? `<span class="muted" style="display:block;font-size:12px">#${esc(i.no)}</span>` : ""}${have ? ` <span class="badge">In your store</span>` : ""}</span></span></td>
-        ${kind === "c" ? `<td class="hide-sm">${esc(i.r || "")}</td>` : ""}<td class="num"><b>${money(i.p)}</b></td>
-        <td class="num"><input class="field qty" type="number" min="0" max="999" value="${on ? picks.get(k).qty : 1}" data-q="${ix}" aria-label="Quantity" style="width:64px"></td></tr>`; }).join("")}
+    $("#rows").innerHTML = items.length ? `<div class="table-wrap"><table><thead><tr><th style="width:36px"><input type="checkbox" id="all" aria-label="Select all"></th><th>${kind === "s" ? "Product" : "Card"}</th><th class="num">Market</th><th class="num">Qty</th></tr></thead><tbody>
+      ${items.map((i, ix) => { const k = keyOf(i), on = picks.get(k), have = handleOf[i.id];
+        return `<tr><td><input type="checkbox" data-ix="${ix}" ${on ? "checked" : ""} aria-label="Select ${esc(i.n)}"></td>
+        <td class="title"><span style="display:flex;align-items:center;gap:10px">${imgTag(i.id, "")}<span>${esc(i.n)}${i.r ? `<span class="muted" style="display:block;font-size:12px">${esc(i.r)}</span>` : ""}${have ? ` <span class="badge">In store · restock</span>` : ""}</span></span></td>
+        <td class="num"><b>${money(i.p)}</b></td>
+        <td class="num"><div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><input class="field" type="number" min="0" max="999" value="${on ? on.qty : 1}" data-q="${ix}" aria-label="Quantity" style="width:72px">
+        ${have ? "" : `<input class="field" type="number" min="0" step="0.01" placeholder="cost $" value="${on && on.cost != null ? on.cost : ""}" data-c="${ix}" aria-label="Your cost (optional)" style="width:72px">`}</div></td></tr>`; }).join("")}
       </tbody></table></div>` : `<div class="panel empty-note">No ${kind === "s" ? "sealed products" : "cards"} match in this set.</div>`;
-    const pick = (i, qty) => ({ id: i.id, n: i.n, t: i.t, p: i.p, no: i.no, r: i.r, k: set.k, setName: set.n, gameLabel: gl[set.k] || set.k, qty });
+    const read = (ix) => ({ qty: Math.max(0, Number($(`[data-q="${ix}"]`).value) || 0), cost: $(`[data-c="${ix}"]`)?.value ? Number($(`[data-c="${ix}"]`).value) : null });
+    const pick = (i, ix) => {
+      const { qty, cost } = read(ix), sub = (i.n.match(/ \(([^)]+)\)$/) || [, "Normal"])[1];
+      return { id: i.id, n: i.n, t: i.t, p: i.p, r: i.r, k: set.k, sub: i.t === "s" ? "Normal" : sub, setName: set.n, gameLabel: gl[set.k] || set.k,
+        qty, cost, handle: handleOf[i.id] || null };
+    };
     $("#rows").querySelectorAll("[data-ix]").forEach((cb) => cb.addEventListener("change", () => {
-      const i = items[+cb.dataset.ix], qty = Number($(`[data-q="${cb.dataset.ix}"]`).value) || 0;
-      cb.checked ? picks.set(keyOf(i), pick(i, qty)) : picks.delete(keyOf(i)); summary();
+      const i = items[+cb.dataset.ix]; cb.checked ? picks.set(keyOf(i), pick(i, +cb.dataset.ix)) : picks.delete(keyOf(i)); summary();
     }));
-    $("#rows").querySelectorAll("[data-q]").forEach((inp) => inp.addEventListener("input", () => {
-      const i = items[+inp.dataset.q], k = keyOf(i); if (picks.has(k)) { picks.get(k).qty = Math.max(0, Number(inp.value) || 0); summary(); }
+    $("#rows").querySelectorAll("[data-q],[data-c]").forEach((inp) => inp.addEventListener("input", () => {
+      const ix = +(inp.dataset.q ?? inp.dataset.c), i = items[ix];
+      if (picks.has(keyOf(i))) { picks.set(keyOf(i), pick(i, ix)); summary(); }
     }));
     $("#all")?.addEventListener("change", (e) => {
-      items.forEach((i, ix) => { if (inStore.has(i.id)) return; const k = keyOf(i);
-        if (e.target.checked) picks.set(k, pick(i, Number($(`[data-q="${ix}"]`).value) || 0)); else picks.delete(k); });
+      items.forEach((i, ix) => { e.target.checked ? picks.set(keyOf(i), pick(i, ix)) : picks.delete(keyOf(i)); });
       draw(); summary();
     });
   };
@@ -677,7 +713,34 @@ async function pageImporter() {
     a.download = `dys-shopify-import-${meta.updated}.csv`; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   });
-  fillSets(); summary();
+
+  const status = (html) => { $("#run").hidden = false; $("#run").innerHTML = html; };
+  $("#add").addEventListener("click", async () => {
+    if (!ghToken.get()) { $("#conn").open = true; $("#conn-token").focus(); return; }
+    const all = [...picks.values()]; if (!all.length) return;
+    if (all.some((p) => !p.handle && p.qty === 0) && !confirm("Some new products have quantity 0. They'll be listed as sold out. Continue?")) return;
+    const items = all.map((p) => p.handle ? { handle: p.handle, qty: p.qty } : { id: p.id, sub: p.sub, qty: p.qty, ...(p.cost != null ? { cost: p.cost } : {}) });
+    $("#add").disabled = true;
+    const started = new Date(Date.now() - 5000).toISOString();
+    status(`<b>Sending ${items.length} item${items.length === 1 ? "" : "s"} to your store…</b>`);
+    const r = await gh("/actions/workflows/import.yml/dispatches", { method: "POST",
+      body: JSON.stringify({ ref: "main", inputs: { items: JSON.stringify(items), status: $("#status").value.toUpperCase() } }) }).catch(() => null);
+    if (!r || r.status !== 204) { status(`<b class="chg down">Couldn't start the import.</b> ${r ? `GitHub said ${r.status}.` : "Check your connection."} Try again or reconnect.`); $("#add").disabled = false; return; }
+    picks.clear(); draw(); summary();
+    for (let t = 0; t < 120; t++) {
+      await new Promise((res) => setTimeout(res, 5000));
+      const runs = await gh(`/actions/workflows/import.yml/runs?per_page=5&event=workflow_dispatch&created=>${started}`).then((x) => x.json()).catch(() => null);
+      const run = runs?.workflow_runs?.[0];
+      if (!run) { status(`<b>Waiting for the import to start…</b>`); continue; }
+      if (run.status !== "completed") { status(`<b>Adding products to your store…</b> <span class="muted">This usually takes about a minute.</span>`); continue; }
+      status(run.conclusion === "success"
+        ? `<b class="chg up">Done. Your products are in the store.</b> <a href="${esc(run.html_url)}" target="_blank" rel="noopener" style="color:var(--accent)">See exactly what was added →</a>`
+        : `<b class="chg down">The import hit a problem.</b> <a href="${esc(run.html_url)}" target="_blank" rel="noopener" style="color:var(--accent)">See details →</a>`);
+      return;
+    }
+    status(`<b>Still running.</b> <a href="https://github.com/${GH_REPO}/actions/workflows/import.yml" target="_blank" rel="noopener" style="color:var(--accent)">Check progress →</a>`);
+  });
+  paintConn(); fillSets(); summary();
 }
 
 /* ---------- boot ---------- */
