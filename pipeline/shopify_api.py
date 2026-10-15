@@ -2,6 +2,7 @@
 import json
 import os
 import time
+import urllib.error
 import urllib.request
 
 API_VERSION = os.environ.get("SHOPIFY_API_VERSION", "2026-01")
@@ -14,13 +15,18 @@ class Shopify:
 
     def _post(self, url, body, headers):
         req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json", **headers})
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            return json.loads(resp.read().decode())
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as err:
+            detail = err.read().decode(errors="replace")[:300]
+            where = url.split("/admin/")[-1]
+            raise RuntimeError(f"HTTP {err.code} from Shopify ({where}): {detail}") from None
 
     def _client_credentials(self):
         cid, secret = os.environ.get("SHOPIFY_CLIENT_ID"), os.environ.get("SHOPIFY_CLIENT_SECRET")
         if not (cid and secret):
-            print("sync: no Shopify credentials set; skipping")
+            print("::warning title=Missing secret::SHOPIFY_CLIENT_ID / SHOPIFY_CLIENT_SECRET not set")
             raise SystemExit(0)
         out = self._post(f"https://{self.shop}/admin/oauth/access_token",
                          {"grant_type": "client_credentials", "client_id": cid, "client_secret": secret}, {})

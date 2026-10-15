@@ -112,7 +112,8 @@ def main():
     status = "DRAFT" if os.environ.get("STATUS", "").upper() == "DRAFT" else "ACTIVE"
     shop = os.environ.get("SHOPIFY_SHOP", "").strip()
     if not shop:
-        sys.exit("Add the SHOPIFY_SHOP, SHOPIFY_CLIENT_ID and SHOPIFY_CLIENT_SECRET secrets first.")
+        print("::error title=Missing secret::SHOPIFY_SHOP is not set")
+        sys.exit(1)
     groups, products = tcgcsv.load_catalog()
     latest = snapshots.load(snapshots.available()[-1])
     api = Shopify(shop)
@@ -183,4 +184,11 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit:
+        raise
+    except Exception as err:  # surface the reason as a GitHub annotation
+        msg = str(err).replace("\n", " ")[:500]
+        print(f"::error title=Import failed::{type(err).__name__}: {msg}")
+        raise
