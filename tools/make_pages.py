@@ -126,6 +126,19 @@ PAGES = {
   <div class="block-head"><div><h1 style="font-size:36px">Watchlist</h1><p>Products and cards you've saved, with today's market price and how much they've moved since you saved them. Saved on this device only.</p></div></div>
   <div id="list"><div class="skeleton" style="height:200px"></div></div>
 </section></div>'''),
+"importer": ("Shopify importer · Drive Your Style Market Insights", "Pick TCG products and download a Shopify import file.", '''
+<div class="wrap"><section class="block">
+  <div class="block-head"><div><h1 style="font-size:36px">Shopify importer</h1><p>Pick sealed products or singles, set quantities, then download a file to import in Shopify (Products → Import). Prices are set to today's TCGplayer market price and sync nightly.</p></div></div>
+  <div class="controls"><div id="game"></div><select class="select" id="set" aria-label="Set"></select><div id="kind"></div></div>
+  <div class="controls"><label class="muted" style="font-size:14px">Min market $ <input class="field" id="min" type="number" min="0" value="0" style="width:80px"></label>
+    <input class="field" id="q" type="search" placeholder="Filter by name" aria-label="Filter by name"></div>
+  <div id="rows"><div class="skeleton" style="height:240px"></div></div>
+  <div class="panel" style="position:sticky;bottom:12px;margin-top:16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:14px 16px">
+    <b id="count"></b>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><label class="muted" style="font-size:14px">Status <select class="select" id="status"><option value="Active">Active (live)</option><option value="Draft">Draft (review first)</option></select></label>
+      <button class="btn" id="clear" type="button">Clear</button><button class="btn primary" id="dl" type="button">Download Shopify CSV</button></div>
+  </div>
+</section></div>'''),
 "about": ("About the data · Drive Your Style Market Insights", "Where Drive Your Style market prices come from.", '''
 <div class="wrap"><article class="prose">
   <h1>Where this data comes from</h1>
@@ -144,7 +157,8 @@ PAGES = {
 
 for page, (title, desc, body) in PAGES.items():
     canon = "" if page == "index" else f"{page}.html"
-    html = HEAD.replace("@@CANON@@", canon).replace("@@TITLE@@", title).replace("@@DESC@@", desc).replace("@@PAGE@@", page).replace("@@BODY@@", body)
+    head = HEAD.replace("<link rel=\"canonical\"", "<meta name=\"robots\" content=\"noindex\">\n<link rel=\"canonical\"") if page == "importer" else HEAD
+    html = head.replace("@@CANON@@", canon).replace("@@TITLE@@", title).replace("@@DESC@@", desc).replace("@@PAGE@@", page).replace("@@BODY@@", body)
     with open(os.path.join(ROOT, "site", f"{page}.html"), "w", encoding="utf-8") as f:
         f.write(html)
 print("pages written:", ", ".join(PAGES))

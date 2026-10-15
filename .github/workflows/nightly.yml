@@ -51,6 +51,14 @@ jobs:
       - name: Download today's prices and build site data
         run: python pipeline/run.py
 
+      - name: Sync Shopify prices to market
+        continue-on-error: true
+        env:
+          SHOPIFY_SHOP: ${{ secrets.SHOPIFY_SHOP }}
+          SHOPIFY_CLIENT_ID: ${{ secrets.SHOPIFY_CLIENT_ID }}
+          SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
+        run: python pipeline/shopify_sync.py
+
       - name: Save prices (data branch)
         run: |
           rm -rf /tmp/data-out && mkdir -p /tmp/data-out

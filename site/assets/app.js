@@ -584,10 +584,106 @@ async function pageWatchlist() {
   draw();
 }
 
+/* ---------- Shopify importer ---------- */
+const PRINT_CODES = { Normal: "", Holofoil: "H", "Reverse Holofoil": "RH" };
+const printCode = (sub) => sub in PRINT_CODES ? PRINT_CODES[sub] : sub.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 12);
+const GAME_META = {
+  "pokemon": { vendor: "The Pokémon Company", tag: "Pokemon", sealed: "Pokémon Sealed", single: "Pokémon Single" },
+  "pokemon-jp": { vendor: "The Pokémon Company", tag: "Pokemon", extra: "Pokemon Japan", sealed: "Pokémon Japan Sealed", single: "Pokémon Japan Single" },
+  "one-piece": { vendor: "Bandai", tag: "One Piece", sealed: "One Piece Sealed", single: "One Piece Single" },
+};
+const slugify = (t) => t.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 200);
+const csvCell = (v) => { const t = String(v ?? ""); return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+const htmlEsc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+function shopifyRows(picks, status) {
+  const head = ["Title", "URL handle", "Description", "Vendor", "Type", "Tags", "Published on online store", "Status", "SKU",
+    "Option1 name", "Option1 value", "Price", "Charge tax", "Inventory tracker", "Inventory quantity", "Continue selling when out of stock",
+    "Requires shipping", "Fulfillment service", "Product image URL", "Image position", "Image alt text", "SEO title", "SEO description"];
+  const rows = [head];
+  const used = new Set();
+  for (const p of picks) {
+    const gm = GAME_META[p.k] || GAME_META.pokemon;
+    const sealed = p.t === "s";
+    const sub = (p.n.match(/ \(([^)]+)\)$/) || [, "Normal"])[1];
+    const title = p.n;
+    let handle = slugify(title); if (used.has(handle)) handle += "-" + p.id; used.add(handle);
+    const code = sealed ? "" : printCode(sub);
+    const sku = "TCGP-" + p.id + (code ? "-" + code : "");
+    const desc = sealed
+      ? `<p>Factory-sealed ${htmlEsc(title)} from the ${htmlEsc(p.setName)} set (${htmlEsc(p.gameLabel)}).</p><p>All sealed product is sold factory sealed and ships from Las Vegas.</p>`
+      : `<p>${htmlEsc(title)} from ${htmlEsc(p.setName)} (${htmlEsc(p.gameLabel)}).${p.r ? ` Rarity: ${htmlEsc(p.r)}.` : ""}</p><p>Condition: Near Mint. Ships sleeved and protected from Las Vegas.</p>`;
+    const tags = [gm.tag, gm.extra, sealed ? "Sealed" : "Singles", "TCG", p.setName].filter(Boolean).join(", ");
+    const seoDesc = sealed ? `Shop factory-sealed ${title} at Drive Your Style. Ships fast from Las Vegas.` : `Shop ${title} (${p.setName}), Near Mint, at Drive Your Style. Ships fast from Las Vegas.`;
+    rows.push([title, handle, desc, gm.vendor, sealed ? gm.sealed : gm.single, tags, "TRUE", status, sku,
+      "Condition", sealed ? "Unopened" : "Near Mint", (p.p / 100).toFixed(2), "TRUE", "shopify", p.qty, "DENY",
+      "TRUE", "manual", img(p.id, 1000), "1", title, `${title} | Drive Your Style`, seoDesc.slice(0, 320)]);
+  }
+  return rows.map((r) => r.map(csvCell).join(",")).join("\r\n");
+}
+
+async function pageImporter() {
+  const [meta, sets, stockMap] = await Promise.all([getJSON("meta.json"), getJSON("sets.json"), getJSON("store-prices.json").catch(() => ({}))]);
+  const inStore = new Set(Object.values(stockMap).map((r) => r.id));
+  const gl = Object.fromEntries(meta.games.map((g) => [g.slug, g.label]));
+  let game = "pokemon", kind = "s", minP = 0, q = "", set = null;
+  const picks = new Map(); // key -> pick
+  const keyOf = (i) => `${i.id}|${i.n}`;
+  const fillSets = () => {
+    const list = sets.filter((s) => s.k === game);
+    $("#set").innerHTML = list.map((s) => `<option value="${s.id}">${esc(s.n)}${s.pub ? " · " + s.pub.slice(0, 7) : ""}</option>`).join("");
+    loadSet(list[0]?.id);
+  };
+  const loadSet = async (gid) => { if (!gid) return; set = await getJSON(`set/${gid}.json`); draw(); };
+  const summary = () => {
+    const n = picks.size, total = [...picks.values()].reduce((a, p) => a + p.p * p.qty, 0);
+    $("#count").textContent = n ? `${n} product${n === 1 ? "" : "s"} selected · ${money(total)} at market` : "Nothing selected yet";
+    $("#dl").disabled = !n; $("#clear").disabled = !n;
+  };
+  const draw = () => {
+    if (!set) return;
+    const items = set.items.filter((i) => i.t === kind && i.p >= minP * 100 && (!q || i.n.toLowerCase().includes(q)));
+    $("#rows").innerHTML = items.length ? `<div class="table-wrap"><table><thead><tr><th style="width:36px"><input type="checkbox" id="all" aria-label="Select all"></th><th>${kind === "s" ? "Product" : "Card"}</th>${kind === "c" ? `<th class="hide-sm">Rarity</th>` : ""}<th class="num">Market</th><th class="num">Qty</th></tr></thead><tbody>
+      ${items.map((i, ix) => { const k = keyOf(i), on = picks.has(k), have = inStore.has(i.id);
+        return `<tr><td><input type="checkbox" data-ix="${ix}" ${on ? "checked" : ""} ${have ? "disabled" : ""} aria-label="Select ${esc(i.n)}"></td>
+        <td class="title"><span style="display:flex;align-items:center;gap:10px">${imgTag(i.id, "")}<span>${esc(i.n)}${i.no ? `<span class="muted" style="display:block;font-size:12px">#${esc(i.no)}</span>` : ""}${have ? ` <span class="badge">In your store</span>` : ""}</span></span></td>
+        ${kind === "c" ? `<td class="hide-sm">${esc(i.r || "")}</td>` : ""}<td class="num"><b>${money(i.p)}</b></td>
+        <td class="num"><input class="field qty" type="number" min="0" max="999" value="${on ? picks.get(k).qty : 1}" data-q="${ix}" aria-label="Quantity" style="width:64px"></td></tr>`; }).join("")}
+      </tbody></table></div>` : `<div class="panel empty-note">No ${kind === "s" ? "sealed products" : "cards"} match in this set.</div>`;
+    const pick = (i, qty) => ({ id: i.id, n: i.n, t: i.t, p: i.p, no: i.no, r: i.r, k: set.k, setName: set.n, gameLabel: gl[set.k] || set.k, qty });
+    $("#rows").querySelectorAll("[data-ix]").forEach((cb) => cb.addEventListener("change", () => {
+      const i = items[+cb.dataset.ix], qty = Number($(`[data-q="${cb.dataset.ix}"]`).value) || 0;
+      cb.checked ? picks.set(keyOf(i), pick(i, qty)) : picks.delete(keyOf(i)); summary();
+    }));
+    $("#rows").querySelectorAll("[data-q]").forEach((inp) => inp.addEventListener("input", () => {
+      const i = items[+inp.dataset.q], k = keyOf(i); if (picks.has(k)) { picks.get(k).qty = Math.max(0, Number(inp.value) || 0); summary(); }
+    }));
+    $("#all")?.addEventListener("change", (e) => {
+      items.forEach((i, ix) => { if (inStore.has(i.id)) return; const k = keyOf(i);
+        if (e.target.checked) picks.set(k, pick(i, Number($(`[data-q="${ix}"]`).value) || 0)); else picks.delete(k); });
+      draw(); summary();
+    });
+  };
+  tabs($("#game"), meta.games.map((g) => [g.slug, g.label]), game, (v) => { game = v; fillSets(); });
+  tabs($("#kind"), [["s", "Sealed"], ["c", "Singles"]], kind, (v) => { kind = v; draw(); });
+  $("#set").addEventListener("change", (e) => loadSet(e.target.value));
+  $("#min").addEventListener("input", (e) => { minP = Number(e.target.value) || 0; draw(); });
+  $("#q").addEventListener("input", (e) => { q = e.target.value.trim().toLowerCase(); draw(); });
+  $("#clear").addEventListener("click", () => { picks.clear(); draw(); summary(); });
+  $("#dl").addEventListener("click", () => {
+    const csv = shopifyRows([...picks.values()], $("#status").value);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
+    a.download = `dys-shopify-import-${meta.updated}.csv`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  });
+  fillSets(); summary();
+}
+
 /* ---------- boot ---------- */
 shell();
 document.querySelectorAll("[data-search]").forEach(initSearch);
-const pages = { index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, watchlist: pageWatchlist };
+const pages = { index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, watchlist: pageWatchlist, importer: pageImporter };
 (pages[PAGE] || (async () => {}))().catch((err) => {
   console.error(err);
   const main = $("main");
