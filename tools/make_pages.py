@@ -47,39 +47,38 @@ MOVERS = '''<div class="movers"><div class="panel"><h3><span class="chg up">▲<
 PAGES = {
 "index": ("Market Insights · Drive Your Style",
           "Nightly market prices, biggest movers and set values for Pokémon and One Piece sealed product and cards.", f'''
-<section class="hero"><div class="wrap">
+<section class="hero hero-tight"><div class="wrap">
   <span class="eyebrow"><b>●</b> Live market data · Beta</span>
   <h1>Know the market <span class="holo">before you rip.</span></h1>
-  <p class="lead">We record the going market price for Pokémon and One Piece sealed product and cards every night, so you can see what's moving before you buy, sell or hold.</p>
-  <div class="search" data-search>{SEARCH}<input type="search" placeholder="Search products &amp; cards" aria-label="Search products and cards" autocomplete="off"><div class="results"></div></div>
-  <div class="chips" id="game-chips"></div>
+  <p class="lead">Nightly market prices for Pokémon and One Piece cards and sealed product.</p>
+  <div class="search" data-search>{SEARCH}<input type="search" placeholder="Search any card or product" aria-label="Search products and cards" autocomplete="off"><div class="results"></div></div>
 </div></section>
-<section class="block" style="padding-top:6px"><div class="wrap"><div class="gtiles" id="gtiles"></div></div></section>
+<section class="block" style="padding-top:4px"><div class="wrap"><div class="gtiles" id="gtiles"></div></div></section>
+<section class="block" id="stock-block"><div class="wrap">
+  <div class="block-head"><div><h2>In stock at Drive Your Style</h2><p>Our price next to today's market price.</p></div><a class="more" href="https://driveyourstyle.net/collections/sealed-product">Shop all →</a></div>
+  <div class="stockrow" id="stock"></div>
+</div></section>
 <section class="block"><div class="wrap">
-  <div class="block-head"><div><h2>Newest sets</h2><p>Latest and upcoming releases.</p></div><a class="more" href="sets.html">All sets →</a></div>
+  <div class="block-head"><div><h2>Newest sets</h2><p>Latest and upcoming releases.</p></div><a class="more" href="calendar.html">Release calendar →</a></div>
   <div class="srow" id="newsets"></div>
 </div></section>
-<div class="wrap"><div class="stats" id="stats">{SK * 4}</div></div>
 <section class="block"><div class="wrap">
-  <div class="block-head"><div><h2>Biggest sealed movers</h2><p>Sealed products over $5, ranked by market price change.</p></div><a class="more" href="trends.html">Full trends →</a></div>
+  <div class="block-head"><div><h2>Trending cards</h2><p>Biggest card price moves over $5.</p></div><a class="more" href="cards.html">See all →</a></div>
+  <div id="card-movers"></div>
+</div></section>
+<section class="block"><div class="wrap">
+  <div class="block-head"><div><h2>Trending sealed</h2><p>Biggest sealed price moves over $5.</p></div><a class="more" href="trends.html">See all →</a></div>
   <div id="sealed-movers"></div>
 </div></section>
 <section class="block"><div class="wrap">
-  <div class="block-head"><div><h2>Biggest card movers</h2><p>Single cards over $5, ranked by market price change.</p></div><a class="more" href="cards.html">All card movers →</a></div>
-  <div id="card-movers"></div>
-</div></section>
-<section class="block" id="stock-block"><div class="wrap">
-  <div class="block-head"><div><h2>In stock at Drive Your Style</h2><p>Our price next to today's market price.</p></div><a class="more" href="https://driveyourstyle.net/collections/sealed-product">Shop sealed →</a></div>
-  <div class="grid" id="stock"></div>
+  <div class="cta"><div><h2>Track your collection</h2><p>Add your cards and sealed, see what your binder is worth tonight, and how close you are to finishing each set.</p></div>
+  <a class="btn" href="collection.html">Start My Collection →</a></div>
 </div></section>
 <section class="block"><div class="wrap">
   <div class="cta"><div><h2>Get restock &amp; drop alerts</h2><p>Be first to know when new sets, singles and sneakers land at Drive Your Style.</p></div>
   <a class="btn" href="https://driveyourstyle.net/#newsletter">Sign up at the store →</a></div>
 </div></section>
-<section class="block"><div class="wrap">
-  <div class="block-head"><div><h2>Recent &amp; upcoming sets</h2><p>Booster box price (or the main sealed product when there is no booster box) and 7-day change in total sealed value.</p></div><a class="more" href="sets.html">All sets →</a></div>
-  <div id="recent"></div>
-</div></section>'''),
+<div class="wrap"><p class="stats-line" id="stats"></p></div>'''),
 "sets": ("All sets · Drive Your Style Market Insights",
          "Every Pokémon, Pokémon Japan and One Piece set by era, with sealed and card market prices.", '''
 <div class="wrap"><section class="block">

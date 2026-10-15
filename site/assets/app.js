@@ -195,34 +195,23 @@ function setsTable(rows, meta, opts = {}) {
 /* ---------- pages ---------- */
 async function pageIndex() {
   const meta = await getJSON("meta.json");
-  $("#game-chips").innerHTML = meta.games.map((g) => `<a class="chip" href="sets.html?game=${g.slug}">${esc(g.label)} <span class="n">${g.sets} sets</span></a>`).join("")
-    + `<a class="chip" href="sets.html">All sets →</a><a class="chip" href="cards.html">Card prices →</a><a class="chip" href="trends.html">Trends →</a>`;
-  $("#stats").innerHTML = [
-    [meta.sealed.toLocaleString(), "Sealed products tracked"],
-    [meta.cards.toLocaleString(), "Cards tracked"],
-    [meta.sets.toLocaleString(), "Sets"],
-    [fmtDate(meta.updated), "Latest market price"],
-  ].map(([v, l]) => `<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+  $("#stats").textContent = `Tracking ${meta.cards.toLocaleString()} cards and ${meta.sealed.toLocaleString()} sealed products across ${meta.sets.toLocaleString()} sets · prices updated ${fmtDate(meta.updated)}`;
   const allSets = await getJSON("sets.json");
   const GT = { "pokemon": "Pokémon TCG", "pokemon-jp": "Pokémon Japan", "one-piece": "One Piece Card Game" };
-  $("#gtiles").innerHTML = meta.games.map((g, i) => `<a class="gtile gt${i}" href="sets.html?game=${g.slug}"><b>${esc(GT[g.slug] || g.label)}</b><span>${g.sets} sets · browse cards &amp; prices →</span></a>`).join("");
+  $("#gtiles").innerHTML = meta.games.map((g, i) => `<a class="gtile gt${i}" href="sets.html?game=${g.slug}"><b>${esc(GT[g.slug] || g.label)}</b><span>${g.sets} sets<i> · browse cards &amp; prices</i> →</span></a>`).join("");
   const horizon = new Date(Date.now() + 45 * 864e5).toISOString().slice(0, 10);
   $("#newsets").innerHTML = allSets.filter((s) => s.pub && s.pub <= horizon && !SPECIAL.test(s.n) && (s.lg || s.bbId))
     .sort((a, b) => b.pub.localeCompare(a.pub)).slice(0, 12).map((s) => setTile(s, meta.updated)).join("");
-  moversPanel($("#sealed-movers"), { kind: "sealed", meta });
-  moversPanel($("#card-movers"), { kind: "cards", meta });
-
+  moversPanel($("#card-movers"), { kind: "cards", meta, limit: 5 });
+  moversPanel($("#sealed-movers"), { kind: "sealed", meta, limit: 5 });
   const stock = await getJSON("stock.json").catch(() => []);
   if (stock.length) {
-    $("#stock").innerHTML = stock.slice(0, 10).map((s) => `<a class="card" href="${esc(s.u)}">${imgTag(s.id, "", 1000)}
-      <span class="badge">In stock</span>${below(s.p, s.m) ? BELOW : ""}<span class="t">${esc(s.n)}</span>
-      <span class="p"><span>Our price <b style="color:var(--ink)">${money(s.p)}</b></span><span>Mkt ${money(s.m)}</span></span></a>`).join("");
+    const deals = stock.slice().sort((a, b) => (below(b.p, b.m) - below(a.p, a.m)) || (b.m || 0) - (a.m || 0));
+    $("#stock").innerHTML = deals.slice(0, 16).map((s) => `<a class="scard" href="${esc(s.u)}"><span class="si">${imgTag(s.id, "", 1000)}${below(s.p, s.m) ? `<span class="badge deal">Below market</span>` : ""}</span>
+      <span class="t">${esc(s.n)}</span><span class="pp"><b>${money(s.p)}</b><span class="muted">Mkt ${money(s.m)}</span></span></a>`).join("");
   } else {
     $("#stock-block").hidden = true;
   }
-  const sets = await getJSON("sets.json");
-  const byId = Object.fromEntries(sets.map((s) => [s.id, s]));
-  $("#recent").innerHTML = setsTable(meta.recent.map((id) => byId[id]).filter(Boolean), meta);
 }
 
 const ERAS = {

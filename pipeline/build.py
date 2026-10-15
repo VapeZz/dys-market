@@ -97,6 +97,8 @@ def build(groups, products, stock, log=print):
             if v < config.MOVER_THRESHOLDS[0] * 100:
                 continue
             row = [int(pid), label(products, k)[1], p["g"], v, o, pct(v, o)]
+            if row[5] > 300 or row[5] < -75:  # almost always a one-off sale or bad listing, not a real move
+                continue
             for gs in ("all", p["k"]):
                 buckets.setdefault(f"{kinds[p['t']]}-{gs}", []).append(row)
         del old
