@@ -391,3 +391,53 @@ tr.grp td{background:var(--surface-2);font-size:13px;padding-top:8px;padding-bot
 .ctile .cp em{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #sres .ctile .cn{align-items:flex-start}
 #sres .ctile .cn b{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:clip}
+/* Grade It? calculator */
+.gcalc{margin-top:22px;padding:18px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);display:flex;flex-direction:column;gap:14px;min-width:0}
+.gcalc h2{font-size:20px;margin:0 0 2px}
+.gcalc .gcalc-head p{font-size:13px;margin:0}
+.gverdict{display:flex;flex-direction:column;gap:2px;padding:14px 16px;border-radius:12px;border:1px solid var(--line-strong);background:var(--surface-2)}
+.gverdict .gl{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.gverdict b{font-family:var(--display);font-size:24px;line-height:1.2}
+.gverdict span:last-child{font-size:13px}
+.gverdict[data-v="grade"]{border-color:color-mix(in srgb,var(--up) 55%,transparent);background:color-mix(in srgb,var(--up) 10%,var(--surface))}
+.gverdict[data-v="grade"] .gl{color:var(--up)}
+.gverdict[data-v="slab"]{border-color:color-mix(in srgb,var(--accent-2) 55%,transparent);background:color-mix(in srgb,var(--accent-2) 9%,var(--surface))}
+.gverdict[data-v="slab"] .gl{color:var(--accent-2)}
+.gverdict[data-v="hold"]{border-color:color-mix(in srgb,#f2b544 55%,transparent);background:color-mix(in srgb,#f2b544 9%,var(--surface))}
+.gverdict[data-v="raw"]{border-color:color-mix(in srgb,var(--down) 55%,transparent);background:color-mix(in srgb,var(--down) 9%,var(--surface))}
+.gverdict[data-v="raw"] .gl{color:var(--down)}
+.gbody{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+@media(max-width:700px){.gbody{grid-template-columns:minmax(0,1fr)}}
+.gcol{display:flex;flex-direction:column;gap:10px;min-width:0}
+.gsub{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.gcond{width:100%}
+.gcond button{flex:1}
+.ggrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.gfield{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink-3);min-width:0}
+.gfield input.field{width:100%;min-width:0;font-variant-numeric:tabular-nums;font-size:15px;padding:10px 12px}
+.godds{display:flex;flex-direction:column;gap:6px}
+.godd{display:grid;grid-template-columns:104px minmax(0,1fr) 40px;gap:10px;align-items:center;font-size:12px;color:var(--ink-2)}
+.godd i{display:block;height:8px;border-radius:4px;background:var(--chip);overflow:hidden}
+.godd i b{display:block;height:100%;border-radius:4px}
+.godd .num{text-align:right;font-variant-numeric:tabular-nums}
+.gbreak{display:flex;flex-direction:column;gap:8px;font-size:14px}
+.gbreak:empty{display:none}
+.gbreak div{display:flex;justify-content:space-between;gap:12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.gbreak div:last-child{border-bottom:0;padding-bottom:0}
+.gbreak span:first-child{color:var(--ink-2)}
+.gbreak .num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.gbreak b.up{color:var(--up)}.gbreak b.down{color:var(--down)}
+/* your own photos in My Collection */
+.tline{display:flex;align-items:center;gap:10px}
+.tline a{min-width:0}
+.ph-wrap{position:relative;flex:0 0 auto;display:inline-flex;cursor:pointer;border-radius:6px}
+.ph-wrap input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:0}
+.ph-wrap:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.ph-wrap.mine img{object-fit:cover;outline:2px solid var(--accent);outline-offset:-2px}
+.cam-dot{position:absolute;right:-6px;bottom:-6px;width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;box-shadow:0 0 0 2px var(--surface);pointer-events:none}
+.cam-dot svg{width:12px;height:12px}
+.row-acts{display:inline-flex;gap:6px;align-items:center;justify-content:flex-end}
+.row-acts [hidden]{display:none!important}
+.row-acts .btn.icon{width:38px;height:38px}
+.row-acts .btn.icon svg{width:18px;height:18px}
+@media (max-width:560px){.row-acts{flex-direction:column;gap:4px}.row-acts .btn.icon{width:34px;height:34px}#list .btn[data-rm]{width:34px;height:34px;padding:0;justify-content:center}}

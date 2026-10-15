@@ -391,7 +391,69 @@ function gradedHtml(base, set, v) {
   return `<section class="graded"><h2 style="font-size:24px">Graded prices &amp; gem rate</h2>
     <p class="muted">Live graded data isn't built in yet. These links search recent graded sales for this card, and GemRate for its population and gem rate.</p>
     <div class="glinks">${link(ebay("PSA 10"), "PSA 10 sold ↗", "eBay sold listings")}${link(ebay("PSA 9"), "PSA 9 sold ↗", "eBay sold listings")}${link(ebay("CGC 10"), "CGC 10 sold ↗", "eBay sold listings")}${link(`https://www.pricecharting.com/search-products?q=${encodeURIComponent(q)}&type=prices`, "All grades ↗", "PriceCharting")}${link("https://www.gemrate.com/", "Gem rate &amp; pop ↗", "Search it on GemRate")}</div>
+    <div class="gcalc" id="gcalc"></div>
   </section>`;
+}
+
+/* ---------- Grade It? calculator ---------- */
+const GKEY = "dys-grade";
+const ODDS = { fresh: [55, 35, "Pack fresh"], nm: [30, 50, "Near mint"], lp: [5, 35, "Light play"] };
+function gradeCalc(el, rawCents, id) {
+  if (!el) return;
+  let all = {}; try { all = JSON.parse(localStorage.getItem(GKEY)) || {}; } catch {}
+  const saved = all[id] || {};
+  const dollars = (c) => c == null ? "" : (c / 100).toFixed(2);
+  const s = { cond: saved.cond || "nm", o10: saved.o10 ?? ODDS[saved.cond || "nm"][0], o9: saved.o9 ?? ODDS[saved.cond || "nm"][1],
+    raw: saved.raw ?? dollars(rawCents), p10: saved.p10 ?? "", p9: saved.p9 ?? "", p8: saved.p8 ?? "", fee: saved.fee ?? "25", ship: saved.ship ?? "20" };
+  const f = (k, l, extra = "") => `<label class="gfield"><span>${l}</span><input class="field" type="number" inputmode="decimal" min="0" step="0.01" data-g="${k}" value="${esc(s[k])}"${extra}></label>`;
+  el.innerHTML = `<div class="gcalc-head"><div><h2>Grade It?</h2><p class="muted">Should you grade this card raw, or buy it already graded? Paste PSA prices from the sold links above.</p></div></div>
+    <div class="gverdict" id="gv"><span class="gl">Verdict</span><b id="gv-t"></b><span id="gv-w" class="muted"></span></div>
+    <div class="gbody">
+      <div class="gcol">
+        <span class="gsub">Your condition estimate</span>
+        <div class="tabs gcond" role="group" aria-label="Condition">${Object.entries(ODDS).map(([k, o]) => `<button type="button" data-cond="${k}" aria-pressed="${k === s.cond}">${o[2]}</button>`).join("")}</div>
+        <div class="godds" id="godds"></div>
+        <div class="ggrid">${f("o10", "PSA 10 odds %", ' max="100" step="1"')}${f("o9", "PSA 9 odds %", ' max="100" step="1"')}</div>
+      </div>
+      <div class="gcol">
+        <div class="ggrid">${f("raw", "Raw price $")}${f("p10", "PSA 10 price $")}${f("p9", "PSA 9 price $")}${f("p8", "PSA 8 or lower $")}${f("fee", "Grading fee $")}${f("ship", "Ship + insure $")}</div>
+      </div>
+    </div>
+    <div class="gbreak" id="gb"></div>
+    <p class="muted" style="font-size:12px;margin:8px 0 0">Raw price starts at today's market price. Odds are rough starting guesses; use the card's gem rate if you know it. Estimates only, not financial advice. Your numbers save on this device.</p>`;
+  const n = (v) => { const x = parseFloat(v); return isNaN(x) ? 0 : x; };
+  const save = () => { all[id] = s; try { localStorage.setItem(GKEY, JSON.stringify(all)); } catch {} };
+  const calc = () => {
+    const o10 = Math.min(100, Math.max(0, n(s.o10))) / 100, o9 = Math.min(1 - o10, Math.max(0, n(s.o9) / 100)), o8 = Math.max(0, 1 - o10 - o9);
+    $("#godds", el).innerHTML = [["PSA 10", o10, "var(--up)"], ["PSA 9", o9, "var(--accent)"], ["PSA 8 or lower", o8, "var(--ink-3)"]]
+      .map(([l, p, c]) => `<div class="godd"><span>${l}</span><i><b style="width:${Math.round(p * 100)}%;background:${c}"></b></i><span class="num">${Math.round(p * 100)}%</span></div>`).join("");
+    const raw = n(s.raw), p10 = n(s.p10), p9 = n(s.p9), p8 = s.p8 === "" ? raw : n(s.p8), cost = raw + n(s.fee) + n(s.ship);
+    const box = $("#gv", el);
+    if (!p10) {
+      box.dataset.v = "wait"; $("#gv-t", el).textContent = "Add the PSA 10 price";
+      $("#gv-w", el).textContent = "Tap “PSA 10 sold” above, then enter a typical recent sale.";
+      $("#gb", el).innerHTML = ""; return;
+    }
+    const ev = o10 * p10 + o9 * (p9 || raw) + o8 * p8, profit = ev - cost, chase = o10 > 0 ? cost / o10 : Infinity;
+    let v, w, k;
+    if (chase > p10 && profit <= raw * 0.15) { k = "slab"; v = "Buy the slab"; w = "Chasing a 10 costs more than buying one already graded."; }
+    else if (profit > raw * 0.15) { k = "grade"; v = "Grade it"; w = "Expected graded value beats your cost plus fees by a clear margin."; }
+    else if (profit > 0) { k = "hold"; v = "Marginal: keep it raw"; w = "Small expected gain. Probably not worth the wait and the grade risk."; }
+    else { k = "raw"; v = "Keep or sell raw"; w = "Fees and grade risk outweigh the graded premium."; }
+    box.dataset.v = k; $("#gv-t", el).textContent = v; $("#gv-w", el).textContent = w;
+    const d = (x) => isFinite(x) ? money(Math.round(x * 100)) : "—";
+    $("#gb", el).innerHTML = [["Expected value after grading", d(ev)], ["Total cost (card + fee + shipping)", d(cost)],
+      [`Expected profit`, `<b class="${profit >= 0 ? "up" : "down"}">${profit >= 0 ? "+" : "−"}${d(Math.abs(profit))}</b>`],
+      ["Average cost to land one PSA 10", d(chase)], ["Buy a PSA 10 outright", d(p10)]]
+      .map(([l, x]) => `<div><span>${l}</span><span class="num">${x}</span></div>`).join("");
+  };
+  el.querySelectorAll("[data-g]").forEach((i) => i.addEventListener("input", () => { s[i.dataset.g] = i.value; save(); calc(); }));
+  el.querySelectorAll("[data-cond]").forEach((b) => b.addEventListener("click", () => {
+    s.cond = b.dataset.cond; s.o10 = ODDS[s.cond][0]; s.o9 = ODDS[s.cond][1];
+    el.querySelectorAll("[data-cond]").forEach((x) => x.setAttribute("aria-pressed", x === b));
+    $('[data-g="o10"]', el).value = s.o10; $('[data-g="o9"]', el).value = s.o9; save(); calc();
+  }));
+  calc();
 }
 
 async function pageProduct() {
@@ -429,6 +491,7 @@ async function pageProduct() {
       colSet(c); paintCol(); toast(`Added to My Collection`);
     });
     paintCol();
+    if (v.t === "c") gradeCalc($("#gcalc"), v.p, `${id}|${printCode(subOf(v.n))}`);
     const key = `${id}:${set.id}`;
     const paint = () => { const on = watchGet().some((w) => w.k === key); const b = $("#watch"); b.textContent = on ? "★ Watching" : "☆ Watch"; b.setAttribute("aria-pressed", on); };
     $("#watch").addEventListener("click", () => {
@@ -900,6 +963,38 @@ const CKEY = "dys-collection";
 const colGet = () => { try { return JSON.parse(localStorage.getItem(CKEY)) || { name: "", items: [] }; } catch { return { name: "", items: [] }; } };
 const colSet = (c, stamp = true) => { if (stamp) c.updated = Date.now(); try { localStorage.setItem(CKEY, JSON.stringify(c)); } catch {} if (stamp) acct.push(c); };
 
+const CAM = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
+/* ---------- your own card photos (kept on this device, outside the synced collection) ---------- */
+const photos = (() => {
+  let dbp = null;
+  const open = () => dbp ||= new Promise((res, rej) => {
+    if (!("indexedDB" in window)) return rej(new Error("no idb"));
+    const r = indexedDB.open("dys-photos", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("p");
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+  const tx = (mode, fn) => open().then((db) => new Promise((res, rej) => {
+    const t = db.transaction("p", mode), q = fn(t.objectStore("p"));
+    t.oncomplete = () => res(q && q.result); t.onerror = () => rej(t.error);
+  }));
+  return {
+    get: (k) => tx("readonly", (s) => s.get(k)).catch(() => null),
+    put: (k, blob) => tx("readwrite", (s) => s.put(blob, k)),
+    del: (k) => tx("readwrite", (s) => s.delete(k)).catch(() => {}),
+  };
+})();
+const shrinkPhoto = (file) => new Promise((res, rej) => {
+  const u = URL.createObjectURL(file), im = new Image();
+  im.onload = () => {
+    const k = Math.min(1, 1000 / Math.max(im.naturalWidth, im.naturalHeight)), c = document.createElement("canvas");
+    c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
+    c.getContext("2d").drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(u);
+    c.toBlob((b) => b ? res(b) : rej(new Error("encode")), "image/jpeg", 0.85);
+  };
+  im.onerror = () => { URL.revokeObjectURL(u); rej(new Error("decode")); };
+  im.src = u;
+});
+
 /* ---------- customer accounts (Shopify Customer Account API, public client + PKCE) ---------- */
 const ACCT = {
   clientId: "",                 // Headless channel > Customer Account API > Client ID
@@ -1052,19 +1147,38 @@ async function pageCollection() {
       return `<tr class="grp"><td colspan="6"><b>${esc(setName(i.g))}</b>${st ? ` <span class="muted">· ${st.have}/${st.total || "?"} cards</span>` : ""}</td></tr>`; };
     const list = grouped ? shown.slice().sort((a, b) => setName(a.g).localeCompare(setName(b.g)) || (b.mkt || 0) - (a.mkt || 0)) : shown;
     $("#list").innerHTML = list.length ? `<div class="table-wrap"><table><thead><tr><th>Item</th><th class="num">Qty${shared ? "" : " · paid"}</th><th class="num">Market</th><th class="num">Value</th><th class="num hide-sm">Change</th>${shared ? "" : "<th></th>"}</tr></thead><tbody>
-      ${list.map((i) => `${grpRow(i)}<tr><td class="title"><a href="${prodUrl(i.id, i.g)}">${imgTag(i.id, "")}<span>${esc(i.name)}<span class="muted" style="display:block;font-size:12px;font-weight:400">${esc(setName(i.g))}</span></span></a></td>
+      ${list.map((i) => `${grpRow(i)}<tr><td class="title">${shared ? "" : `<div class="tline"><label class="ph-wrap" data-ph="${esc(keyOf(i))}" title="Add your own photo">${imgTag(i.id, "")}<span class="cam-dot" aria-hidden="true">${CAM}</span><input type="file" accept="image/*" data-cam="${esc(keyOf(i))}" aria-label="Take or choose a photo of ${esc(i.name)}"></label>`}<a href="${prodUrl(i.id, i.g)}">${shared ? imgTag(i.id, "") : ""}<span>${esc(i.name)}<span class="muted" style="display:block;font-size:12px;font-weight:400">${esc(setName(i.g))}</span></span></a>${shared ? "" : "</div>"}</td>
         <td class="num">${shared ? i.qty : `<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><input class="field" type="number" min="1" max="9999" value="${i.qty}" data-qty="${esc(keyOf(i))}" aria-label="Quantity" style="width:72px"><input class="field" type="number" min="0" step="0.01" placeholder="paid $" value="${i.paid != null ? (i.paid / 100).toFixed(2) : ""}" data-paid="${esc(keyOf(i))}" aria-label="Paid each" style="width:72px"></div>`}</td>
         <td class="num">${money(i.mkt)}</td>
         <td class="num"><b>${money(i.mkt == null ? null : i.mkt * i.qty)}</b></td>
         <td class="num hide-sm">${chg(bestCh(i.ch))}</td>
-        ${shared ? "" : `<td class="num"><button class="btn" type="button" data-rm="${esc(keyOf(i))}" aria-label="Remove ${esc(i.name)}">✕</button></td>`}</tr>`).join("")}
+        ${shared ? "" : `<td class="num"><div class="row-acts"><button class="btn icon" type="button" data-unph="${esc(keyOf(i))}" aria-label="Use the official image for ${esc(i.name)}" title="Use official image" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button><button class="btn" type="button" data-rm="${esc(keyOf(i))}" aria-label="Remove ${esc(i.name)}">✕</button></div></td>`}</tr>`).join("")}
       </tbody></table></div>` : `<div class="panel empty-note">${shared ? "This shared collection is empty." : "Your collection is empty. Search above to add your first card or sealed product."}</div>`;
     plot();
     if (shared) return;
     const find = (k) => col.items.find((x) => keyOf(x) === k);
     $("#list").querySelectorAll("[data-qty]").forEach((el) => el.addEventListener("change", () => { const it = find(el.dataset.qty); it.qty = Math.max(1, Number(el.value) || 1); save(); setTimeout(draw); }));
     $("#list").querySelectorAll("[data-paid]").forEach((el) => el.addEventListener("change", () => { const it = find(el.dataset.paid); it.paid = el.value === "" ? null : Math.round(Number(el.value) * 100); save(); setTimeout(draw); }));
-    $("#list").querySelectorAll("[data-rm]").forEach((el) => el.addEventListener("click", () => { col.items = col.items.filter((x) => keyOf(x) !== el.dataset.rm); save(); draw(); }));
+    $("#list").querySelectorAll("[data-rm]").forEach((el) => el.addEventListener("click", () => { photos.del(el.dataset.rm); col.items = col.items.filter((x) => keyOf(x) !== el.dataset.rm); save(); draw(); }));
+    $("#list").querySelectorAll("[data-cam]").forEach((el) => el.addEventListener("change", async () => {
+      const file = el.files && el.files[0]; el.value = ""; if (!file) return;
+      try { await photos.put(el.dataset.cam, await shrinkPhoto(file)); toast("Photo saved"); paintPhotos(); }
+      catch { toast("Couldn't save that photo. Try another."); }
+    }));
+    $("#list").querySelectorAll("[data-unph]").forEach((el) => el.addEventListener("click", async () => { await photos.del(el.dataset.unph); toast("Showing the official image"); paintPhotos(); }));
+    paintPhotos();
+  };
+  const photoUrls = [];
+  const paintPhotos = async () => {
+    photoUrls.splice(0).forEach((u) => URL.revokeObjectURL(u));
+    for (const w of $("#list").querySelectorAll("[data-ph]")) {
+      const k = w.dataset.ph, blob = await photos.get(k);
+      const off = $(`[data-unph="${CSS.escape(k)}"]`);
+      if (off) off.hidden = !blob;
+      const imgEl = $("img", w);
+      if (blob) { const u = URL.createObjectURL(blob); photoUrls.push(u); imgEl.onerror = null; imgEl.src = u; w.classList.add("mine"); }
+      else if (w.classList.contains("mine")) { w.classList.remove("mine"); imgEl.src = img(Number(k.split("|")[0]), 200); }
+    }
   };
 
   $("#cq").addEventListener("input", (e) => { cq = e.target.value.trim().toLowerCase(); draw(); });
@@ -1206,4 +1320,25 @@ const pages = { search: pageSearch, index: pageIndex, sets: pageSets, set: pageS
   const main = $("main");
   if (main) main.insertAdjacentHTML("afterbegin", `<div class="wrap"><p class="panel empty-note" style="margin-top:24px">Couldn't load market data right now. Please refresh in a minute.</p></div>`);
 });
+
+/* ---------- install as an app ---------- */
+if ("serviceWorker" in navigator && window.isSecureContext) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+let installEvt = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault(); installEvt = e;
+  if ($("#install-app")) return;
+  const b = document.createElement("button");
+  b.id = "install-app"; b.type = "button"; b.className = "install-btn"; b.textContent = "Install app";
+  b.addEventListener("click", async () => {
+    if (!installEvt) return;
+    installEvt.prompt();
+    const { outcome } = await installEvt.userChoice.catch(() => ({}));
+    installEvt = null; b.remove();
+    if (outcome === "accepted") toast("Installed. Open it from your home screen.");
+  });
+  $(".top-actions")?.prepend(b);
+});
+window.addEventListener("appinstalled", () => { installEvt = null; $("#install-app")?.remove(); });
 })();
