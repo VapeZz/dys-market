@@ -254,6 +254,13 @@ async function pageSet() {
   drawCards();
 }
 
+function pullsHtml(set) {
+  const seen = new Set(), cards = set.items.filter((i) => i.t === "c" && !seen.has(i.id) && seen.add(i.id));
+  if (!cards.length) return "";
+  return `<section style="grid-column:1/-1;margin-top:28px"><div class="block-head"><div><h2 style="font-size:24px">Top cards you could pull</h2><p>The most valuable singles in ${esc(set.n)} at today's market price.</p></div><a class="more" href="set.html?id=${set.id}">All ${cards.length} cards →</a></div>
+    <div class="chase-row">${cards.slice(0, 18).map((c, i) => `<a class="chase" href="${prodUrl(c.id, set.id)}"><span class="rank">${i + 1}</span>${imgTag(c.id, "", 1000)}<span class="t">${esc(c.n)}</span><span class="p"><b>${money(c.p)}</b>${chg(c.ch?.["7"])}</span></a>`).join("")}</div></section>`;
+}
+
 async function pageProduct() {
   const id = Number(params.get("id")), gid = params.get("set");
   const [meta, set] = await Promise.all([getJSON("meta.json"), getJSON(`set/${gid}.json`)]);
@@ -278,7 +285,7 @@ async function pageProduct() {
           <button class="btn" id="watch" type="button"></button></div>
         <div class="chart-card"><div class="chart-head"><b>Price history</b><div id="range"></div></div><div class="chart" id="chart"></div>
           <p class="muted" style="font-size:12px;margin:6px 0 4px">Nightly TCGplayer market price. Gaps mean no market price was recorded that day.</p></div>
-      </div>`;
+      </div>${v.t === "s" ? pullsHtml(set) : ""}`;
     const key = `${id}:${set.id}`;
     const paint = () => { const on = watchGet().some((w) => w.k === key); const b = $("#watch"); b.textContent = on ? "★ Watching" : "☆ Watch"; b.setAttribute("aria-pressed", on); };
     $("#watch").addEventListener("click", () => {

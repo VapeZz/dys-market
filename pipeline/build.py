@@ -235,7 +235,7 @@ def build(groups, products, stock, log=print):
             continue
         k = max(keys, key=lambda k: latest[k])
         handle = s["u"].rsplit("/products/", 1)[-1]
-        by_handle[handle] = {"id": int(pid), "g": p["g"], "m": latest[k], "c7": (changes.get(k) or {}).get("7")}
+        by_handle[handle] = {"id": int(pid), "g": p["g"], "t": p["t"], "m": latest[k], "c7": (changes.get(k) or {}).get("7")}
     write("store-prices.json", by_handle)
 
     sealed_priced = {k.split(":")[0] for k in latest if products[k.split(":")[0]]["t"] == "s"}
