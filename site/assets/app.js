@@ -24,8 +24,10 @@ const chg = (p) => {
   return `<span class="chg ${cls}">${arrow} ${Math.abs(p).toFixed(1)}%</span>`;
 };
 const img = (id, size = 200) => `https://tcgplayer-cdn.tcgplayer.com/product/${id}_${size === 1000 ? "in_1000x1000" : size + "w"}.jpg`;
-const imgTag = (id, cls = "thumb", size = 200) =>
-  `<img class="${cls}" src="${img(id, size)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`;
+const NOIMG = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 350"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2a2f45"/><stop offset="1" stop-color="#151827"/></linearGradient></defs><rect x="4" y="4" width="242" height="342" rx="16" fill="url(#g)" stroke="#3a4060" stroke-width="3"/><circle cx="125" cy="150" r="38" fill="none" stroke="#6b7395" stroke-width="6"/><path d="M87 150h76" stroke="#6b7395" stroke-width="6"/><circle cx="125" cy="150" r="11" fill="#151827" stroke="#6b7395" stroke-width="6"/><text x="125" y="240" fill="#8b93b5" font-family="Arial,sans-serif" font-size="20" text-anchor="middle">No image yet</text></svg>');
+window.dysImg = (el) => { if (el.dataset.alt && !el.dataset.tried) { el.dataset.tried = "1"; el.src = el.dataset.alt; } else { el.onerror = null; el.src = NOIMG; } };
+const imgTag = (id, cls = "thumb", size = 200, alt = "") =>
+  `<img class="${cls}" src="${img(id, size)}"${alt ? ` data-alt="${esc(alt)}"` : ""} alt="" loading="lazy" onerror="dysImg(this)">`;
 const prodUrl = (id, gid) => `product.html?id=${id}&set=${gid}`;
 const fmtDate = (d) => d ? new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
 const below = (ours, mkt) => ours != null && mkt != null && ours < mkt;
@@ -296,11 +298,11 @@ async function pageSet() {
   const stats = () => {
     const own = owned(), uniq = new Set(cards.map((c) => c.id));
     const ownedIds = new Set(cards.filter((c) => own.has(ownKey(c))).map((c) => c.id));
-    const value = cards.reduce((a, c) => a + c.p, 0);
+    const value = cards.reduce((a, c) => a + (c.p || 0), 0);
     $("#set-stats").innerHTML = [
       [`${uniq.size ? Math.round(ownedIds.size / uniq.size * 100) : 0}%`, "Owned"],
       [uniq.size.toLocaleString(), "Cards"],
-      [money(value), "Set value"],
+      [cards.some((c) => c.p != null) ? money(value) : "—", "Set value"],
       [sealed.length.toLocaleString(), "Sealed"],
     ].map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join("");
   };
@@ -309,7 +311,7 @@ async function pageSet() {
     const own = owned();
     let items = (tab === "c" ? cards : sealed).filter((i) => (tab === "s" || rar === "all" || (i.r || "Other") === rar) && (!q || (i.n + " " + (i.no || "")).toLowerCase().includes(q))
       && (ownf === "all" || (ownf === "owned" ? own.has(ownKey(i)) : ownf === "missing" ? !own.has(ownKey(i)) : !!i.dys)));
-    items = items.slice().sort((a, b) => sort === "price" ? b.p - a.p : sort === "low" ? a.p - b.p : sort === "num" ? numOf(a) - numOf(b) || a.n.localeCompare(b.n) : a.n.localeCompare(b.n));
+    items = items.slice().sort((a, b) => sort === "price" ? (b.p ?? -1) - (a.p ?? -1) : sort === "low" ? (a.p ?? 1e12) - (b.p ?? 1e12) : sort === "num" ? numOf(a) - numOf(b) || a.n.localeCompare(b.n) : a.n.localeCompare(b.n));
     $("#rar").hidden = tab !== "c" || rarities.length < 2;
     $("#count-line").textContent = `${items.length} ${tab === "c" ? "cards" : "sealed products"}`;
     if (!items.length) { $("#grid").innerHTML = `<div class="panel empty-note">Nothing matches.</div>`; return; }
@@ -318,11 +320,11 @@ async function pageSet() {
     $("#grid").innerHTML = shown.map((i) => {
       const k = ownKey(i), qty = own.get(k) || 0, pr = tab === "c" ? printing(i) : "";
       return view === "grid"
-        ? `<div class="ctile${tab === "s" ? " sealed" : ""}${qty ? " owned" : ""}"><a href="${prodUrl(i.id, set.id)}" class="cimg">${imgTag(i.id, "", 1000)}</a>
+        ? `<div class="ctile${tab === "s" ? " sealed" : ""}${qty ? " owned" : ""}"><a href="${prodUrl(i.id, set.id)}" class="cimg">${imgTag(i.id, "", 1000, i.im)}</a>
             <button class="cadd" type="button" data-add="${esc(k)}" aria-label="Add ${esc(i.n)} to My Collection">${qty ? `✓${qty > 1 ? qty : ""}` : "+"}</button>
             <a href="${prodUrl(i.id, set.id)}" class="cinfo"><span class="cn"><b>${esc(tab === "c" ? short(i) : i.n)}</b>${i.no ? `<small>${esc(i.no)}</small>` : ""}</span>
-            <span class="cp"><b>${money(i.p)}</b>${bestCh(i.ch) != null ? `<small class="cchg">${chg(bestCh(i.ch))}</small>` : ""}${pr ? `<em>${esc(pr)}</em>` : ""}${i.dys ? `<em class="instock">In stock</em>` : ""}</span></a></div>`
-        : `<div class="crow${qty ? " owned" : ""}"><a href="${prodUrl(i.id, set.id)}">${imgTag(i.id, "")}<span><b>${esc(i.n)}</b><small>${esc([i.r, i.no].filter(Boolean).join(" · "))}</small></span></a>
+            <span class="cp">${i.p == null ? `<small class="muted">No price yet</small>` : `<b>${money(i.p)}</b>`}${bestCh(i.ch) != null ? `<small class="cchg">${chg(bestCh(i.ch))}</small>` : ""}${pr ? `<em>${esc(pr)}</em>` : ""}${i.dys ? `<em class="instock">In stock</em>` : ""}</span></a></div>`
+        : `<div class="crow${qty ? " owned" : ""}"><a href="${prodUrl(i.id, set.id)}">${imgTag(i.id, "", 200, i.im)}<span><b>${esc(i.n)}</b><small>${esc([i.r, i.no].filter(Boolean).join(" · "))}</small></span></a>
             <span class="num"><b>${money(i.p)}</b>${chg(i.ch?.["7"])}</span><button class="cadd" type="button" data-add="${esc(k)}" aria-label="Add ${esc(i.n)} to My Collection">${qty ? `✓${qty > 1 ? qty : ""}` : "+"}</button></div>`;
     }).join("") + (items.length > lim ? `<div class="cmore"><button class="btn" id="more" type="button">Show all ${items.length}</button></div>` : "");
     $("#more")?.addEventListener("click", () => { lim = 1e9; draw(); });
@@ -389,11 +391,11 @@ async function pageProduct() {
   const gl = Object.fromEntries(meta.games.map((g) => [g.slug, g.label]));
   $("#crumbs").innerHTML = `<a href="sets.html">Sets</a> / <a href="set.html?id=${set.id}">${esc(set.n)}</a> / ${esc(base)}`;
   const draw = () => {
-    $("#prod").innerHTML = `<div class="prod-img">${imgTag(id, "", 1000)}</div>
+    $("#prod").innerHTML = `<div class="prod-img">${imgTag(id, "", 1000, v.im)}</div>
       <div><span class="muted">${esc(gl[set.k] || "")} · ${esc(set.n)}${v.no ? " · #" + esc(v.no) : ""}${v.r ? " · " + esc(v.r) : ""}</span>
         <h1 style="font-size:clamp(26px,3.4vw,38px);margin-top:6px">${esc(base)}</h1>
         ${variants.length > 1 ? `<div id="var" style="margin-top:12px"></div>` : ""}
-        <div class="muted" style="margin-top:14px">Market price</div><div class="price-big">${money(v.p)}</div>
+        <div class="muted" style="margin-top:14px">Market price</div><div class="price-big">${v.p == null ? `<span class="muted" style="font-size:.6em">No market price yet</span>` : money(v.p)}</div>
         ${v.dys && below(v.dys.p, v.p) ? `<p style="margin:6px 0 0">${BELOW} <span class="muted">Our price ${money(v.dys.p)} is ${Math.round((1 - v.dys.p / v.p) * 100)}% under market</span></p>` : ""}
         <div class="kpis">${[["7", "7 days"], ["30", "30 days"], ["90", "90 days"], ["a", `Since ${fmtShort(meta.first)}`]].map(([k, l]) => `<div class="kpi"><div class="l">${l}</div>${chg(v.ch?.[k])}</div>`).join("")}</div>
         <div class="btns">${v.dys ? `<a class="btn primary" href="${esc(v.dys.u)}">Buy at Drive Your Style · ${money(v.dys.p)}</a>`
@@ -808,7 +810,7 @@ async function pageImporter() {
   };
   const draw = () => {
     if (!set) return;
-    const items = set.items.filter((i) => i.t === kind && i.p >= minP * 100 && (!q || i.n.toLowerCase().includes(q)));
+    const items = set.items.filter((i) => i.t === kind && i.p != null && i.p >= minP * 100 && (!q || i.n.toLowerCase().includes(q)));
     $("#rows").innerHTML = items.length ? `<div class="table-wrap"><table><thead><tr><th style="width:36px"><input type="checkbox" id="all" aria-label="Select all"></th><th>${kind === "s" ? "Product" : "Card"}</th><th class="num">Market</th><th class="num">Qty</th></tr></thead><tbody>
       ${items.map((i, ix) => { const k = keyOf(i), on = picks.get(k), have = handleOf[i.id] || justAdded.has(i.id);
         return `<tr><td><input type="checkbox" data-ix="${ix}" ${on ? "checked" : ""} aria-label="Select ${esc(i.n)}"></td>

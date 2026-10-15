@@ -28,6 +28,16 @@ def is_code_card(p):
     return p.get("r") == "Code Card" or p.get("n", "").lower().startswith("code card")
 
 
+def ptcg_img(set_id, number):
+    """Fallback card image from pokemontcg.io, used when TCGplayer has no picture."""
+    if not number:
+        return None
+    n = number.split("/")[0].strip()
+    if n.isdigit():
+        n = str(int(n))
+    return f"https://images.pokemontcg.io/{set_id}/{n}.png"
+
+
 def label(products, key):
     pid, sub = key.split(":", 1)
     p = products[pid]
@@ -146,7 +156,10 @@ def build(groups, products, stock, log=print):
         del old
 
     sets_out = []
+    has_products = {str(p["g"]) for p in products.values()}
     for gid, g in groups.items():
+        if gid not in has_products:  # TCGplayer lists the set but has no products in it yet
+            continue
         keys = by_set.get(gid, [])
         bb_key = None
         for k in keys:
@@ -187,6 +200,17 @@ def build(groups, products, stock, log=print):
                 series[i][j] = v
         del snap
 
+    by_group = {}
+    for pid, p in products.items():
+        by_group.setdefault(str(p["g"]), []).append((pid, p))
+    for gid in by_group:
+        by_set.setdefault(gid, [])
+    ptcg = {}
+    for gid, g in groups.items():
+        m = re.match(r"https://images\.pokemontcg\.io/([^/]+)/logo\.png", g.get("lg") or "")
+        if m and g.get("k") == "pokemon":
+            ptcg[gid] = m.group(1)
+
     for gid, keys in by_set.items():
         g = groups.get(gid)
         if not g:
@@ -206,6 +230,21 @@ def build(groups, products, stock, log=print):
                 item["s"] = series[idx[k]]
             if pid in stock:
                 item["dys"] = stock[pid]
+            if p["t"] == "c" and gid in ptcg:
+                item["im"] = ptcg_img(ptcg[gid], p.get("no"))
+            items.append(item)
+        # cards and sealed with no market price yet still belong in the set list
+        priced_ids = {k.split(":", 1)[0] for k in keys}
+        for pid, p in sorted(by_group.get(gid, []), key=lambda x: x[1]["n"]):
+            if pid in priced_ids:
+                continue
+            item = {"id": int(pid), "n": p["n"], "t": p["t"], "p": None}
+            if p.get("no"):
+                item["no"] = p["no"]
+            if p.get("r"):
+                item["r"] = p["r"]
+            if p["t"] == "c" and gid in ptcg:
+                item["im"] = ptcg_img(ptcg[gid], p.get("no"))
             items.append(item)
         write(f"set/{gid}.json", {
             "id": int(gid), "n": g["name"], "a": g["abbr"], "k": g["k"], "pub": g["pub"],
