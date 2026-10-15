@@ -68,7 +68,7 @@ def build(groups, products, stock, log=print):
 
     # ---- per-item changes for 7/30/90 (used on set pages) --------------
     changes = {}  # key -> {"7": pct, ...}
-    for w in ("7", "30", "90"):
+    for w in ("7", "30", "90", "all"):
         d = anchors.get(w)
         if not d:
             continue
@@ -76,7 +76,7 @@ def build(groups, products, stock, log=print):
         for k, v in latest.items():
             o = old.get(k)
             if o and o >= 50:
-                changes.setdefault(k, {})[w] = pct(v, o)
+                changes.setdefault(k, {})["a" if w == "all" else w] = pct(v, o)
         del old
 
     # ---- movers ---------------------------------------------------------

@@ -37,6 +37,12 @@
     <p class="muted" id="added" style="min-height:20px;font-size:14px;margin:8px 0 0" role="status"></p>
   </div>
   <div class="stats" id="stats" style="margin:18px 0"></div>
+  <div class="chart-card" id="cchart-wrap" hidden style="margin-bottom:18px"><div class="chart-head"><b>Collection value</b><div id="crange"></div></div><div class="chart" id="cchart"></div>
+    <p class="muted" style="font-size:12px;margin:6px 0 4px">Your current quantities at each day's market price.</p></div>
+  <div id="csets" style="margin-bottom:18px"></div>
+  <div class="ctools"><input class="field" id="cq" type="search" placeholder="Search your collection" aria-label="Search your collection">
+    <select class="select" id="csort" aria-label="Sort"><option value="value">Value</option><option value="recent">Recently added</option><option value="name">Name</option><option value="set">Set</option></select>
+    <label class="toggle"><input type="checkbox" id="cgroup"> Group by set</label></div>
   <div id="list"><div class="skeleton" style="height:200px"></div></div>
   <div id="tools" class="panel" style="margin-top:18px;padding:14px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
     <label class="muted" style="font-size:14px;flex:1;min-width:200px">Collection name <input class="field" id="name" maxlength="60" placeholder="e.g. Keo's binder" style="width:100%;margin-top:4px"></label>

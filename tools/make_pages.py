@@ -54,6 +54,11 @@ PAGES = {
   <div class="search" data-search>{SEARCH}<input type="search" placeholder="Search products &amp; cards" aria-label="Search products and cards" autocomplete="off"><div class="results"></div></div>
   <div class="chips" id="game-chips"></div>
 </div></section>
+<section class="block" style="padding-top:6px"><div class="wrap"><div class="gtiles" id="gtiles"></div></div></section>
+<section class="block"><div class="wrap">
+  <div class="block-head"><div><h2>Newest sets</h2><p>Latest and upcoming releases.</p></div><a class="more" href="sets.html">All sets →</a></div>
+  <div class="srow" id="newsets"></div>
+</div></section>
 <div class="wrap"><div class="stats" id="stats">{SK * 4}</div></div>
 <section class="block"><div class="wrap">
   <div class="block-head"><div><h2>Biggest sealed movers</h2><p>Sealed products over $5, ranked by market price change.</p></div><a class="more" href="trends.html">Full trends →</a></div>
@@ -86,6 +91,7 @@ PAGES = {
 "set": ("Set prices · Drive Your Style Market Insights", "Every card and sealed product in this set with today's market price.", '''
 <div class="wrap"><div class="crumbs" id="crumbs"></div>
 <section class="block" style="padding-top:12px">
+  <div id="set-logo" class="set-logo" hidden></div>
   <h1 id="title" style="font-size:clamp(26px,4vw,40px)"></h1><p class="muted" id="sub" style="margin-top:4px"></p>
   <div class="set-bar">
     <div class="search set-q">''' + SEARCH + '''<input id="q" type="search" placeholder="Search…" aria-label="Search this set" autocomplete="off"></div>
@@ -94,6 +100,7 @@ PAGES = {
   </div>
   <div class="set-tabs"><div id="tab"></div><div id="rar" class="chips-row"></div></div>
   <div class="set-stats" id="set-stats"></div>
+  <div class="set-tabs" style="margin-top:10px"><div id="ownf" class="chips-row"></div></div>
   <p class="muted" id="count-line" style="font-size:13px;margin:6px 0 10px"></p>
   <div id="grid"><div class="skeleton" style="height:400px"></div></div>
 </section></div>'''),
@@ -169,6 +176,12 @@ PAGES = {
     <p class="muted" id="added" style="min-height:20px;font-size:14px;margin:8px 0 0" role="status"></p>
   </div>
   <div class="stats" id="stats" style="margin:18px 0"></div>
+  <div class="chart-card" id="cchart-wrap" hidden style="margin-bottom:18px"><div class="chart-head"><b>Collection value</b><div id="crange"></div></div><div class="chart" id="cchart"></div>
+    <p class="muted" style="font-size:12px;margin:6px 0 4px">Your current quantities at each day's market price.</p></div>
+  <div id="csets" style="margin-bottom:18px"></div>
+  <div class="ctools"><input class="field" id="cq" type="search" placeholder="Search your collection" aria-label="Search your collection">
+    <select class="select" id="csort" aria-label="Sort"><option value="value">Value</option><option value="recent">Recently added</option><option value="name">Name</option><option value="set">Set</option></select>
+    <label class="toggle"><input type="checkbox" id="cgroup"> Group by set</label></div>
   <div id="list"><div class="skeleton" style="height:200px"></div></div>
   <div id="tools" class="panel" style="margin-top:18px;padding:14px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
     <label class="muted" style="font-size:14px;flex:1;min-width:200px">Collection name <input class="field" id="name" maxlength="60" placeholder="e.g. Keo's binder" style="width:100%;margin-top:4px"></label>
