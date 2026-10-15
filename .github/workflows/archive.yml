@@ -1,0 +1,71 @@
+name: Price archive (other TCGs)
+
+# Saves a daily price snapshot for Magic, Yu-Gi-Oh!, Lorcana and other TCGs,
+# plus a permanent copy of the Pokémon / One Piece snapshot, as GitHub Release
+# files (one release per month). Does not change the live site.
+
+on:
+  schedule:
+    - cron: "15 23 * * *"   # after TCGCSV's daily update and the nightly site build
+  workflow_dispatch:
+    inputs:
+      catalog:
+        description: "Also save each game's full card list (runs automatically on the 1st)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: archive
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download prices for other TCGs
+        run: |
+          if [ "${{ inputs.catalog }}" = "true" ] || [ "$(date -u +%d)" = "01" ]; then
+            python pipeline/archive.py --catalog
+          else
+            python pipeline/archive.py
+          fi
+
+      - name: Add today's Pokémon / One Piece snapshot (kept forever here)
+        run: |
+          day=$(cat archive-out/day.txt)
+          git clone --depth 1 --branch data "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" /tmp/data-branch
+          mkdir -p archive-out/pokemon-onepiece
+          if [ -f "/tmp/data-branch/data/snapshots/$day.json.gz" ]; then
+            cp "/tmp/data-branch/data/snapshots/$day.json.gz" "archive-out/pokemon-onepiece/$day.json.gz"
+          fi
+          if [ "$(date -u +%d)" = "01" ] || [ "${{ inputs.catalog }}" = "true" ]; then
+            gzip -c /tmp/data-branch/data/catalog/products.json > "archive-out/pokemon-onepiece/catalog-$day.json.gz"
+          fi
+
+      - name: Upload to this month's release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          day=$(cat archive-out/day.txt)
+          tag="archive-${day:0:7}"
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --title "Price archive ${day:0:7}" \
+            --notes "Daily TCGplayer market + low prices (cents) for every TCG we archive. One file per game per day: <game>-<date>.json.gz. catalog-* files hold card names." --latest=false
+          mkdir -p upload
+          for dir in archive-out/*/; do
+            game=$(basename "$dir")
+            for f in "$dir"*.json.gz; do [ -e "$f" ] && cp "$f" "upload/$game-$(basename "$f")"; done
+          done
+          ls -la upload
+          gh release upload "$tag" upload/* --clobber
+          echo "### Archived $(ls upload | wc -l) files to release $tag" >> "$GITHUB_STEP_SUMMARY"
+          ls -la upload | awk '{print "- " $9 " (" int($5/1024) " KB)"}' | tail -n +4 >> "$GITHUB_STEP_SUMMARY"
