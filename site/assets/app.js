@@ -91,6 +91,22 @@ function shell() {
 const ALIASES = [[/elite trainer box/, " etb"], [/booster box/, " bb"], [/ultra[- ]premium collection/, " upc"],
   [/super[- ]premium collection/, " spc"], [/premium collection/, " pc"], [/booster bundle/, " bundle"], [/pokemon center/, " pc etb"]];
 const alias = (h) => { h = h.replace(/é/g, "e"); for (const [re, add] of ALIASES) if (re.test(h)) h += add; return h; };
+const wordRe = (t) => new RegExp(`(^|[^a-z0-9])${t.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}([^a-z0-9]|$)`);
+/* rank matches: exact whole-word name matches first (so "mew" puts Mew before Mewtwo), then by price */
+function rankHits(rows, terms, hayOf, nameOf, limit = Infinity) {
+  const res = [], res2 = terms.map(wordRe);
+  rows.forEach((r, i) => {
+    const hay = hayOf(r, i);
+    if (!terms.every((t) => hay.includes(t))) return;
+    const name = nameOf(r).toLowerCase().replace(/é/g, "e");
+    let sc = 0;
+    res2.forEach((re) => { if (re.test(name)) sc += 2; });
+    if (terms.length && name.startsWith(terms[0])) sc += 1;
+    res.push([sc, i, r]);
+  });
+  res.sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+  return res.slice(0, limit).map((x) => x[2]);
+}
 function initSearch(box) {
   const input = $("input", box), out = $(".results", box);
   let rows = null, sel = -1, meta = null;
@@ -100,11 +116,7 @@ function initSearch(box) {
     const q = input.value.trim().toLowerCase().replace(/é/g, "e");
     if (!rows || q.length < 2) { out.classList.remove("open"); return; }
     const terms = q.split(/\s+/);
-    const hits = [];
-    for (const r of rows) {
-      const hay = alias((r[1] + " " + (meta.groups[r[2]]?.[0] || "")).toLowerCase());
-      if (terms.every((t) => hay.includes(t))) { hits.push(r); if (hits.length >= 12) break; }
-    }
+    const hits = rankHits(rows, terms, (r) => alias((r[1] + " " + (meta.groups[r[2]]?.[0] || "")).toLowerCase().replace(/é/g, "e")), (r) => r[1], 12);
     sel = -1;
     out.innerHTML = hits.length ? hits.map((r) => `<a href="${prodUrl(r[0], r[2])}">${imgTag(r[0])}
       <span class="name"><b>${esc(r[1])}</b><span>${esc(meta.groups[r[2]]?.[0] || "")} · ${r[3] === "s" ? "Sealed" : "Card"}</span></span>
@@ -561,11 +573,8 @@ function picker(box, onPick) {
     await load();
     const q = input.value.trim().toLowerCase().replace(/é/g, "e");
     if (q.length < 2) { out.classList.remove("open"); return; }
-    const terms = q.split(/\s+/), hits = [];
-    for (const r of rows) {
-      const hay = alias((r[1] + " " + (meta.groups[r[2]]?.[0] || "")).toLowerCase());
-      if (terms.every((t) => hay.includes(t))) { hits.push(r); if (hits.length >= 10) break; }
-    }
+    const terms = q.split(/\s+/);
+    const hits = rankHits(rows, terms, (r) => alias((r[1] + " " + (meta.groups[r[2]]?.[0] || "")).toLowerCase().replace(/é/g, "e")), (r) => r[1], 10);
     out.innerHTML = hits.length ? hits.map((r) => `<a href="#" data-id="${r[0]}" data-g="${r[2]}">${imgTag(r[0])}
       <span class="name"><b>${esc(r[1])}</b><span>${esc(meta.groups[r[2]]?.[0] || "")}</span></span><span class="figs" style="margin-left:auto"><b>${money(r[4])}</b></span></a>`).join("")
       : `<div class="empty">No matches</div>`;
@@ -1151,19 +1160,16 @@ async function pageSearch() {
   const R = data.r;
   $("#srar").innerHTML += R.map((r, i) => [r, i]).sort((a, b) => a[0].localeCompare(b[0])).map(([r, i]) => `<option value="${i}">${esc(r)}</option>`).join("");
   const hay = data.rows.map((r) => alias(normNum(`${r[1]} ${setById.get(r[2])?.n || ""} ${r[5]} ${r[6] >= 0 ? R[r[6]] : ""}`.toLowerCase().replace(/é/g, "e"))));
+  const idx = new Map(data.rows.map((r, i) => [r, i]));
   const numOf = (r) => { const m = (r[5] || "").match(/\d+/); return m ? Number(m[0]) : 1e9; };
   const draw = () => {
     const terms = normNum(q.toLowerCase().replace(/é/g, "e")).split(/\s+/).filter(Boolean);
-    const out = [];
-    data.rows.forEach((r, i) => {
-      if (type !== "all" && r[3] !== type) return;
-      if (game !== "all" && setById.get(r[2])?.k !== game) return;
-      if (rar !== "" && String(r[6]) !== rar) return;
-      if (priced && r[4] == null) return;
-      if (terms.length && !terms.every((t) => hay[i].includes(t))) return;
-      out.push(r);
-    });
-    if (sort === "low") out.sort((a, b) => (a[4] ?? 1e12) - (b[4] ?? 1e12));
+    const pool = data.rows.filter((r) => (type === "all" || r[3] === type) && (game === "all" || setById.get(r[2])?.k === game)
+      && (rar === "" || String(r[6]) === rar) && (!priced || r[4] != null));
+    const out = terms.length ? rankHits(pool, terms, (r) => hay[idx.get(r)], (r) => normNum(r[1])) : pool;
+    if (sort === "price" && !terms.length) out.sort((a, b) => (b[4] ?? -1) - (a[4] ?? -1));
+    else if (sort === "high") out.sort((a, b) => (b[4] ?? -1) - (a[4] ?? -1));
+    else if (sort === "low") out.sort((a, b) => (a[4] ?? 1e12) - (b[4] ?? 1e12));
     else if (sort === "name") out.sort((a, b) => a[1].localeCompare(b[1]));
     else if (sort === "num") out.sort((a, b) => numOf(a) - numOf(b) || a[1].localeCompare(b[1]));
     $("#scount").textContent = !terms.length && game === "all" && rar === "" ? `${out.length.toLocaleString()} items. Type a name, set or card number to narrow it down.` : `${out.length.toLocaleString()} results`;
