@@ -288,3 +288,22 @@ table.cmp th:first-child,table.cmp td:first-child{width:32%}
 .chips-row[hidden]{display:none}
 .ctile.sealed .cimg img{background:#fff}
 .set-bar .select{max-width:118px}
+
+/* sets page: tiles grouped by era */
+.era{margin:22px 0 8px}
+.era h2{font-size:20px;margin:0 0 12px;display:flex;align-items:baseline;gap:8px}
+.era h2 small{font-size:13px;color:var(--ink-3);font-weight:500}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}
+@media(max-width:600px){.sgrid{grid-template-columns:repeat(2,1fr);gap:10px}}
+.stile{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface);color:inherit;text-decoration:none;transition:border-color .15s}
+.stile:hover{border-color:var(--accent)}
+.stile .simg{position:relative;display:flex;align-items:center;justify-content:center;aspect-ratio:16/11;background:#fff}
+.stile .simg img{width:100%;height:100%;object-fit:contain;padding:8px;font-size:0;color:transparent}
+.stile .simg .badge{position:absolute;top:8px;left:8px}
+.stile .sph{display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 30%,var(--surface-2)),var(--surface-2));color:var(--ink);font-family:var(--display);font-size:22px;font-weight:700;letter-spacing:.04em}
+.stile .sname{padding:10px 12px 0;font-weight:600;font-size:14px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.stile .smeta{padding:4px 12px 12px;font-size:12px;color:var(--ink-3)}
+.stile .simg{overflow:hidden;height:auto}
+.stile .simg img{position:absolute;inset:0}
+.stile .simg .sph{position:absolute;inset:0}
+.stile .simg .badge{background:#0b0d14;color:#fff;z-index:1}

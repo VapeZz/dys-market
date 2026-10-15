@@ -76,11 +76,11 @@ PAGES = {
   <div id="recent"></div>
 </div></section>'''),
 "sets": ("All sets · Drive Your Style Market Insights",
-         "Every Pokémon and One Piece set with booster box market price and 7-day change.", '''
+         "Every Pokémon, Pokémon Japan and One Piece set by era, with sealed and card market prices.", '''
 <div class="wrap"><section class="block">
   <div class="block-head"><div><h1 style="font-size:36px">Sets</h1><p id="count"></p></div></div>
-  <div class="controls"><div id="game"></div><input class="field" id="q" type="search" placeholder="Filter sets" aria-label="Filter sets">
-    <select class="select" id="sort" aria-label="Sort"><option value="pub">Newest first</option><option value="bb">Main sealed price</option><option value="up">7D gainers</option><option value="down">7D decliners</option></select></div>
+  <div class="controls"><div id="game"></div><input class="field" id="q" type="search" placeholder="Search sets" aria-label="Search sets"></div>
+  <div class="set-tabs" style="margin:4px 0 8px"><div id="eras" class="chips-row"></div></div>
   <div id="table"><div class="skeleton" style="height:300px"></div></div>
 </section></div>'''),
 "set": ("Set prices · Drive Your Style Market Insights", "Every card and sealed product in this set with today's market price.", '''

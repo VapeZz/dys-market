@@ -217,20 +217,53 @@ async function pageIndex() {
   $("#recent").innerHTML = setsTable(meta.recent.map((id) => byId[id]).filter(Boolean), meta);
 }
 
+const ERAS = {
+  "pokemon": [["2025-09-20", "Mega Evolution"], ["2023-03-25", "Scarlet & Violet"], ["2020-02-01", "Sword & Shield"], ["2017-01-28", "Sun & Moon"], ["2014-02-01", "XY"],
+    ["2011-04-20", "Black & White"], ["2010-02-01", "HeartGold & SoulSilver"], ["2007-05-01", "Diamond & Pearl / Platinum"], ["2003-06-01", "EX"], ["2001-12-01", "e-Card & Legendary"], ["2000-12-01", "Neo"], ["1990-01-01", "Classic"]],
+  "pokemon-jp": [["2025-08-01", "Mega (M)"], ["2023-01-15", "Scarlet & Violet (SV)"], ["2019-12-01", "Sword & Shield (S)"], ["2016-12-01", "Sun & Moon (SM)"], ["2013-12-01", "XY"],
+    ["2010-09-15", "Black & White (BW)"], ["2009-12-01", "LEGEND"], ["2006-09-01", "Diamond & Pearl / Platinum"], ["2001-01-01", "ADV, PCG & e-Series"], ["1990-01-01", "Classic"]],
+};
+function eraOf(s) {
+  if (s.k === "one-piece") {
+    const a = (s.a || "").toUpperCase(), n = s.n.toLowerCase();
+    if (/release event|promo|tournament|pre-release|judge/.test(n)) return "Promos & Events";
+    if (a.startsWith("OP")) return "Booster Sets";
+    if (a.startsWith("EB")) return "Extra Boosters";
+    if (a.startsWith("PRB")) return "Premium Boosters";
+    if (a.startsWith("ST") || a.startsWith("SD")) return "Starter Decks";
+    return "Other";
+  }
+  if (!s.pub) return "Other";
+  const e = (ERAS[s.k] || []).find(([d]) => s.pub >= d);
+  return e ? e[1] : "Other";
+}
+
 async function pageSets() {
   const [meta, sets] = await Promise.all([getJSON("meta.json"), getJSON("sets.json")]);
-  let game = params.get("game") || "all", q = "", sort = "pub";
+  let game = params.get("game") || "pokemon", q = "", era = "all";
+  const today = meta.updated;
+  const tile = (s) => `<a class="stile" href="set.html?id=${s.id}">
+      <span class="simg">${s.bbId ? imgTag(s.bbId, "", 1000) : `<span class="sph">${esc((s.a || s.n).slice(0, 8))}</span>`}${s.pub && s.pub > today ? `<span class="badge up-next">Upcoming</span>` : ""}</span>
+      <span class="sname">${esc(s.n.replace(/^(ME|SV|SWSH|SM|M)\d*[a-z]?:\s*/i, ""))}</span>
+      <span class="smeta">${s.pub ? new Date(s.pub + "T12:00:00").toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "—"}${s.bb ? ` · ${money(s.bb)}` : ""}</span></a>`;
   const draw = () => {
-    let rows = sets.filter((s) => (game === "all" || s.k === game) && (!q || (s.n + " " + s.a).toLowerCase().includes(q)));
-    rows = rows.slice().sort((a, b) => sort === "pub" ? (b.pub || "").localeCompare(a.pub || "")
-      : sort === "bb" ? (b.bb || 0) - (a.bb || 0)
-      : sort === "up" ? (b.c7 ?? -1e9) - (a.c7 ?? -1e9) : (a.c7 ?? 1e9) - (b.c7 ?? 1e9));
-    $("#count").textContent = `${rows.length} sets`;
-    $("#table").innerHTML = rows.length ? setsTable(rows, meta) : `<div class="panel empty-note">No sets match.</div>`;
+    const list = sets.filter((s) => s.k === game && (!q || (s.n + " " + s.a).toLowerCase().includes(q)))
+      .sort((a, b) => (b.pub || "").localeCompare(a.pub || ""));
+    const groups = new Map();
+    for (const s of list) { const e = eraOf(s); if (!groups.has(e)) groups.set(e, []); groups.get(e).push(s); }
+    if (game === "one-piece") for (const k of ["Promos & Events", "Other"]) if (groups.has(k)) { const v = groups.get(k); groups.delete(k); groups.set(k, v); }
+    if (groups.has("Other") && game !== "one-piece") { const v = groups.get("Other"); groups.delete("Other"); groups.set("Other", v); }
+    const eras = [...groups.keys()];
+    if (era !== "all" && !groups.has(era)) era = "all";
+    $("#eras").innerHTML = [["all", "All"], ...eras.map((e) => [e, e])].map(([v, l]) => `<button type="button" class="chip${v === era ? " on" : ""}" data-e="${esc(v)}">${esc(l)}</button>`).join("");
+    $("#count").textContent = `${list.length} sets`;
+    $("#table").innerHTML = list.length ? [...groups].filter(([e]) => era === "all" || e === era).map(([e, ss]) =>
+      `<section class="era"><h2>${esc(e)} <small>${ss.length} sets</small></h2><div class="sgrid">${ss.map(tile).join("")}</div></section>`).join("")
+      : `<div class="panel empty-note">No sets match.</div>`;
   };
-  tabs($("#game"), [["all", "All games"], ...meta.games.map((g) => [g.slug, g.label])], game, (v) => { game = v; draw(); });
+  tabs($("#game"), meta.games.map((g) => [g.slug, g.label]), game, (v) => { game = v; era = "all"; draw(); });
+  $("#eras").addEventListener("click", (e) => { const b = e.target.closest("[data-e]"); if (!b) return; era = b.dataset.e; draw(); window.scrollTo({ top: $("#table").offsetTop - 140, behavior: "smooth" }); });
   $("#q").addEventListener("input", (e) => { q = e.target.value.trim().toLowerCase(); draw(); });
-  $("#sort").addEventListener("change", (e) => { sort = e.target.value; draw(); });
   draw();
 }
 
