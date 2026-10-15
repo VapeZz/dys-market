@@ -45,27 +45,34 @@ jobs:
           day=$(cat archive-out/day.txt)
           git clone --depth 1 --branch data "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" /tmp/data-branch
           mkdir -p archive-out/pokemon-onepiece
-          if [ -f "/tmp/data-branch/data/snapshots/$day.json.gz" ]; then
-            cp "/tmp/data-branch/data/snapshots/$day.json.gz" "archive-out/pokemon-onepiece/$day.json.gz"
-          fi
+          # every saved day; ones already in the archive are skipped at upload
+          cp /tmp/data-branch/data/snapshots/*.json.gz archive-out/pokemon-onepiece/ 2>/dev/null || true
           if [ "$(date -u +%d)" = "01" ] || [ "${{ inputs.catalog }}" = "true" ]; then
             gzip -c /tmp/data-branch/data/catalog/products.json > "archive-out/pokemon-onepiece/catalog-$day.json.gz"
           fi
 
-      - name: Upload to this month's release
+      - name: Upload to the monthly releases
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          day=$(cat archive-out/day.txt)
-          tag="archive-${day:0:7}"
-          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --title "Price archive ${day:0:7}" \
-            --notes "Daily TCGplayer market + low prices (cents) for every TCG we archive. One file per game per day: <game>-<date>.json.gz. catalog-* files hold card names." --latest=false
           mkdir -p upload
           for dir in archive-out/*/; do
             game=$(basename "$dir")
             for f in "$dir"*.json.gz; do [ -e "$f" ] && cp "$f" "upload/$game-$(basename "$f")"; done
           done
-          ls -la upload
-          gh release upload "$tag" upload/* --clobber
-          echo "### Archived $(ls upload | wc -l) files to release $tag" >> "$GITHUB_STEP_SUMMARY"
-          ls -la upload | awk '{print "- " $9 " (" int($5/1024) " KB)"}' | tail -n +4 >> "$GITHUB_STEP_SUMMARY"
+          n=0
+          for f in upload/*; do
+            name=$(basename "$f")
+            d=$(echo "$name" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | tail -1)
+            tag="archive-${d:0:7}"
+            if [ ! -f "/tmp/assets-$tag" ]; then
+              gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --title "Price archive ${d:0:7}" \
+                --notes "Daily TCGplayer prices (cents) for every TCG we archive. One file per game per day: <game>-<date>.json.gz. catalog-* files hold card names." --latest=false
+              gh api "repos/${{ github.repository }}/releases/tags/$tag" -q '.assets[].name' > "/tmp/assets-$tag"
+            fi
+            # Pokémon / One Piece days that are already archived are not re-uploaded
+            if [[ "$name" == pokemon-onepiece-2* ]] && grep -qx "$name" "/tmp/assets-$tag"; then continue; fi
+            gh release upload "$tag" "$f" --clobber
+            n=$((n+1)); echo "- $name ($(( $(stat -c %s "$f") / 1024 )) KB) -> $tag" >> "$GITHUB_STEP_SUMMARY"
+          done
+          echo "### Archived $n files" >> "$GITHUB_STEP_SUMMARY"
