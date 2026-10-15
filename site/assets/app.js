@@ -721,7 +721,8 @@ async function pageImporter() {
     if (all.some((p) => !p.handle && p.qty === 0) && !confirm("Some new products have quantity 0. They'll be listed as sold out. Continue?")) return;
     const items = all.map((p) => p.handle ? { handle: p.handle, qty: p.qty } : { id: p.id, sub: p.sub, qty: p.qty, ...(p.cost != null ? { cost: p.cost } : {}) });
     $("#add").disabled = true;
-    const started = new Date(Date.now() - 5000).toISOString();
+    const lastRun = async () => (await gh("/actions/workflows/import.yml/runs?per_page=1").then((x) => x.json()).catch(() => null))?.workflow_runs?.[0];
+    const before = (await lastRun())?.id || 0;
     status(`<b>Sending ${items.length} item${items.length === 1 ? "" : "s"} to your store…</b>`);
     const r = await gh("/actions/workflows/import.yml/dispatches", { method: "POST",
       body: JSON.stringify({ ref: "main", inputs: { items: JSON.stringify(items), status: $("#status").value.toUpperCase() } }) }).catch(() => null);
@@ -729,13 +730,14 @@ async function pageImporter() {
     picks.clear(); draw(); summary();
     for (let t = 0; t < 120; t++) {
       await new Promise((res) => setTimeout(res, 5000));
-      const runs = await gh(`/actions/workflows/import.yml/runs?per_page=5&event=workflow_dispatch&created=>${started}`).then((x) => x.json()).catch(() => null);
-      const run = runs?.workflow_runs?.[0];
+      const latest = await lastRun();
+      const run = latest && latest.id > before ? latest : null;
       if (!run) { status(`<b>Waiting for the import to start…</b>`); continue; }
       if (run.status !== "completed") { status(`<b>Adding products to your store…</b> <span class="muted">This usually takes about a minute.</span>`); continue; }
       status(run.conclusion === "success"
         ? `<b class="chg up">Done. Your products are in the store.</b> <a href="${esc(run.html_url)}" target="_blank" rel="noopener" style="color:var(--accent)">See exactly what was added →</a>`
         : `<b class="chg down">The import hit a problem.</b> <a href="${esc(run.html_url)}" target="_blank" rel="noopener" style="color:var(--accent)">See details →</a>`);
+      summary();
       return;
     }
     status(`<b>Still running.</b> <a href="https://github.com/${GH_REPO}/actions/workflows/import.yml" target="_blank" rel="noopener" style="color:var(--accent)">Check progress →</a>`);
