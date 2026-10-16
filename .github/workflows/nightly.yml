@@ -60,9 +60,13 @@ jobs:
         continue-on-error: true
         run: |
           if [ "${{ inputs.social }}" != "true" ] && [ "$(date -u +%u)" != "7" ]; then echo "Not Sunday; skipping"; exit 0; fi
-          pip install -q playwright==1.56.0
-          python -m playwright install --with-deps chromium >/dev/null
-          python tools/social.py site/data data/social --date "$(date -u +%F)"
+          set +e
+          pip install -q playwright==1.56.0 > /tmp/social.log 2>&1 || { echo "::error title=Carousel::pip install failed: $(tail -c 400 /tmp/social.log | tr '\n' ' ')"; exit 1; }
+          python -m playwright install --with-deps chromium > /tmp/social.log 2>&1 || { echo "::error title=Carousel::browser install failed: $(tail -c 400 /tmp/social.log | tr '\n' ' ')"; exit 1; }
+          python tools/social.py site/data data/social --date "$(date -u +%F)" > /tmp/social.log 2>&1; rc=$?
+          cat /tmp/social.log
+          if [ $rc -ne 0 ]; then echo "::error title=Carousel::$(tail -c 600 /tmp/social.log | tr '\n' ' ')"; exit 1; fi
+          echo "::notice title=Carousel::$(tail -n 1 /tmp/social.log)"
 
       - name: Copy social images into the site
         run: if [ -d data/social ]; then mkdir -p site/social && cp -r data/social/. site/social/; fi
