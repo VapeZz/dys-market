@@ -6,10 +6,5 @@ jobs:
   p:
     runs-on: ubuntu-latest
     steps:
-      - run: |
-          mkdir out && cd out
-          for p in lorcana/TFC lorcana/ROTF lorcana/ITI lorcana/UR lorcana/SS lorcana/AZS lorcana/ARI lorcana/ROJ lorcana/FBL lorcana/WITW lorcana/AOTV riftbound/OGN riftbound/OGS riftbound/SFD riftbound/UNL riftbound/VEN; do
-            curl -s -o $(echo $p | tr / _).png -A Mozilla/5.0 "https://images.scrydex.com/$p-logo/logo"
-          done
-          git init -q -b probe && git config user.name b && git config user.email b@x && git add -A && git commit -qm p
-          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" probe
+      - uses: actions/checkout@v4
+      - run: git push origin --delete probe || true
