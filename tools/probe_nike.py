@@ -1,29 +1,26 @@
-import json, urllib.request
-UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36", "Accept": "application/json", "nike-api-caller-id": "nike:snkrs:web:1.0"}
+import json, re, urllib.request
+UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36", "Accept": "application/json"}
 def get(u):
     try:
         r = urllib.request.urlopen(urllib.request.Request(u, headers=UA), timeout=20); return r.status, r.read()
     except Exception as e:
         return getattr(e, "code", str(e)), b""
-SN, DC = "010794e5-35fe-4e32-aaff-cd2c74f15d9f", "d9a5bc42-4b9c-4976-858a-f159cf99c647"
-B = "https://api.nike.com/product_feed/threads/v3/?count=50&filter=marketplace(US)&filter=language(en)"
-tests = {
- "v3 snkrs all": f"{B}&filter=channelId({SN})",
- "v3 snkrs upcoming": f"{B}&filter=channelId({SN})&filter=upcoming(true)",
- "v2 snkrs upcoming": f"https://api.nike.com/product_feed/threads/v2/?count=50&filter=marketplace(US)&filter=language(en)&filter=channelId({SN})&filter=upcoming(true)",
- "v2 style snkrs": f"https://api.nike.com/product_feed/threads/v2?filter=marketplace(US)&filter=language(en)&filter=channelId({SN})&filter=productInfo.merchProduct.styleColor(IO6260-800)",
- "v2 style dotcom": f"https://api.nike.com/product_feed/threads/v2?filter=marketplace(US)&filter=language(en)&filter=channelId({DC})&filter=productInfo.merchProduct.styleColor(HV6474-601)",
- "v2 style dotcom AJ1": f"https://api.nike.com/product_feed/threads/v2?filter=marketplace(US)&filter=language(en)&filter=channelId({DC})&filter=productInfo.merchProduct.styleColor(HQ6998-600)",
-}
-for k, u in tests.items():
+DC = "d9a5bc42-4b9c-4976-858a-f159cf99c647"
+codes = [r["c"] for r in json.load(open("site/sneakers.json"))["releases"] if r.get("c") and re.match(r"^[A-Z0-9]{6}-\d{3}$", r["c"])]
+found = {}
+for i in range(0, len(codes), 20):
+    batch = codes[i:i+20]
+    u = f"https://api.nike.com/product_feed/threads/v2?count=50&filter=marketplace(US)&filter=language(en)&filter=channelId({DC})&filter=productInfo.merchProduct.styleColor({','.join(batch)})"
     s, b = get(u)
-    try:
-        d = json.loads(b); objs = d.get("objects", [])
-        out = []
-        for o in objs[:40]:
-            for pi in o.get("productInfo", []):
-                out.append((pi.get("merchProduct", {}).get("styleColor"), (pi.get("imageUrls") or {}).get("productImageUrl"), (pi.get("launchView") or {}).get("startEntryDate", "")[:10]))
-        print(k, s, "objs", len(objs), "pages", d.get("pages"), "|", "; ".join(f"{a} {c} {b2}" for a, b2, c in out[:6]))
-        print(k, "codes:", ",".join(sorted({a for a, _, _ in out if a}))[:900])
-    except Exception as e:
-        print(k, s, "raw", b[:200])
+    d = json.loads(b or b"{}")
+    for o in d.get("objects", []):
+        txt = json.dumps(o)
+        for pi in o.get("productInfo", []):
+            sc = pi.get("merchProduct", {}).get("styleColor")
+            urls = re.findall(r'https://static\.nike\.com/a/images/[^"]+', json.dumps(pi)) or re.findall(r'https://static\.nike\.com/a/images/[^"]+', txt)
+            if sc: found[sc] = urls[:2]
+first = list(found.items())[:2]
+print(f"lookup: {len(codes)} codes, found {len(found)}: {','.join(found)}")
+print("sample", json.dumps(first)[:900])
+s, b = get(first[0][1][0]) if first and first[0][1] else (None, b"")
+print("img fetch", s, len(b))
