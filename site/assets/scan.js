@@ -111,8 +111,9 @@
       if (ints.size) for (const r of data.rows) {
         if (r[3] !== "c" || !ints.has(leadNum(r[5]))) continue;
         const t = tris(letters(r[1])); let m = 0; t.forEach((x) => { if (T.has(x)) m++; });
+        // a bare number alone is too common, so some of the name must show too
         const exact = bare.includes(r[5]), ratio = m / Math.max(1, t.size);   // exact = a bare promo number like "085" printed as-is
-        if (exact || (m >= 6 && ratio >= 0.5)) { const sc = (exact ? 1.2 : 0) + ratio; if (!scored.has(r) || scored.get(r) < sc) scored.set(r, sc); }
+        if ((exact && (m >= 3 || ratio >= 0.25 || /^0\d\d$/.test(r[5]))) || (m >= 6 && ratio >= 0.5)) { const sc = (exact ? 1.2 : 0) + ratio; if (!scored.has(r) || scored.get(r) < sc) scored.set(r, sc); }
       }
     }
     const list = [...scored].sort((a, b) => b[1] - a[1] || (b[0][4] || 0) - (a[0][4] || 0)).slice(0, 12).map(([r, s]) => ({ s, r }));
@@ -200,7 +201,7 @@
       try {
         const res = await scanFile(input, { status });
         meta = await getMeta(); rows = (await getRows()).rows;
-        const best = res.list[0]?.s || 0, good = res.list.filter((x) => x.s >= Math.max(0.4, best * 0.5));
+        const best = res.list[0]?.s || 0, good = res.list.filter((x) => x.s >= Math.max(0.6, best * 0.5));
         box.querySelector(".scan-refine").hidden = false;
         if (!good.length) { status("Couldn't read that one. Try again with less glare, or type the number or name below."); return; }
         const sure = res.sure;
