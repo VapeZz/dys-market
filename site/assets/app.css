@@ -556,3 +556,11 @@ tr.grp td{background:var(--surface-2);font-size:13px;padding-top:8px;padding-bot
 .snk-past .si .verdict{position:absolute;left:8px;top:8px;font-size:10px}
 .snk-past .pp{flex-direction:row-reverse}
 .snk-past-cta{padding:0 10px;font-size:12px}
+/* graded slabs in My Collection */
+.slab-badge{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.04em;padding:2px 7px;border-radius:6px;background:linear-gradient(90deg,#5ee7ff,#a78bfa);color:#0b0d14;vertical-align:1px;white-space:nowrap}
+.grade-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:8px}
+.grade-sel{padding:5px 28px 5px 10px;font-size:13px;min-width:0}
+.gv{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2)}
+.gv .field{width:90px;padding:5px 8px;font-size:13px}
+.sold-link{font-size:12.5px;font-weight:600;color:var(--accent);white-space:nowrap}
+.mkt-note{display:block;font-size:11px;font-weight:400;white-space:nowrap}

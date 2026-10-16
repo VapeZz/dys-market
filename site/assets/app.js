@@ -301,7 +301,7 @@ async function pageSet() {
   const rarities = [...cards.reduce((m, c) => m.set(c.r || "Other", (m.get(c.r || "Other") || 0) + 1), new Map())]
     .sort((a, b) => a[1] - b[1]).map(([r]) => r);
   const ownKey = (i) => `${i.id}|${printCode(subOf(i.n))}`;
-  const owned = () => new Map(colGet().items.map((x) => [`${x.id}|${printCode(subOf(x.n || ""))}`, x.qty]));
+  const owned = sumOwned;
   let tab = params.get("tab") === "sealed" || !cards.length ? "s" : "c", rar = "all", q = "", sort = "price", view = "grid", lim = 60, ownf = "all";
   try { view = localStorage.getItem("dys-view") || "grid"; } catch {}
 
@@ -344,7 +344,7 @@ async function pageSet() {
     $("#more")?.addEventListener("click", () => { lim = 1e9; draw(); });
     $("#grid").querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => {
       const it = items.find((i) => ownKey(i) === b.dataset.add); if (!it) return;
-      const col = colGet(), ex = col.items.find((x) => `${x.id}|${printCode(subOf(x.n || ""))}` === b.dataset.add);
+      const col = colGet(), ex = col.items.find((x) => !x.gr && `${x.id}|${printCode(subOf(x.n || ""))}` === b.dataset.add);
       ex ? ex.qty++ : col.items.push({ id: it.id, g: set.id, n: it.n, qty: 1, paid: null });
       colSet(col); toast(`Added ${tab === "c" ? short(it) : it.n} to My Collection`); draw(); stats();
     }));
@@ -484,9 +484,9 @@ async function pageProduct() {
           <p class="muted" style="font-size:12px;margin:6px 0 4px">Nightly TCGplayer market price. Gaps mean no market price was recorded that day.</p></div>
       </div>${v.t === "c" ? gradedHtml(base, set, v) : ""}${v.t === "s" ? pullsHtml(set) : moreHtml(set, id)}`;
     const ck = `${id}|${printCode(subOf(v.n))}`;
-    const paintCol = () => { const x = colGet().items.find((y) => `${y.id}|${printCode(subOf(y.n || ""))}` === ck); $("#addcol").textContent = x ? `✓ In collection (${x.qty}) · add 1` : "＋ Add to collection"; };
+    const paintCol = () => { const n = sumOwned().get(ck) || 0; $("#addcol").textContent = n ? `✓ In collection (${n}) · add 1` : "＋ Add to collection"; };
     $("#addcol").addEventListener("click", () => {
-      const c = colGet(), x = c.items.find((y) => `${y.id}|${printCode(subOf(y.n || ""))}` === ck);
+      const c = colGet(), x = c.items.find((y) => !y.gr && `${y.id}|${printCode(subOf(y.n || ""))}` === ck);
       x ? x.qty++ : c.items.push({ id, g: set.id, n: v.n, qty: 1, paid: null });
       colSet(c); paintCol(); toast(`Added to My Collection`);
     });
@@ -1221,6 +1221,14 @@ const subOf = (n) => (n.match(/ \(([^)]+)\)$/) || [, "Normal"])[1];
 const b64e = (o) => btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const b64d = (t) => JSON.parse(decodeURIComponent(escape(atob(t.replace(/-/g, "+").replace(/_/g, "/")))));
 
+/* graded slabs: each grade is its own line in the collection, valued at the owner's number (eBay sold is one tap away) */
+const GRADES = [["PSA", ["10", "9", "8", "7", "6", "5"]], ["CGC", ["10 Pristine", "10", "9.5", "9", "8.5", "8"]], ["BGS", ["10 Black Label", "10", "9.5", "9", "8.5"]],
+  ["SGC", ["10", "9.5", "9", "8"]], ["TAG", ["10", "9", "8"]], ["ACE", ["10", "9", "8"]]];
+const gradeOpts = (cur) => `<option value=""${cur ? "" : " selected"}>Raw</option>` + GRADES.map(([co, gs]) => `<optgroup label="${co}">${gs.map((g) => { const v = `${co} ${g}`; return `<option value="${v}"${v === cur ? " selected" : ""}>${v}</option>`; }).join("")}</optgroup>`).join("") + `<option value="Other slab"${cur === "Other slab" ? " selected" : ""}>Other slab</option>`;
+const cleanCard = (n) => n.replace(/ \((Holofoil|Normal|Foil|Reverse Holofoil)\)$/, "").replace(/ - (\S+)$/, " $1");
+const soldUrl = (name, gr) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(`${cleanCard(name)} ${gr === "Other slab" ? "graded" : gr}`)}&LH_Sold=1&LH_Complete=1&_sop=13`;
+const sumOwned = () => { const m = new Map(); for (const x of colGet().items) { const k = `${x.id}|${printCode(subOf(x.n || ""))}`; m.set(k, (m.get(k) || 0) + x.qty); } return m; };
+
 async function pageCollection() {
   const [meta, rows] = await Promise.all([getJSON("meta.json"), getJSON("search.json")]);
   const byKey = new Map(rows.map((r) => [`${r[0]}|${printCode(subOf(r[1]))}`, r]));
@@ -1228,11 +1236,12 @@ async function pageCollection() {
   const shared = location.hash.startsWith("#c=");
   let col = colGet();
   if (shared) {
-    try { const d = b64d(location.hash.slice(3)); col = { name: d.n || "", items: (d.i || []).map(([id, g, qty, code]) => ({ id, g, qty, code })) }; }
+    try { const d = b64d(location.hash.slice(3)); col = { name: d.n || "", items: (d.i || []).map(([id, g, qty, code, gr, gv]) => ({ id, g, qty, code, ...(gr ? { gr, gv: gv ?? null } : {}) })) }; }
     catch { col = { name: "", items: [] }; }
     $("#mine").hidden = true; $("#shared-note").hidden = false;
   }
-  const keyOf = (it) => `${it.id}|${it.code ?? printCode(subOf(it.n || ""))}`;
+  const keyOf = (it) => `${it.id}|${it.code ?? printCode(subOf(it.n || ""))}${it.gr ? "|" + it.gr : ""}`;
+  const rawKey = (it) => `${it.id}|${it.code ?? printCode(subOf(it.n || ""))}`;
   const changes = {}, series = {}, setCards = {};
   let dates = null, cq = "", csort = "value", grouped = false, range = "90";
   const loadChanges = async () => {
@@ -1248,7 +1257,8 @@ async function pageCollection() {
     const vals = dates.map((d) => {
       let sum = 0, any = false;
       for (const it of col.items) {
-        const sr = series[keyOf(it)]; if (!sr) continue;
+        if (it.gr && it.gv != null) { sum += it.gv * it.qty; any = true; continue; }
+        const sr = series[rawKey(it)]; if (!sr) continue;
         let j = sr.dates.indexOf(d), v = null; while (j >= 0 && v == null) v = sr.s[j--];
         if (v != null) { sum += v * it.qty; any = true; }
       }
@@ -1260,7 +1270,8 @@ async function pageCollection() {
   const save = () => { if (!shared) colSet(col); };
 
   const draw = () => {
-    const all = col.items.map((it, ix) => { const r = byKey.get(keyOf(it)); return { ...it, ix, name: it.n || r?.[1] || `#${it.id}`, mkt: r?.[4] ?? null, ch: changes[keyOf(it)], t: r?.[3] }; });
+    const all = col.items.map((it, ix) => { const r = byKey.get(rawKey(it)); const raw = r?.[4] ?? null;
+      return { ...it, ix, name: it.n || r?.[1] || `#${it.id}`, raw, mkt: it.gr && it.gv != null ? it.gv : raw, est: !!it.gr && it.gv == null, ch: it.gr ? null : changes[rawKey(it)], t: r?.[3] }; });
     const items = all.slice().sort((a, b) => csort === "name" ? a.name.localeCompare(b.name) : csort === "set" ? setName(a.g).localeCompare(setName(b.g)) || (b.mkt || 0) - (a.mkt || 0)
       : csort === "recent" ? b.ix - a.ix : (b.mkt || 0) * b.qty - (a.mkt || 0) * a.qty);
     const value = items.reduce((a, i) => a + (i.mkt || 0) * i.qty, 0);
@@ -1277,7 +1288,7 @@ async function pageCollection() {
     const count = items.reduce((a, i) => a + i.qty, 0);
     $("#title").textContent = col.name || (shared ? "Shared collection" : "My collection");
     $("#stats").innerHTML = [
-      [money(value), "Market value"],
+      [money(value), items.some((i) => i.gr) ? "Collection value" : "Market value"],
       [count.toLocaleString(), "Items"],
       [paidItems.length ? money(paid) : "—", "You paid"],
       [paidItems.length ? `${paidValue - paid >= 0 ? "+" : "−"}${money(Math.abs(paidValue - paid))}` : "—", paidItems.length && paid ? `Gain ${((paidValue - paid) / paid * 100).toFixed(1)}%` : "Gain / loss"],
@@ -1287,9 +1298,12 @@ async function pageCollection() {
       return `<tr class="grp"><td colspan="6"><b>${esc(setName(i.g))}</b>${st ? ` <span class="muted">· ${st.have}/${st.total || "?"} cards</span>` : ""}</td></tr>`; };
     const list = grouped ? shown.slice().sort((a, b) => setName(a.g).localeCompare(setName(b.g)) || (b.mkt || 0) - (a.mkt || 0)) : shown;
     $("#list").innerHTML = list.length ? `<div class="table-wrap"><table><thead><tr><th>Item</th><th class="num">Qty${shared ? "" : " · paid"}</th><th class="num">Market</th><th class="num">Value</th><th class="num hide-sm">Change</th>${shared ? "" : "<th></th>"}</tr></thead><tbody>
-      ${list.map((i) => `${grpRow(i)}<tr><td class="title">${shared ? "" : `<div class="tline"><label class="ph-wrap" data-ph="${esc(keyOf(i))}" title="Add your own photo">${imgTag(i.id, "")}<span class="cam-dot" aria-hidden="true">${CAM}</span><input type="file" accept="image/*" data-cam="${esc(keyOf(i))}" aria-label="Take or choose a photo of ${esc(i.name)}"></label>`}<a href="${prodUrl(i.id, i.g)}">${shared ? imgTag(i.id, "") : ""}<span>${esc(i.name)}<span class="muted" style="display:block;font-size:12px;font-weight:400">${esc(setName(i.g))}</span></span></a>${shared ? "" : "</div>"}</td>
+      ${list.map((i) => `${grpRow(i)}<tr><td class="title">${shared ? "" : `<div class="tline"><label class="ph-wrap" data-ph="${esc(keyOf(i))}" title="Add your own photo">${imgTag(i.id, "")}<span class="cam-dot" aria-hidden="true">${CAM}</span><input type="file" accept="image/*" data-cam="${esc(keyOf(i))}" aria-label="Take or choose a photo of ${esc(i.name)}"></label>`}<a href="${prodUrl(i.id, i.g)}">${shared ? imgTag(i.id, "") : ""}<span>${i.gr ? `<span class="slab-badge">${esc(i.gr)}</span> ` : ""}${esc(i.name)}<span class="muted" style="display:block;font-size:12px;font-weight:400">${esc(setName(i.g))}</span></span></a>${shared ? "" : "</div>"}
+          ${shared || i.t === "s" ? "" : `<div class="grade-row"><select class="select grade-sel" data-grade="${esc(keyOf(i))}" aria-label="Raw or graded">${gradeOpts(i.gr || "")}</select>
+            ${i.gr ? `<label class="gv">Value each $<input class="field" type="number" min="0" step="0.01" inputmode="decimal" placeholder="${i.raw != null ? (i.raw / 100).toFixed(2) : "0.00"}" value="${i.gv != null ? (i.gv / 100).toFixed(2) : ""}" data-gv="${esc(keyOf(i))}" aria-label="Value of your ${esc(i.gr)}"></label>
+            <a class="sold-link" href="${esc(soldUrl(i.name, i.gr))}" target="_blank" rel="noopener">eBay sold ${esc(i.gr === "Other slab" ? "graded" : i.gr)} →</a>` : ""}</div>`}</td>
         <td class="num">${shared ? i.qty : `<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><input class="field" type="number" min="1" max="9999" value="${i.qty}" data-qty="${esc(keyOf(i))}" aria-label="Quantity" style="width:72px"><input class="field" type="number" min="0" step="0.01" placeholder="paid $" value="${i.paid != null ? (i.paid / 100).toFixed(2) : ""}" data-paid="${esc(keyOf(i))}" aria-label="Paid each" style="width:72px"></div>`}</td>
-        <td class="num">${money(i.mkt)}</td>
+        <td class="num">${money(i.mkt)}${i.gr ? `<span class="muted mkt-note">${i.est ? "raw price · set value" : "your value"}</span>` : ""}</td>
         <td class="num"><b>${money(i.mkt == null ? null : i.mkt * i.qty)}</b></td>
         <td class="num hide-sm">${chg(bestCh(i.ch))}</td>
         ${shared ? "" : `<td class="num"><div class="row-acts"><button class="btn icon" type="button" data-unph="${esc(keyOf(i))}" aria-label="Use the official image for ${esc(i.name)}" title="Use official image" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button><button class="btn" type="button" data-rm="${esc(keyOf(i))}" aria-label="Remove ${esc(i.name)}">✕</button></div></td>`}</tr>`).join("")}
@@ -1299,6 +1313,16 @@ async function pageCollection() {
     const find = (k) => col.items.find((x) => keyOf(x) === k);
     $("#list").querySelectorAll("[data-qty]").forEach((el) => el.addEventListener("change", () => { const it = find(el.dataset.qty); it.qty = Math.max(1, Number(el.value) || 1); save(); setTimeout(draw); }));
     $("#list").querySelectorAll("[data-paid]").forEach((el) => el.addEventListener("change", () => { const it = find(el.dataset.paid); it.paid = el.value === "" ? null : Math.round(Number(el.value) * 100); save(); setTimeout(draw); }));
+    $("#list").querySelectorAll("[data-grade]").forEach((el) => el.addEventListener("change", () => {
+      const it = find(el.dataset.grade), gr = el.value;
+      const target = { ...it, qty: 1 };
+      if (gr) { target.gr = gr; target.gv = null; } else { delete target.gr; delete target.gv; }
+      const ex = col.items.find((x) => x !== it && keyOf(x) === keyOf(target));
+      if (it.qty > 1) it.qty--; else col.items = col.items.filter((x) => x !== it);   // one copy moves; the rest stay as they were
+      if (ex) ex.qty++; else col.items.push(target);
+      save(); toast(gr ? `Marked 1 copy as ${gr}. Add its value or check eBay sold.` : "Marked 1 copy as raw"); setTimeout(draw);
+    }));
+    $("#list").querySelectorAll("[data-gv]").forEach((el) => el.addEventListener("change", () => { const it = find(el.dataset.gv); it.gv = el.value === "" ? null : Math.round(Number(el.value) * 100); save(); setTimeout(draw); }));
     $("#list").querySelectorAll("[data-rm]").forEach((el) => el.addEventListener("click", () => { photos.del(el.dataset.rm); col.items = col.items.filter((x) => keyOf(x) !== el.dataset.rm); save(); draw(); }));
     $("#list").querySelectorAll("[data-cam]").forEach((el) => el.addEventListener("change", async () => {
       const file = el.files && el.files[0]; el.value = ""; if (!file) return;
@@ -1339,7 +1363,7 @@ async function pageCollection() {
       out.querySelectorAll("[data-hit]").forEach((a) => a.addEventListener("click", async (e) => {
         e.preventDefault(); const r = hits[+a.dataset.hit];
         const it = { id: r[0], g: r[2], n: r[1], qty: 1, paid: null };
-        const ex = col.items.find((x) => keyOf(x) === keyOf(it));
+        const ex = col.items.find((x) => !x.gr && keyOf(x) === keyOf(it));
         ex ? ex.qty++ : col.items.push(it);
         save(); input.value = ""; out.classList.remove("open"); await loadChanges(); draw();
         $("#added").textContent = `Added ${r[1]}`; setTimeout(() => { $("#added").textContent = ""; }, 2500);
@@ -1347,7 +1371,7 @@ async function pageCollection() {
     });
     document.addEventListener("click", (e) => { if (!$("#add-box").contains(e.target)) out.classList.remove("open"); });
     $("#share").addEventListener("click", async () => {
-      const url = `${location.origin}${location.pathname}#c=${b64e({ n: col.name, i: col.items.map((i) => [i.id, i.g, i.qty, printCode(subOf(i.n || ""))]) })}`;
+      const url = `${location.origin}${location.pathname}#c=${b64e({ n: col.name, i: col.items.map((i) => [i.id, i.g, i.qty, printCode(subOf(i.n || "")), ...(i.gr ? [i.gr, i.gv ?? null] : [])]) })}`;
       try { if (navigator.share) { await navigator.share({ title: col.name || "My collection", url }); return; } } catch { return; }
       try { await navigator.clipboard.writeText(url); $("#added").textContent = "Share link copied"; } catch { prompt("Copy your share link:", url); }
     });
@@ -1358,7 +1382,7 @@ async function pageCollection() {
     });
     $("#restore").addEventListener("change", async (e) => {
       const f = e.target.files[0]; if (!f) return;
-      try { const d = JSON.parse(await f.text()); if (!Array.isArray(d.items)) throw 0; col = { name: d.name || "", items: d.items.filter((i) => i && i.id && i.g).map((i) => ({ id: i.id, g: i.g, n: i.n, qty: Math.max(1, i.qty | 0), paid: i.paid ?? null })) }; save(); $("#name").value = col.name; await loadChanges(); draw(); $("#added").textContent = "Collection restored"; }
+      try { const d = JSON.parse(await f.text()); if (!Array.isArray(d.items)) throw 0; col = { name: d.name || "", items: d.items.filter((i) => i && i.id && i.g).map((i) => ({ id: i.id, g: i.g, n: i.n, qty: Math.max(1, i.qty | 0), paid: i.paid ?? null, ...(i.gr ? { gr: String(i.gr).slice(0, 30), gv: i.gv ?? null } : {}) })) }; save(); $("#name").value = col.name; await loadChanges(); draw(); $("#added").textContent = "Collection restored"; }
       catch { $("#added").textContent = "That file isn't a collection backup."; }
     });
   }
@@ -1383,7 +1407,7 @@ async function pageCollection() {
           col = { name: remote.name || local.name || "", items: remote.items || [], updated: remote.updated };
           colSet(col, false);
         } else if (remote && justSignedIn) {          // first sign-in on this device: combine both
-          const key = (x) => `${x.id}|${printCode(subOf(x.n || ""))}`, m = new Map(remote.items.map((x) => [key(x), x]));
+          const key = (x) => `${x.id}|${printCode(subOf(x.n || ""))}${x.gr ? "|" + x.gr : ""}`, m = new Map(remote.items.map((x) => [key(x), x]));
           for (const x of local.items) { const r = m.get(key(x)); m.set(key(x), r ? { ...r, qty: Math.max(r.qty, x.qty), paid: r.paid ?? x.paid } : x); }
           col = { name: local.name || remote.name || "", items: [...m.values()] };
           colSet(col);
@@ -1427,7 +1451,7 @@ async function pageSearch() {
     else if (sort === "name") out.sort((a, b) => a[1].localeCompare(b[1]));
     else if (sort === "num") out.sort((a, b) => numOf(a) - numOf(b) || a[1].localeCompare(b[1]));
     $("#scount").textContent = !terms.length && game === "all" && rar === "" ? `${out.length.toLocaleString()} items. Type a name, set or card number to narrow it down.` : `${out.length.toLocaleString()} results`;
-    const own = new Map(colGet().items.map((x) => [`${x.id}|${printCode(subOf(x.n || ""))}`, x.qty]));
+    const own = sumOwned();
     $("#sres").innerHTML = out.slice(0, lim).map((r) => {
       const st = setById.get(r[2]), k = `${r[0]}|${printCode(subOf(r[1]))}`, qty = own.get(k) || 0;
       const alt = r[3] === "c" && st?.k === "pokemon" ? ptcgImg(ptcgFromLogo(st.lg), r[5]) : "";
@@ -1440,7 +1464,7 @@ async function pageSearch() {
     $("#smore")?.addEventListener("click", () => { lim += 120; draw(); });
     $("#sres").querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => {
       const r = out.find((x) => `${x[0]}|${printCode(subOf(x[1]))}` === b.dataset.add); if (!r) return;
-      const col = colGet(), ex = col.items.find((x) => `${x.id}|${printCode(subOf(x.n || ""))}` === b.dataset.add);
+      const col = colGet(), ex = col.items.find((x) => !x.gr && `${x.id}|${printCode(subOf(x.n || ""))}` === b.dataset.add);
       ex ? ex.qty++ : col.items.push({ id: r[0], g: r[2], n: r[1], qty: 1, paid: null });
       colSet(col); toast(`Added ${r[1]} to My Collection`); draw();
     }));
