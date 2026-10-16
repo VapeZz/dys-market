@@ -1,7 +1,7 @@
 /* Drive Your Style Market — app service worker.
    Network first for everything, so prices and pages are always fresh.
    The last copy of each page and data file is kept so the app still opens offline. */
-const CACHE = "dys-app-v1";
+const CACHE = "dys-app-v2";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => {
