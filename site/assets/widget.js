@@ -24,7 +24,14 @@
 .dys-market .dm-card img{font-size:0;color:transparent;width:100%;aspect-ratio:5/7;object-fit:contain;border-radius:6px;background:rgba(127,127,127,.08)}
 .dys-market .dm-card span{font-size:11.5px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .dys-market .dm-card b{font-size:12px}
-.dys-market .dm-all{display:inline-block;margin:10px 0 0!important;font-size:13px}`;
+.dys-market .dm-all{display:inline-block;margin:10px 0 0!important;font-size:13px}
+.dys-market .dm-snk{padding:12px 14px;border:1px solid rgba(127,127,127,.3);border-radius:10px}
+.dys-market .dm-snk b{display:block;font-size:14px;margin-bottom:2px}
+.dys-market .dm-snk p{margin:0 0 10px;font-size:13px;opacity:.75}
+.dys-market .dm-pills{display:flex;flex-wrap:wrap;gap:8px}
+.dys-market .dm-pills a{margin:0!important;opacity:1!important;text-decoration:none!important;font-size:13px;font-weight:600;padding:7px 14px;border:1px solid rgba(127,127,127,.45);border-radius:999px}
+.dys-market .dm-pills a:hover{border-color:currentColor}
+.dys-market .dm-cal{display:inline-block;margin-top:10px!important;font-size:13px}`;
     document.head.appendChild(st);
   }
   const showCards = (el, row) => {
@@ -44,7 +51,20 @@
       el.appendChild(box);
     }).catch(() => {});
   };
+  // Sneakers: resale check (StockX / GOAT / eBay sold) by style code, plus the release calendar
+  const showSneaker = (el, s) => {
+    const q = encodeURIComponent(s.c || s.n);
+    el.innerHTML = `<div class="dm-snk"><b>Check resale before you buy</b><p>Compare this pair${s.c ? ` (${s.c})` : ""} with live listings and recent sales.</p>
+      <div class="dm-pills"><a href="https://stockx.com/search?s=${q}" target="_blank" rel="noopener">StockX</a><a href="https://www.goat.com/search?query=${q}" target="_blank" rel="noopener">GOAT</a><a href="https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Sold=1&LH_Complete=1" target="_blank" rel="noopener">eBay sold</a></div>
+      <a class="dm-cal" href="${BASE}sneakers.html" target="_blank" rel="noopener">Upcoming sneaker drops &amp; release calendar \u2192</a></div>`;
+  };
+  const sneakers = () => fetch(BASE + "data/sneakers-stock.json", { cache: "no-cache" }).then((r) => r.ok ? r.json() : []).catch(() => []);
   fetch(BASE + "data/store-prices.json", { cache: "no-cache" }).then((r) => r.ok ? r.json() : {}).then((data) => {
+    const rest = [...els].filter((el) => !data[el.dataset.handle]?.m);
+    if (rest.length) sneakers().then((list) => rest.forEach((el) => {
+      const s = list.find((x) => x.u.endsWith("/products/" + el.dataset.handle));
+      if (s) showSneaker(el, s);
+    }));
     els.forEach((el) => {
       const row = data[el.dataset.handle];
       if (!row || !row.m) return;

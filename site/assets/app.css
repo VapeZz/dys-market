@@ -512,9 +512,9 @@ tr.grp td{background:var(--surface-2);font-size:13px;padding-top:8px;padding-bot
 .snk-pick-img{position:relative;aspect-ratio:16/10;background:#f2f2f2;display:block;margin-bottom:10px;overflow:hidden}
 .snk-pick-img .pimg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:grid}
 .snk-pick-img .verdict{position:absolute;top:10px;left:10px}
-.snk-pick-img .verdict.v-cop{background:#d9f7e8;color:#0d8a57}
-.snk-pick-img .verdict.v-wear{background:#e9e5ff;color:#5b46f0}
-.snk-pick-img .verdict.v-wait{background:#fdf0d5;color:#9a6412}
+.snk-pick-img .verdict.v-cop,.snk-past .si .verdict.v-cop{background:#d9f7e8;color:#0d8a57}
+.snk-pick-img .verdict.v-wear,.snk-past .si .verdict.v-wear{background:#e9e5ff;color:#5b46f0}
+.snk-pick-img .verdict.v-wait,.snk-past .si .verdict.v-wait{background:#fdf0d5;color:#9a6412}
 .snk-pick-top{font-size:13px;margin-bottom:2px}
 .ph{display:grid;place-content:center;justify-items:center;gap:4px;background:#ececef!important;color:#8a8fa3;font-family:"Space Grotesk",sans-serif;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
 .ph svg{width:46%;max-width:120px;height:auto;opacity:.55}
@@ -538,3 +538,21 @@ tr.grp td{background:var(--surface-2);font-size:13px;padding-top:8px;padding-bot
   .snk-mprice{display:inline}
   .snk-item .cal-date{flex-basis:34px}
 }
+/* sneakers: reminders, request, just dropped, compact votes */
+.snk-resale{align-items:center}
+.remind{position:relative}
+.remind summary{list-style:none;cursor:pointer;font-size:12px;font-weight:600;padding:4px 10px;border:1px solid var(--accent);border-radius:999px;color:var(--accent);user-select:none}
+.remind summary::-webkit-details-marker{display:none}
+.remind[open] summary{background:rgba(139,123,255,.16)}
+.remind-menu{position:absolute;z-index:20;top:calc(100% + 6px);left:0;min-width:180px;display:flex;flex-direction:column;padding:6px;border:1px solid var(--line-strong);border-radius:12px;background:var(--surface);box-shadow:var(--shadow, 0 12px 30px rgba(0,0,0,.35))}
+.snk-resale .remind-menu a{border:0;border-radius:8px;padding:9px 10px;font-size:13.5px;color:var(--ink)}
+.snk-resale .remind-menu a:hover{background:var(--surface-2)}
+.snk-resale a.req{border-color:rgba(245,185,66,.55);color:#f5b942}
+[data-theme="light"] .snk-resale a.req{color:#9a6412}
+.snk-vote.compact{margin:6px 0 0}
+.snk-vote.compact .vote{font-size:12.5px;padding:3px 10px}
+.snk-past .si{background:#f2f2f2}
+.snk-past .si .pimg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;padding:0}
+.snk-past .si .verdict{position:absolute;left:8px;top:8px;font-size:10px}
+.snk-past .pp{flex-direction:row-reverse}
+.snk-past-cta{padding:0 10px;font-size:12px}

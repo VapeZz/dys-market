@@ -780,18 +780,30 @@ const SNK_NS = "https://abacus.jasoncameron.dev";
 const voteKey = (code, dir) => `dys-snk/${code.replace(/[^A-Za-z0-9-]/g, "")}-${dir}`;
 const VKEY = "dys-snk-votes";
 const myVotes = () => { try { return JSON.parse(localStorage.getItem(VKEY) || "{}"); } catch { return {}; } };
-const snkCount = (code, dir) => fetch(`${SNK_NS}/get/${voteKey(code, dir)}`).then((r) => r.ok ? r.json() : { value: 0 }).then((j) => j.value || 0).catch(() => null);
 const SHOE = `<svg viewBox="0 0 64 32" fill="currentColor" aria-hidden="true"><path d="M3 22c0-4 1-9 3-12 1-2 3-2 4 0 2 3 5 5 9 5 3 0 5-2 7-4l3 1c3 5 10 8 18 9 6 1 11 3 12 6v2H5c-1 0-2-1-2-2z"/><rect x="3" y="27" width="58" height="3" rx="1.5"/></svg>`;
 const snkPh = (r, cls) => `<span class="${cls} ph">${SHOE}<span>${esc(r.b)}</span></span>`;
 window.dysShoe = (el) => { el.outerHTML = el.dataset.ph; };
 const snkImg = (im, r, cls) => im ? `<img class="${cls}" src="${esc(im)}" alt="${esc(r.n)}" loading="lazy" data-ph="${esc(snkPh(r, cls))}" onerror="dysShoe(this)">` : snkPh(r, cls);
-function voteBox(el, code) {
+/* Abacus allows ~30 requests per 10s per visitor, so counts load through a slow queue, only when visible. */
+const abQ = []; let abRunning = false;
+const abFetch = (path) => new Promise((res) => { abQ.push([path, res]); if (!abRunning) abPump(); });
+function abPump() {
+  const job = abQ.shift(); if (!job) { abRunning = false; return; }
+  abRunning = true;
+  fetch(`${SNK_NS}/${job[0]}`).then((r) => r.ok ? r.json() : (r.status === 404 ? { value: 0 } : null)).catch(() => null).then((j) => job[1](j));
+  setTimeout(abPump, 380);
+}
+const snkCountQ = (code, dir) => abFetch(`get/${voteKey(code, dir)}`).then((j) => j ? j.value || 0 : null);
+const voteSeen = typeof IntersectionObserver === "function" ? new IntersectionObserver((ents) => ents.forEach((e) => {
+  if (e.isIntersecting) { voteSeen.unobserve(e.target); e.target._load?.(); }
+}), { rootMargin: "200px" }) : null;
+function voteBox(el, code, compact = false) {
   const draw = (up, dn) => {
     const mine = myVotes()[code], tot = (up || 0) + (dn || 0), pct = tot ? Math.round((up || 0) / tot * 100) : null;
-    el.innerHTML = `<div class="vote-row"><button type="button" data-d="up" class="vote${mine === "up" ? " on" : ""}"${mine ? " disabled" : ""} aria-label="Thumbs up">👍 <b>${up ?? "–"}</b></button>
-      <button type="button" data-d="dn" class="vote${mine === "dn" ? " on" : ""}"${mine ? " disabled" : ""} aria-label="Thumbs down">👎 <b>${dn ?? "–"}</b></button>
-      <span class="vote-note">${pct == null ? (mine ? "Thanks for voting" : "Would you cop?") : `${pct}% would cop${mine ? " · you voted" : ""}`}</span></div>
-      ${pct == null ? "" : `<div class="vote-bar"><i style="width:${pct}%"></i></div>`}`;
+    const btn = (d, ico, n) => `<button type="button" data-d="${d}" class="vote${mine === d ? " on" : ""}"${mine ? " disabled" : ""} aria-label="${d === "up" ? "Thumbs up" : "Thumbs down"}">${ico} <b>${n ?? "–"}</b></button>`;
+    el.innerHTML = `<div class="vote-row">${btn("up", "👍", up)}${btn("dn", "👎", dn)}
+      <span class="vote-note">${pct == null ? (mine ? "Thanks for voting" : compact ? "" : "Would you cop?") : `${pct}% would cop${mine && !compact ? " · you voted" : ""}`}</span></div>
+      ${pct == null || compact ? "" : `<div class="vote-bar"><i style="width:${pct}%"></i></div>`}`;
     el.querySelectorAll("button[data-d]").forEach((b) => b.addEventListener("click", async () => {
       if (myVotes()[code]) return;
       const d = b.dataset.d, v = myVotes(); v[code] = d;
@@ -803,16 +815,50 @@ function voteBox(el, code) {
     }));
   };
   draw(null, null);
-  Promise.all([snkCount(code, "up"), snkCount(code, "dn")]).then(([up, dn]) => draw(up, dn));
+  el._load = () => Promise.all([snkCountQ(code, "up"), snkCountQ(code, "dn")]).then(([up, dn]) => draw(up, dn));
+  if (voteSeen) voteSeen.observe(el); else el._load();
 }
+/* "Remind me": an all-day calendar event with alerts the day before (9am) and on the morning of the drop */
+const icsDate = (d, add = 0) => { const x = new Date(d + "T12:00:00"); x.setDate(x.getDate() + add); return x.toLocaleDateString("en-CA").replace(/-/g, ""); };
+const icsText = (s) => String(s).replace(/[\;,]/g, (c) => "\\" + c).replace(/\n/g, "\\n");
+function icsFor(r) {
+  const title = `${r.n} release`, desc = `${r.cw ? r.cw + "\n" : ""}${r.c ? "Style code " + r.c + "\n" : ""}Retail ${r.r ? "$" + r.r : "TBA"}\nResale and more drops: https://market.driveyourstyle.net/sneakers.html`;
+  return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Drive Your Style//Sneaker drops//EN", "BEGIN:VEVENT",
+    `UID:${(r.c || r.n).replace(/\W+/g, "")}-${r.d}@driveyourstyle.net`, `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").slice(0, 15)}Z`,
+    `DTSTART;VALUE=DATE:${icsDate(r.d)}`, `DTEND;VALUE=DATE:${icsDate(r.d, 1)}`, `SUMMARY:${icsText(title)}`, `DESCRIPTION:${icsText(desc)}`,
+    "URL:https://market.driveyourstyle.net/sneakers.html",
+    "BEGIN:VALARM", "TRIGGER:-PT15H", "ACTION:DISPLAY", `DESCRIPTION:${icsText(r.n + " drops tomorrow")}`, "END:VALARM",
+    "BEGIN:VALARM", "TRIGGER:PT6H45M", "ACTION:DISPLAY", `DESCRIPTION:${icsText(r.n + " drops today")}`, "END:VALARM",
+    "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+}
+const gcalFor = (r) => `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(r.n + " release")}&dates=${icsDate(r.d)}/${icsDate(r.d, 1)}&details=${encodeURIComponent(`${r.cw || ""}${r.c ? " · " + r.c : ""} · Retail ${r.r ? "$" + r.r : "TBA"}\nhttps://market.driveyourstyle.net/sneakers.html`)}`;
+const SNK_REL = [];
+const remindHtml = (r) => { const i = SNK_REL.push(r) - 1; return `<details class="remind"><summary>🔔 Remind me</summary><div class="remind-menu">
+  <a href="#" data-ics="${i}">📅 Phone calendar</a><a href="${esc(gcalFor(r))}" target="_blank" rel="noopener">Google Calendar</a></div></details>`; };
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("[data-ics]");
+  if (a) {
+    const r = SNK_REL[a.dataset.ics];
+    a.href = "data:text/calendar;charset=utf-8," + encodeURIComponent(icsFor(r));
+    a.download = `${(r.n).replace(/[^\w]+/g, "-").replace(/^-|-$/g, "")}.ics`;
+    setTimeout(() => a.closest("details")?.removeAttribute("open"), 300);
+    return;
+  }
+  document.querySelectorAll("details.remind[open]").forEach((d) => { if (!d.contains(e.target)) d.removeAttribute("open"); });
+});
+const IG_DM = "https://ig.me/m/drive.yourstyle";
+const snkActions = (r, { remind = true, request = false } = {}) =>
+  snkLinks(r.c, r.n).replace("</span>", `${remind ? remindHtml(r) : ""}${request ? `<a class="req" href="${IG_DM}" target="_blank" rel="noopener" title="DM us the shoe and your size">🙋 Request this pair</a>` : ""}</span>`);
 const VERDICT = { cop: ["Cop", "v-cop"], wear: ["Cop to wear", "v-wear"], wait: ["Wait", "v-wait"] };
 const HEAT = ["", "", `<span class="badge heat">Hyped</span>`, `<span class="badge heat hot">🔥 Hot</span>`];
 async function pageSneakers() {
   const [data, imgs] = await Promise.all([fetch("sneakers.json", { cache: "no-cache" }).then((r) => r.json()), getJSON("sneaker-images.json").catch(() => ({}))]);
   const imOf = (r) => r.im || (r.c && imgs[r.c]) || null;
   const today = new Date().toLocaleDateString("en-CA");
+  const back = new Date(); back.setDate(back.getDate() - 14); const since = back.toLocaleDateString("en-CA");
   const rel = data.releases;
   const by = Object.fromEntries(rel.filter((r) => r.c).map((r) => [r.c, r]));
+  const pickOf = Object.fromEntries(data.picks.map((p) => [p.c, p]));
   const usd = (d) => d == null ? "TBA" : "$" + d;
   const day = (d, o) => new Date(d + "T12:00:00").toLocaleDateString("en-US", o);
   $("#picks").innerHTML = data.picks.map((p) => {
@@ -821,10 +867,20 @@ async function pageSneakers() {
     return `<div class="snk-pick"><div class="snk-pick-img">${snkImg(imOf(r), r, "pimg")}<span class="verdict ${cls}">${v}</span></div>
       <div class="snk-pick-top muted">${day(r.d, { weekday: "short", month: "short", day: "numeric" })} · ${usd(r.r)} retail</div>
       <b>${esc(r.n)}</b><span class="muted snk-cw">${esc(r.cw || "")}</span><p>${esc(p.why)}</p>
-      <div class="snk-vote" data-vote="${esc(p.c)}"></div>${snkLinks(r.c, r.n)}</div>`;
+      <div class="snk-vote" data-vote="${esc(p.c)}"></div>${snkActions(r, { request: true })}</div>`;
   }).join("") || `<div class="panel empty-note">New picks are coming soon.</div>`;
-  document.querySelectorAll("[data-vote]").forEach((el) => voteBox(el, el.dataset.vote));
-  $("#snk-src").innerHTML = `Release info last checked ${fmtDate(data.updated)} from ${data.sources.map(([n, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(n)}</a>`).join(" and ")}. Resale links open live searches. Not affiliated with Nike, Jordan Brand, adidas, StockX, GOAT or eBay.`;
+  $("#picks").querySelectorAll("[data-vote]").forEach((el) => voteBox(el, el.dataset.vote));
+  const past = rel.filter((r) => r.d < today && r.d >= since).sort((a, b) => b.d.localeCompare(a.d) || b.h - a.h);
+  if (past.length) {
+    $("#dropped-block").hidden = false;
+    $("#dropped").innerHTML = past.map((r) => {
+      const p = pickOf[r.c], vd = p && (VERDICT[p.v] || VERDICT.wear);
+      return `<div class="scard snk-card snk-past"><span class="si">${snkImg(imOf(r), r, "pimg")}${vd ? `<span class="verdict ${vd[1]}">We said: ${vd[0]}</span>` : ""}</span>
+        <span class="t">${esc(r.n)}</span><span class="pp"><span class="muted">${day(r.d, { month: "short", day: "numeric" })}</span><b>${usd(r.r)} retail</b></span>
+        <span class="snk-past-cta muted">How's it trading?</span>${snkActions(r, { remind: false })}</div>`;
+    }).join("");
+  }
+  $("#snk-src").innerHTML = `Release info last checked ${fmtDate(data.updated)} from ${data.sources.map(([n, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(n)}</a>`).join(" and ")}. Photos from Nike.com. Resale links open live searches. Not affiliated with Nike, Jordan Brand, adidas, StockX, GOAT or eBay.`;
   let brand = "all", hot = false;
   const brands = [...new Set(rel.map((r) => r.b))].sort((a, b) => rel.filter((r) => r.b === b).length - rel.filter((r) => r.b === a).length);
   const weekOf = (d) => { const x = new Date(d + "T12:00:00"); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x.toLocaleDateString("en-CA"); };
@@ -838,14 +894,16 @@ async function pageSneakers() {
       <div class="snk-list">${items.map((r) => `<div class="snk-item${r.h === 3 ? " is-hot" : ""}"><div class="cal-date"><b>${day(r.d, { day: "numeric" })}</b><span>${day(r.d, { month: "short" })}</span></div>
         ${snkImg(imOf(r), r, "simg-s")}
         <div class="snk-body"><div class="snk-name">${esc(r.n)} ${HEAT[r.h]}</div>
-        <div class="muted snk-meta">${[r.cw, r.c].filter(Boolean).map(esc).join(" · ")}<span class="snk-mprice"> · <b>${usd(r.r)}</b></span></div>${snkLinks(r.c, r.n)}</div>
+        <div class="muted snk-meta">${[r.cw, r.c].filter(Boolean).map(esc).join(" · ")}<span class="snk-mprice"> · <b>${usd(r.r)}</b></span></div>
+        ${r.h === 3 && r.c ? `<div class="snk-vote compact" data-cvote="${esc(r.c)}"></div>` : ""}${snkActions(r, { request: r.h >= 2 })}</div>
         <div class="snk-price"><b>${usd(r.r)}</b><span class="muted">retail</span></div></div>`).join("")}</div>`).join("")
       : `<div class="panel empty-note">No upcoming releases match.</div>`;
+    $("#cal").querySelectorAll("[data-cvote]").forEach((el) => voteBox(el, el.dataset.cvote, true));
   };
   tabs($("#brand"), [["all", "All brands"], ...brands.map((b) => [b, b])], brand, (v) => { brand = v; draw(); });
   $("#hot").addEventListener("change", (e) => { hot = e.target.checked; draw(); });
   draw();
-  const stock = await getJSON("sneakers-stock.json").catch(() => []);
+  const stock = (await getJSON("sneakers-stock.json").catch(() => [])).filter((s) => s.a !== false);
   if (stock.length) {
     $("#snk-stock-block").hidden = false;
     $("#snk-stock").innerHTML = stock.map((s) => `<div class="scard snk-card"><a class="si" href="${esc(s.u)}">${s.im ? `<img src="${esc(s.im + (s.im.includes("?") ? "&" : "?") + "width=600")}" alt="${esc(s.n)}" loading="lazy">` : ""}</a>

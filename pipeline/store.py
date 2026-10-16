@@ -93,12 +93,13 @@ STYLE_CODE = re.compile(r"Style code:\s*([A-Z0-9]{2,8}-?[A-Z0-9]{2,4})", re.I)
 
 
 def sneaker_rows(store_rows):
-    """In-stock sneakers (product type Shoes/Sneakers) for the sneakers page."""
+    """Sneakers (product type Shoes/Sneakers) for the sneakers page and the store widget. "a" = in stock."""
     out = []
     for row in store_rows:
         if (row.get("product_type") or "").strip().lower() not in ("shoes", "sneakers", "shoe", "sneaker"):
             continue
-        variants = [v for v in row.get("variants") or [] if v.get("available")]
+        all_v = row.get("variants") or []
+        variants = [v for v in all_v if v.get("available")] or all_v
         if not variants:
             continue
         body = re.sub(r"<[^>]+>", " ", row.get("body_html") or "")
@@ -112,6 +113,7 @@ def sneaker_rows(store_rows):
             "c": code.group(1).upper() if code else None,
             "im": imgs[0].get("src") if imgs else None,
             "at": (row.get("published_at") or row.get("created_at") or "")[:10],
+            "a": any(v.get("available") for v in all_v),
         })
     out.sort(key=lambda r: r["at"], reverse=True)
     return out

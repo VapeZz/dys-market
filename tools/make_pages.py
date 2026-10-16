@@ -169,6 +169,10 @@ PAGES = {
   <div class="block-head"><div><h2>In stock at Drive Your Style</h2><p>Brand new pairs, ready to ship or pick up. Check resale before you buy.</p></div><a class="more" href="https://driveyourstyle.net/collections/new-shoes">Shop sneakers →</a></div>
   <div class="snk-stock" id="snk-stock"></div>
 </section>
+<section class="block" id="dropped-block" hidden>
+  <div class="block-head"><div><h2>Just dropped</h2><p>Released in the last 2 weeks. Tap a resale link to see how each pair is trading.</p></div></div>
+  <div class="snk-stock" id="dropped"></div>
+</section>
 <section class="block">
   <div class="block-head"><div><h2>Release calendar</h2><p id="snk-note">Dates and prices can change. Retail is US men's sizing.</p></div></div>
   <div class="controls"><div id="brand"></div><label class="toggle"><input type="checkbox" id="hot"> Hyped drops only</label></div>
