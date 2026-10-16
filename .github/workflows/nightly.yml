@@ -55,6 +55,12 @@ jobs:
       - name: Download today's prices and build site data
         run: python pipeline/run.py
 
+      - name: Sneaker release photos
+        continue-on-error: true
+        run: |
+          python tools/sneaker_images.py | tee /tmp/snk.log
+          echo "::notice title=Sneakers::$(tail -n 1 /tmp/snk.log)"
+
       - name: Weekly Trending cards carousel (Sundays)
         if: ${{ inputs.social || github.event.schedule == '30 21 * * *' }}
         continue-on-error: true

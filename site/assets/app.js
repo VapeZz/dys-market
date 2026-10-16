@@ -776,10 +776,40 @@ const snkLinks = (code, name) => {
   const q = encodeURIComponent(code || name);
   return `<span class="snk-resale"><a href="https://stockx.com/search?s=${q}" target="_blank" rel="noopener">StockX</a><a href="https://www.goat.com/search?query=${q}" target="_blank" rel="noopener">GOAT</a><a href="https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Sold=1&LH_Complete=1" target="_blank" rel="noopener">eBay sold</a></span>`;
 };
+const SNK_NS = "https://abacus.jasoncameron.dev";
+const voteKey = (code, dir) => `dys-snk/${code.replace(/[^A-Za-z0-9-]/g, "")}-${dir}`;
+const VKEY = "dys-snk-votes";
+const myVotes = () => { try { return JSON.parse(localStorage.getItem(VKEY) || "{}"); } catch { return {}; } };
+const snkCount = (code, dir) => fetch(`${SNK_NS}/get/${voteKey(code, dir)}`).then((r) => r.ok ? r.json() : { value: 0 }).then((j) => j.value || 0).catch(() => null);
+const SHOE = `<svg viewBox="0 0 64 32" fill="currentColor" aria-hidden="true"><path d="M3 22c0-4 1-9 3-12 1-2 3-2 4 0 2 3 5 5 9 5 3 0 5-2 7-4l3 1c3 5 10 8 18 9 6 1 11 3 12 6v2H5c-1 0-2-1-2-2z"/><rect x="3" y="27" width="58" height="3" rx="1.5"/></svg>`;
+const snkPh = (r, cls) => `<span class="${cls} ph">${SHOE}<span>${esc(r.b)}</span></span>`;
+window.dysShoe = (el) => { el.outerHTML = el.dataset.ph; };
+const snkImg = (im, r, cls) => im ? `<img class="${cls}" src="${esc(im)}" alt="${esc(r.n)}" loading="lazy" data-ph="${esc(snkPh(r, cls))}" onerror="dysShoe(this)">` : snkPh(r, cls);
+function voteBox(el, code) {
+  const draw = (up, dn) => {
+    const mine = myVotes()[code], tot = (up || 0) + (dn || 0), pct = tot ? Math.round((up || 0) / tot * 100) : null;
+    el.innerHTML = `<div class="vote-row"><button type="button" data-d="up" class="vote${mine === "up" ? " on" : ""}"${mine ? " disabled" : ""} aria-label="Thumbs up">👍 <b>${up ?? "–"}</b></button>
+      <button type="button" data-d="dn" class="vote${mine === "dn" ? " on" : ""}"${mine ? " disabled" : ""} aria-label="Thumbs down">👎 <b>${dn ?? "–"}</b></button>
+      <span class="vote-note">${pct == null ? (mine ? "Thanks for voting" : "Would you cop?") : `${pct}% would cop${mine ? " · you voted" : ""}`}</span></div>
+      ${pct == null ? "" : `<div class="vote-bar"><i style="width:${pct}%"></i></div>`}`;
+    el.querySelectorAll("button[data-d]").forEach((b) => b.addEventListener("click", async () => {
+      if (myVotes()[code]) return;
+      const d = b.dataset.d, v = myVotes(); v[code] = d;
+      try { localStorage.setItem(VKEY, JSON.stringify(v)); } catch {}
+      if (d === "up") up = (up || 0) + 1; else dn = (dn || 0) + 1;
+      draw(up, dn);
+      const res = await fetch(`${SNK_NS}/hit/${voteKey(code, d)}`).then((r) => r.json()).catch(() => null);
+      if (res?.value != null) { if (d === "up") up = res.value; else dn = res.value; draw(up, dn); }
+    }));
+  };
+  draw(null, null);
+  Promise.all([snkCount(code, "up"), snkCount(code, "dn")]).then(([up, dn]) => draw(up, dn));
+}
 const VERDICT = { cop: ["Cop", "v-cop"], wear: ["Cop to wear", "v-wear"], wait: ["Wait", "v-wait"] };
 const HEAT = ["", "", `<span class="badge heat">Hyped</span>`, `<span class="badge heat hot">🔥 Hot</span>`];
 async function pageSneakers() {
-  const data = await fetch("sneakers.json", { cache: "no-cache" }).then((r) => r.json());
+  const [data, imgs] = await Promise.all([fetch("sneakers.json", { cache: "no-cache" }).then((r) => r.json()), getJSON("sneaker-images.json").catch(() => ({}))]);
+  const imOf = (r) => r.im || (r.c && imgs[r.c]) || null;
   const today = new Date().toLocaleDateString("en-CA");
   const rel = data.releases;
   const by = Object.fromEntries(rel.filter((r) => r.c).map((r) => [r.c, r]));
@@ -788,9 +818,12 @@ async function pageSneakers() {
   $("#picks").innerHTML = data.picks.map((p) => {
     const r = by[p.c]; if (!r || r.d < today) return "";
     const [v, cls] = VERDICT[p.v] || VERDICT.wear;
-    return `<div class="snk-pick"><div class="snk-pick-top"><span class="verdict ${cls}">${v}</span><span class="muted">${day(r.d, { weekday: "short", month: "short", day: "numeric" })} · ${usd(r.r)}</span></div>
-      <b>${esc(r.n)}</b><span class="muted snk-cw">${esc(r.cw || "")}</span><p>${esc(p.why)}</p>${snkLinks(r.c, r.n)}</div>`;
+    return `<div class="snk-pick"><div class="snk-pick-img">${snkImg(imOf(r), r, "pimg")}<span class="verdict ${cls}">${v}</span></div>
+      <div class="snk-pick-top muted">${day(r.d, { weekday: "short", month: "short", day: "numeric" })} · ${usd(r.r)} retail</div>
+      <b>${esc(r.n)}</b><span class="muted snk-cw">${esc(r.cw || "")}</span><p>${esc(p.why)}</p>
+      <div class="snk-vote" data-vote="${esc(p.c)}"></div>${snkLinks(r.c, r.n)}</div>`;
   }).join("") || `<div class="panel empty-note">New picks are coming soon.</div>`;
+  document.querySelectorAll("[data-vote]").forEach((el) => voteBox(el, el.dataset.vote));
   $("#snk-src").innerHTML = `Release info last checked ${fmtDate(data.updated)} from ${data.sources.map(([n, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(n)}</a>`).join(" and ")}. Resale links open live searches. Not affiliated with Nike, Jordan Brand, adidas, StockX, GOAT or eBay.`;
   let brand = "all", hot = false;
   const brands = [...new Set(rel.map((r) => r.b))].sort((a, b) => rel.filter((r) => r.b === b).length - rel.filter((r) => r.b === a).length);
@@ -803,8 +836,9 @@ async function pageSneakers() {
     const thisWeek = weekOf(today);
     $("#cal").innerHTML = list.length ? [...weeks].map(([w, items]) => `<h3 class="cal-month">${w === thisWeek ? "This week" : "Week of " + day(w, { month: "long", day: "numeric" })} <small>${items.length} drop${items.length > 1 ? "s" : ""}</small></h3>
       <div class="snk-list">${items.map((r) => `<div class="snk-item${r.h === 3 ? " is-hot" : ""}"><div class="cal-date"><b>${day(r.d, { day: "numeric" })}</b><span>${day(r.d, { month: "short" })}</span></div>
+        ${snkImg(imOf(r), r, "simg-s")}
         <div class="snk-body"><div class="snk-name">${esc(r.n)} ${HEAT[r.h]}</div>
-        <div class="muted snk-meta">${[r.cw, r.c].filter(Boolean).map(esc).join(" · ")}</div>${snkLinks(r.c, r.n)}</div>
+        <div class="muted snk-meta">${[r.cw, r.c].filter(Boolean).map(esc).join(" · ")}<span class="snk-mprice"> · <b>${usd(r.r)}</b></span></div>${snkLinks(r.c, r.n)}</div>
         <div class="snk-price"><b>${usd(r.r)}</b><span class="muted">retail</span></div></div>`).join("")}</div>`).join("")
       : `<div class="panel empty-note">No upcoming releases match.</div>`;
   };
