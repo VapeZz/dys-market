@@ -90,26 +90,29 @@
     const nameScore = (r) => { const ws = words(r[1]); if (!ws.length) return 0; return ws.filter((w) => toks.has(w) || (w.length >= 5 && hay.includes(w))).length / ws.length; };
     const scored = new Map(), sureSet = new Set();
     const add = (r, bonus) => { const sc = nameScore(r) + bonus; if (!scored.has(r) || scored.get(r) < sc) scored.set(r, sc); };
+    const nt = numText.replace(/(?<!\d)(\d{2})\s(\d)(?!\d)/g, "$1$2");   // "08 5" -> "085"
+    const bare = [...new Set(nt.match(/(?<!\d)\d{2,3}(?!\d)/g) || [])].slice(0, 10), ints = new Set(bare.map((x) => parseInt(x, 10)));
     nums.strong.forEach((k) => (by.get(k) || []).forEach((r) => { add(r, 1); if (nameScore(r) >= 0.5) sureSet.add(r); }));
-    nums.weak.forEach((k) => (by.get(k) || []).forEach((r) => add(r, 0.4)));
-    if (!scored.size) {   // only a bare number like "085" (promos) or a misread one: fuzzy-match the name among cards with that number
-      const nt = numText.replace(/(?<!\d)(\d{2})\s(\d)(?!\d)/g, "$1$2");   // "08 5" -> "085"
-      const bare = [...new Set(nt.match(/(?<!\d)\d{2,3}(?!\d)/g) || [])].slice(0, 8), ints = new Set(bare.map((x) => parseInt(x, 10)));
+    nums.weak.forEach((k) => (by.get(k) || []).forEach((r) => { const ns = nameScore(r); add(r, ns >= 0.5 ? 1.2 : 0.4); if (ns >= 0.99) sureSet.add(r); }));
+    // a clearly read card name always counts; a matching number (even printed bare, like "18" for 18/53) seals it
+    const lines = text.split("\n").map(letters).filter((l) => l.length >= 5);
+    for (const r of data.rows) {
+      if (r[3] !== "c") continue;
+      const ws = words(r[1]), nm = letters(r[1]);
+      if (!ws.length || nm.length < 5 || !ws.every((w) => toks.has(w) || hay.includes(w))) continue;
+      if (!lines.some((l) => l.includes(nm))) continue;          // the full name has to sit together on one line
+      const numOk = ints.has(leadNum(r[5])) || (r[5] && bare.includes(r[5]));
+      if (ws.length < 2 && !numOk) continue;                      // one-word names (Switch, Pikachu) need the number too
+      add(r, -0.5 + 0.05 * ws.length + (numOk ? 1 : 0));   // add() already counts the name once
+      if (numOk) sureSet.add(r);
+    }
+    if (!scored.size || Math.max(...scored.values()) < 1.5) {   // only a bare number like "085" (promos) or a misread one: fuzzy-match the name among cards with that number
       const T = tris(letters(nameText));
       if (ints.size) for (const r of data.rows) {
         if (r[3] !== "c" || !ints.has(leadNum(r[5]))) continue;
         const t = tris(letters(r[1])); let m = 0; t.forEach((x) => { if (T.has(x)) m++; });
         const exact = bare.includes(r[5]), ratio = m / Math.max(1, t.size);   // exact = a bare promo number like "085" printed as-is
-        if (exact || (m >= 6 && ratio >= 0.5)) { const sc = (exact ? 1 : 0) + ratio; if (!scored.has(r) || scored.get(r) < sc) scored.set(r, sc); }
-      }
-    }
-    if (!scored.size) {   // no number found at all: lean on the card name
-      const names = [...toks].filter((w) => w.length >= 4);
-      if (names.length) for (const r of data.rows) {
-        if (r[3] !== "c") continue;
-        const ws = words(r[1]), hit = ws.filter((w) => toks.has(w) || (w.length >= 5 && hay.includes(w)));
-        const sc = ws.length ? hit.length / ws.length : 0;
-        if ((sc >= 0.99 && hit.some((w) => w.length >= 5)) || (sc >= 0.74 && hit.filter((w) => w.length >= 4).length >= 2)) add(r, sc >= 0.99 ? 0.3 : 0);
+        if (exact || (m >= 6 && ratio >= 0.5)) { const sc = (exact ? 1.2 : 0) + ratio; if (!scored.has(r) || scored.get(r) < sc) scored.set(r, sc); }
       }
     }
     const list = [...scored].sort((a, b) => b[1] - a[1] || (b[0][4] || 0) - (a[0][4] || 0)).slice(0, 12).map(([r, s]) => ({ s, r }));
