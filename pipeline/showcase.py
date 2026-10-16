@@ -27,7 +27,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from shopify_api import Shopify  # noqa: E402
 
-ALIAS = re.compile(r"^[A-Za-z0-9_.]{3,20}$")
+ALIAS = re.compile(r"^[A-Za-z0-9_. \-]{3,20}$")
 BLOCK = re.compile(r"fuck|shit|bitch|cunt|nigg|fag|rape|nazi|hitler|porn|sex|dick|pussy|whore|slut|kkk|retard|admin|driveyourstyle|drive_your_style|official", re.I)
 PRINT = {"Normal": "", "Holofoil": "H", "Reverse Holofoil": "RH"}
 
@@ -102,11 +102,11 @@ def main(argv):
     profiles, taken = [], set()
     for gid, created, b in sorted(binders, key=lambda x: x[1]):   # older accounts keep a name first
         pid = pid_of(gid)
-        alias = (b.get("alias") or "").strip()
+        alias = re.sub(r"\s+", " ", (b.get("alias") or "").strip())
         if not b.get("pub") or pid in hidden or not ALIAS.match(alias) or BLOCK.search(alias):
             continue
         if alias.lower() in taken:
-            alias = f"{alias}_{pid[:3]}"
+            alias = f"{alias} {pid[:3]}"
         taken.add(alias.lower())
         items, value, cards = [], 0, 0
         for it in b.get("items") or []:

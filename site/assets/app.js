@@ -1224,7 +1224,8 @@ const b64d = (t) => JSON.parse(decodeURIComponent(escape(atob(t.replace(/-/g, "+
 
 /* ---------- collectors: public binders, likes, follows ----------
    Your likes / follows live in your binder (synced to your account); a job tallies everyone's every 30 minutes. */
-const ALIAS_OK = /^[A-Za-z0-9_.]{3,20}$/;
+const ALIAS_OK = /^[A-Za-z0-9_.\- ]{3,20}$/;
+const cleanAlias = (v) => String(v || "").replace(/^@/, "").replace(/\s+/g, " ").trim();
 const myPid = async () => { const a = acct.info(); if (!a?.id) return null;
   const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("dys:" + a.id));
   return [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 12); };
@@ -1272,7 +1273,7 @@ async function pageCollection() {
     [prof, tallied] = await Promise.all([getJSON(`showcase/${viewPid}.json`).catch(() => null), getJSON("showcase.json").then((d) => d.updated).catch(() => 0)]);
     col = prof ? { name: prof.bn || "", items: prof.items } : { name: "", items: [] };
     $("#mine").hidden = true; $("#tools").hidden = true;
-    document.title = prof ? `@${prof.a} · Collectors · Drive Your Style` : "Collector not found · Drive Your Style";
+    document.title = prof ? `${prof.a} · Collectors · Drive Your Style` : "Collector not found · Drive Your Style";
     $("#shared-note").hidden = false;
     $("#shared-note").innerHTML = prof ? `<span class="prof-line">${col.name ? `${esc(col.name)} · ` : ""}<a href="collectors.html" style="color:var(--accent)">All collectors →</a></span><span class="soc-row" id="prof-soc"></span>`
       : `This binder isn't public anymore. <a href="collectors.html" style="color:var(--accent)">Browse collectors →</a>`;
@@ -1328,7 +1329,7 @@ async function pageCollection() {
     const paid = paidItems.reduce((a, i) => a + i.paid * i.qty, 0);
     const paidValue = paidItems.reduce((a, i) => a + (i.mkt || 0) * i.qty, 0);
     const count = items.reduce((a, i) => a + i.qty, 0);
-    $("#title").textContent = prof ? `@${prof.a}` : col.name || (shared ? "Shared collection" : "My collection");
+    $("#title").textContent = prof ? prof.a : col.name || (shared ? "Shared collection" : "My collection");
     $("#stats").innerHTML = (prof ? [
       [money(value), "Collection value"], [count.toLocaleString(), "Items"], [String(new Set(items.map((i) => i.g)).size), "Sets"],
       [String(items.filter((i) => i.gr).reduce((a, i) => a + i.qty, 0)), "Graded slabs"],
@@ -1435,23 +1436,29 @@ async function pageCollection() {
     const box = $("#prof"), pid = await myPid(); if (!box || !pid) return;
     box.hidden = false;
     box.innerHTML = `<div class="prof-head"><b>Your collector profile</b><a href="collectors.html" class="more">Browse collectors →</a></div>
-      <div class="prof-grid"><label class="muted">Collector name (public)<input class="field" id="alias" maxlength="20" autocomplete="nickname" placeholder="e.g. vegas_pulls" value="${esc(col.alias || "")}"></label>
+      <div class="prof-grid"><label class="muted">Collector name (public)<input class="field" id="alias" maxlength="20" autocomplete="nickname" placeholder="e.g. JKL TCG" value="${esc(col.alias || "")}"></label>
       <label class="toggle"><input type="checkbox" id="pub"${col.pub ? " checked" : ""}> Show my binder on the Collectors page</label></div>
-      <p class="muted prof-note" id="alias-msg">Letters, numbers, _ and . (3–20). Your email and what you paid are never shown. Changes show up within 30 minutes.</p>
+      <p class="muted prof-note" id="alias-msg">3–20 letters, numbers or spaces. Your email and what you paid are never shown. Changes show up within 30 minutes.</p>
       <p class="prof-links" id="prof-links"></p>`;
     const links = () => { $("#prof-links").innerHTML = col.pub && ALIAS_OK.test(col.alias || "") ? `<a href="collection.html?p=${pid}">View my public page →</a>` : ""; };
     const taken = async (al) => { const d = await getJSON("showcase.json").catch(() => null); return !!d?.profiles?.some((p) => p.p !== pid && p.a.toLowerCase() === al.toLowerCase()); };
-    $("#alias").addEventListener("change", async (e) => {
-      const al = e.target.value.trim().replace(/^@/, "");
-      if (al && !ALIAS_OK.test(al)) { $("#alias-msg").textContent = "Use 3–20 letters, numbers, _ or . (no spaces)."; return; }
-      if (al && await taken(al)) { $("#alias-msg").textContent = `@${al} is taken. Try another.`; return; }
-      col.alias = al; save(); links(); $("#alias-msg").textContent = al ? `Saved. You're @${al}.` : "Collector name removed.";
+    const saveAlias = async () => {
+      const al = cleanAlias($("#alias").value);
+      if (al === (col.alias || "")) return true;
+      if (al && !ALIAS_OK.test(al)) { $("#alias-msg").textContent = "Use 3–20 letters, numbers, spaces, _ . or -"; return false; }
+      if (al && await taken(al)) { $("#alias-msg").textContent = `"${al}" is taken. Try another.`; return false; }
+      col.alias = al; save(); links(); $("#alias-msg").textContent = al ? `Saved. Your collector name is ${al}.` : "Collector name removed.";
       document.dispatchEvent(new CustomEvent("dys-sync", { detail: "ok" }));
-    });
-    $("#pub").addEventListener("change", (e) => {
-      if (e.target.checked && !ALIAS_OK.test(col.alias || "")) { e.target.checked = false; $("#alias-msg").textContent = "Pick a collector name first."; $("#alias").focus(); return; }
-      col.pub = e.target.checked; save(); links();
-      $("#alias-msg").textContent = col.pub ? "Your binder will appear on the Collectors page within 30 minutes." : "Your binder is private. It leaves the Collectors page within 30 minutes.";
+      return true;
+    };
+    let at = 0;
+    $("#alias").addEventListener("input", () => { clearTimeout(at); at = setTimeout(saveAlias, 700); });
+    $("#alias").addEventListener("change", saveAlias);
+    $("#pub").addEventListener("change", async (e) => {
+      const want = e.target.checked;
+      if (want && !(await saveAlias() && ALIAS_OK.test(col.alias || ""))) { e.target.checked = false; if (!col.alias) $("#alias-msg").textContent = "Type a collector name first."; $("#alias").focus(); return; }
+      col.pub = want; save(); links();
+      $("#alias-msg").textContent = col.pub ? "You're on the Collectors page within 30 minutes." : "Your binder is private. It leaves the Collectors page within 30 minutes.";
     });
     links();
   };
@@ -1461,7 +1468,7 @@ async function pageCollection() {
       bar.hidden = false;
       const a = acct.info();
       const al = colGet().alias;
-      bar.innerHTML = a ? `<span><b>${al ? `Signed in as @${esc(al)}` : "Saved to your account"}</b>${msg ? ` · <span class="muted">${esc(msg)}</span>` : ""}${al ? "" : `<span class="muted" style="display:block;font-size:13px">Pick a collector name below so people see that instead of your email.</span>`}</span><button class="btn" id="acct-out" type="button">Sign out</button>`
+      bar.innerHTML = a ? `<span><b>${al ? `Signed in as ${esc(al)}` : "Saved to your account"}</b>${msg ? ` · <span class="muted">${esc(msg)}</span>` : ""}${al ? "" : `<span class="muted" style="display:block;font-size:13px">Pick a collector name below so people see that instead of your email.</span>`}</span><button class="btn" id="acct-out" type="button">Sign out</button>`
         : `<span><b>Save your binder to your Drive Your Style account</b><span class="muted" style="display:block;font-size:13px">Sign in with the email you shop with. Your binder syncs to every phone and computer.</span></span><button class="btn primary" id="acct-in" type="button">Sign in</button>`;
       $("#acct-in")?.addEventListener("click", () => acct.signIn());
       $("#acct-out")?.addEventListener("click", () => acct.signOut());
@@ -1508,7 +1515,7 @@ async function pageCollectors() {
     $("#cnote").textContent = all.length ? `${all.length} public binder${all.length > 1 ? "s" : ""}${data.updated ? ` · updated ${new Date(data.updated).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}` : "";
     $("#clist").innerHTML = list.length ? list.map((p) => `<a class="col-card" href="collection.html?p=${p.p}">
         <span class="col-thumbs">${p.top.map(([id, gr]) => `<span>${imgTag(id, "", 400)}${gr ? `<i class="slab-badge">${esc(gr)}</i>` : ""}</span>`).join("")}</span>
-        <span class="col-meta"><b>@${esc(p.a)}${p.p === me ? ` <small class="muted">(you)</small>` : ""}</b>${p.bn ? `<span class="muted col-bn">${esc(p.bn)}</span>` : ""}
+        <span class="col-meta"><b>${esc(p.a)}${p.p === me ? ` <small class="muted">(you)</small>` : ""}</b>${p.bn ? `<span class="muted col-bn">${esc(p.bn)}</span>` : ""}
           <span class="col-figs"><b>${money(p.v)}</b><span class="muted">${p.n.toLocaleString()} item${p.n > 1 ? "s" : ""}</span></span></span>
         <span class="soc-row" data-soc="${p.p}"></span></a>`).join("")
       : `<div class="panel empty-note" style="grid-column:1/-1">${tab === "following" ? "You're not following anyone yet. Open a binder and tap <b>Follow</b>." : all.length ? "No collectors match." : "No public binders yet. Be the first: sign in on My Collection, pick a collector name and turn on <b>Show my binder on the Collectors page</b>."}</div>`;
