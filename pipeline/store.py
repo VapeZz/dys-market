@@ -87,3 +87,31 @@ def match_in_stock(products, store_rows, log=print):
             stock[pid] = entry
     log(f"store: {len(stock)} products matched to market data ({sum(1 for v in stock.values() if v['a'])} in stock)")
     return stock
+
+
+STYLE_CODE = re.compile(r"Style code:\s*([A-Z0-9]{2,8}-?[A-Z0-9]{2,4})", re.I)
+
+
+def sneaker_rows(store_rows):
+    """In-stock sneakers (product type Shoes/Sneakers) for the sneakers page."""
+    out = []
+    for row in store_rows:
+        if (row.get("product_type") or "").strip().lower() not in ("shoes", "sneakers", "shoe", "sneaker"):
+            continue
+        variants = [v for v in row.get("variants") or [] if v.get("available")]
+        if not variants:
+            continue
+        body = re.sub(r"<[^>]+>", " ", row.get("body_html") or "")
+        code = STYLE_CODE.search(body)
+        imgs = row.get("images") or []
+        out.append({
+            "n": row.get("title"),
+            "u": f"{config.STORE_URL}/products/{row['handle']}",
+            "p": int(round(min(float(v["price"]) for v in variants) * 100)),
+            "s": ", ".join(v.get("title") for v in variants if v.get("title") and v.get("title") != "Default Title"),
+            "c": code.group(1).upper() if code else None,
+            "im": imgs[0].get("src") if imgs else None,
+            "at": (row.get("published_at") or row.get("created_at") or "")[:10],
+        })
+    out.sort(key=lambda r: r["at"], reverse=True)
+    return out

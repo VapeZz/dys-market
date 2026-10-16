@@ -51,7 +51,7 @@ document.documentElement.dataset.theme = getTheme();
 /* ---------- shell ---------- */
 const SEARCH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>`;
 function shell() {
-  const links = [["index", "Overview"], ["sets", "Sets"], ["trends", "Trends"], ["cards", "Movers"], ["search", "Search"], ["compare", "Compare"], ["calendar", "Calendar"], ["watchlist", "Watchlist"], ["collection", "My Collection"], ["about", "About the data"]];
+  const links = [["sets", "Sets"], ["trends", "Trends"], ["cards", "Movers"], ["search", "Search"], ["compare", "Compare"], ["calendar", "Calendar"], ["sneakers", "Sneakers"], ["watchlist", "Watchlist"], ["collection", "My Collection"], ["about", "About"]];
   $("#top").outerHTML = `<header class="top"><div class="wrap">
     <a class="brand" href="index.html" aria-label="Drive Your Style Market Insights home"><img class="logo-img logo-on-dark" src="assets/logo-light.png" alt="Drive Your Style" width="61" height="40"><img class="logo-img logo-on-light" src="assets/logo-dark.png" alt="" width="61" height="40"><span class="brand-sub">Market<br>Insights</span></a>
     <nav class="nav" id="nav">${links.map(([p, l]) => `<a href="${p}.html"${p === PAGE ? ' aria-current="page"' : ""}>${l}</a>`).join("")}
@@ -771,6 +771,54 @@ async function pageCalendar() {
   draw();
 }
 
+/* ---------- sneakers ---------- */
+const snkLinks = (code, name) => {
+  const q = encodeURIComponent(code || name);
+  return `<span class="snk-resale"><a href="https://stockx.com/search?s=${q}" target="_blank" rel="noopener">StockX</a><a href="https://www.goat.com/search?query=${q}" target="_blank" rel="noopener">GOAT</a><a href="https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Sold=1&LH_Complete=1" target="_blank" rel="noopener">eBay sold</a></span>`;
+};
+const VERDICT = { cop: ["Cop", "v-cop"], wear: ["Cop to wear", "v-wear"], wait: ["Wait", "v-wait"] };
+const HEAT = ["", "", `<span class="badge heat">Hyped</span>`, `<span class="badge heat hot">🔥 Hot</span>`];
+async function pageSneakers() {
+  const data = await fetch("sneakers.json", { cache: "no-cache" }).then((r) => r.json());
+  const today = new Date().toLocaleDateString("en-CA");
+  const rel = data.releases;
+  const by = Object.fromEntries(rel.filter((r) => r.c).map((r) => [r.c, r]));
+  const usd = (d) => d == null ? "TBA" : "$" + d;
+  const day = (d, o) => new Date(d + "T12:00:00").toLocaleDateString("en-US", o);
+  $("#picks").innerHTML = data.picks.map((p) => {
+    const r = by[p.c]; if (!r || r.d < today) return "";
+    const [v, cls] = VERDICT[p.v] || VERDICT.wear;
+    return `<div class="snk-pick"><div class="snk-pick-top"><span class="verdict ${cls}">${v}</span><span class="muted">${day(r.d, { weekday: "short", month: "short", day: "numeric" })} · ${usd(r.r)}</span></div>
+      <b>${esc(r.n)}</b><span class="muted snk-cw">${esc(r.cw || "")}</span><p>${esc(p.why)}</p>${snkLinks(r.c, r.n)}</div>`;
+  }).join("") || `<div class="panel empty-note">New picks are coming soon.</div>`;
+  $("#snk-src").innerHTML = `Release info last checked ${fmtDate(data.updated)} from ${data.sources.map(([n, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(n)}</a>`).join(" and ")}. Resale links open live searches. Not affiliated with Nike, Jordan Brand, adidas, StockX, GOAT or eBay.`;
+  let brand = "all", hot = false;
+  const brands = [...new Set(rel.map((r) => r.b))].sort((a, b) => rel.filter((r) => r.b === b).length - rel.filter((r) => r.b === a).length);
+  const weekOf = (d) => { const x = new Date(d + "T12:00:00"); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x.toLocaleDateString("en-CA"); };
+  const draw = () => {
+    const list = rel.filter((r) => r.d >= today && (brand === "all" || r.b === brand) && (!hot || r.h >= 2))
+      .sort((a, b) => a.d.localeCompare(b.d) || b.h - a.h);
+    const weeks = new Map();
+    for (const r of list) { const w = weekOf(r.d); if (!weeks.has(w)) weeks.set(w, []); weeks.get(w).push(r); }
+    const thisWeek = weekOf(today);
+    $("#cal").innerHTML = list.length ? [...weeks].map(([w, items]) => `<h3 class="cal-month">${w === thisWeek ? "This week" : "Week of " + day(w, { month: "long", day: "numeric" })} <small>${items.length} drop${items.length > 1 ? "s" : ""}</small></h3>
+      <div class="snk-list">${items.map((r) => `<div class="snk-item${r.h === 3 ? " is-hot" : ""}"><div class="cal-date"><b>${day(r.d, { day: "numeric" })}</b><span>${day(r.d, { month: "short" })}</span></div>
+        <div class="snk-body"><div class="snk-name">${esc(r.n)} ${HEAT[r.h]}</div>
+        <div class="muted snk-meta">${[r.cw, r.c].filter(Boolean).map(esc).join(" · ")}</div>${snkLinks(r.c, r.n)}</div>
+        <div class="snk-price"><b>${usd(r.r)}</b><span class="muted">retail</span></div></div>`).join("")}</div>`).join("")
+      : `<div class="panel empty-note">No upcoming releases match.</div>`;
+  };
+  tabs($("#brand"), [["all", "All brands"], ...brands.map((b) => [b, b])], brand, (v) => { brand = v; draw(); });
+  $("#hot").addEventListener("change", (e) => { hot = e.target.checked; draw(); });
+  draw();
+  const stock = await getJSON("sneakers-stock.json").catch(() => []);
+  if (stock.length) {
+    $("#snk-stock-block").hidden = false;
+    $("#snk-stock").innerHTML = stock.map((s) => `<div class="scard snk-card"><a class="si" href="${esc(s.u)}">${s.im ? `<img src="${esc(s.im + (s.im.includes("?") ? "&" : "?") + "width=600")}" alt="${esc(s.n)}" loading="lazy">` : ""}</a>
+      <a class="t" href="${esc(s.u)}">${esc(s.n)}</a><span class="pp"><b>${money(s.p)}</b>${s.s ? `<span class="muted">Size ${esc(s.s)}</span>` : ""}</span>${snkLinks(s.c, s.n)}</div>`).join("");
+  }
+}
+
 async function pageWatchlist() {
   const draw = async () => {
     const list = watchGet();
@@ -1314,7 +1362,7 @@ async function pageSearch() {
   if (!q) $("#sq").focus();
 }
 
-const pages = { search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, watchlist: pageWatchlist, importer: pageImporter, collection: pageCollection };
+const pages = { search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, importer: pageImporter, collection: pageCollection };
 (pages[PAGE] || (async () => {}))().catch((err) => {
   console.error(err);
   const main = $("main");

@@ -28,8 +28,10 @@ def main(argv):
         if removed:
             print(f"snapshots: pruned {removed} old files")
     logos.attach(groups)
-    stock = store.match_in_stock(products, store.fetch_store_products())
+    store_rows = store.fetch_store_products()
+    stock = store.match_in_stock(products, store_rows)
     build.build(groups, products, stock)
+    build.write("sneakers-stock.json", store.sneaker_rows(store_rows))
 
 
 if __name__ == "__main__":

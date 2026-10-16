@@ -80,6 +80,10 @@ PAGES = {
   <a class="btn" href="collection.html">Start My Collection →</a></div>
 </div></section>
 <section class="block"><div class="wrap">
+  <div class="cta"><div><h2>Sneaker drops &amp; resale</h2><p>Upcoming Jordan, Nike and adidas release dates, our worth-copping picks, and one-tap StockX, GOAT and eBay checks.</p></div>
+  <a class="btn" href="sneakers.html">See sneaker drops →</a></div>
+</div></section>
+<section class="block"><div class="wrap">
   <div class="cta"><div><h2>Get restock &amp; drop alerts</h2><p>Be first to know when new sets, singles and sneakers land at Drive Your Style.</p></div>
   <a class="btn" href="https://driveyourstyle.net/#newsletter">Sign up at the store →</a></div>
 </div></section>
@@ -150,6 +154,29 @@ PAGES = {
   <div class="cta" style="margin:28px 0"><div><h2>Want it on release day?</h2><p>Pre-orders and new drops land at Drive Your Style first.</p></div><a class="btn" href="https://driveyourstyle.net/collections/pre-orders">Shop pre-orders →</a></div>
   <h2 style="font-size:24px;margin:18px 0 0">Recently released</h2><div id="released"></div>
 </section></div>'''),
+"sneakers": ("Sneaker release dates & resale · Drive Your Style", "Upcoming Jordan, Nike, adidas and more sneaker release dates with retail prices, our worth-copping picks, and quick resale checks on StockX, GOAT and eBay.", '''
+<section class="hero hero-tight snk-hero"><div class="wrap">
+  <span class="eyebrow"><b>●</b> Sneaker insights</span>
+  <h1>Know the drop <span class="holo">before you cop.</span></h1>
+  <p class="lead">Upcoming release dates, retail prices, our honest picks, and one-tap resale checks.</p>
+</div></section>
+<div class="wrap">
+<section class="block" style="padding-top:4px">
+  <div class="block-head"><div><h2>Worth copping?</h2><p>Our take on the biggest upcoming drops. Opinions, not guarantees.</p></div></div>
+  <div class="snk-picks" id="picks"><div class="skeleton" style="height:180px"></div></div>
+</section>
+<section class="block" id="snk-stock-block" hidden>
+  <div class="block-head"><div><h2>In stock at Drive Your Style</h2><p>Brand new pairs, ready to ship or pick up. Check resale before you buy.</p></div><a class="more" href="https://driveyourstyle.net/collections/new-shoes">Shop sneakers →</a></div>
+  <div class="snk-stock" id="snk-stock"></div>
+</section>
+<section class="block">
+  <div class="block-head"><div><h2>Release calendar</h2><p id="snk-note">Dates and prices can change. Retail is US men's sizing.</p></div></div>
+  <div class="controls"><div id="brand"></div><label class="toggle"><input type="checkbox" id="hot"> Hyped drops only</label></div>
+  <div id="cal"><div class="skeleton" style="height:300px"></div></div>
+</section>
+<section class="block"><div class="cta"><div><h2>Selling a pair?</h2><p>We buy and consign sneakers. Get an offer in a day.</p></div><a class="btn" href="https://driveyourstyle.net/pages/sell-with-us">Sell with us →</a></div></section>
+<p class="muted" id="snk-src" style="font-size:12px;margin:0 0 24px"></p>
+</div>'''),
 "watchlist": ("Watchlist · Drive Your Style Market Insights", "Your saved Pokémon and One Piece products and cards with today's market price.", '''
 <div class="wrap"><section class="block">
   <div class="block-head"><div><h1 style="font-size:36px">Watchlist</h1><p>Products and cards you've saved, with today's market price and how much they've moved since you saved them. Saved on this device only.</p></div></div>

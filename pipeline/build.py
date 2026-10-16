@@ -381,7 +381,7 @@ def pick_series_days(days, latest_day):
 def write_sitemap(groups, products, latest, day, base="https://market.driveyourstyle.net/"):
     """Static pages, every set page and every priced sealed product page."""
     from xml.sax.saxutils import escape
-    urls = [base] + [base + p for p in ("sets.html", "trends.html", "cards.html", "search.html", "compare.html", "calendar.html", "watchlist.html", "about.html")]
+    urls = [base] + [base + p for p in ("sets.html", "trends.html", "cards.html", "search.html", "compare.html", "calendar.html", "sneakers.html", "watchlist.html", "about.html")]
     urls += [f"{base}set.html?id={gid}" for gid in groups]
     seen = set()
     for k in latest:
