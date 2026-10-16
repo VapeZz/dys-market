@@ -63,6 +63,10 @@ PAGES = {
   <div class="block-head"><div><h2>In stock at Drive Your Style</h2><p>Our price next to today's market price.</p></div><a class="more" href="https://driveyourstyle.net/collections/sealed-product">Shop all →</a></div>
   <div class="stockrow" id="stock"></div>
 </div></section>
+<section class="block" id="wanted-block" hidden><div class="wrap">
+  <div class="block-head"><div><h2>Most wanted</h2><p>What collectors are hunting right now, from their Want lists.</p></div><a class="more" href="watchlist.html">My Want list →</a></div>
+  <div class="stockrow" id="wanted"></div>
+</div></section>
 <section class="block"><div class="wrap">
   <div class="block-head"><div><h2>Newest sets</h2><p>Latest and upcoming releases.</p></div><a class="more" href="calendar.html">Release calendar →</a></div>
   <div class="srow" id="newsets"></div>
@@ -181,10 +185,18 @@ PAGES = {
 <section class="block"><div class="cta"><div><h2>Selling a pair?</h2><p>We buy and consign sneakers. Get an offer in a day.</p></div><a class="btn" href="https://driveyourstyle.net/pages/sell-with-us">Sell with us →</a></div></section>
 <p class="muted" id="snk-src" style="font-size:12px;margin:0 0 24px"></p>
 </div>'''),
-"watchlist": ("Watchlist · Drive Your Style Market Insights", "Your saved Pokémon and One Piece products and cards with today's market price.", '''
+"watchlist": ("Want list · Drive Your Style Market Insights", "Cards and sealed products you want, with today's market price, your max price and in-stock alerts.", '''
 <div class="wrap"><section class="block">
-  <div class="block-head"><div><h1 style="font-size:36px">Watchlist</h1><p>Products and cards you've saved, with today's market price and how much they've moved since you saved them. Saved on this device only.</p></div></div>
+  <div class="block-head"><div><h1 style="font-size:36px">Want list</h1><p>Cards and sealed you're hunting. Set the most you'd pay and we'll flag it when the market drops under your max or Drive Your Style has it in stock.</p>
+    <p class="muted" id="acct-note" style="font-size:13px"></p></div></div>
   <div id="list"><div class="skeleton" style="height:200px"></div></div>
+</section></div>'''),
+"demand": ("Demand report · Drive Your Style", "What collectors want.", '''
+<div class="wrap"><section class="block">
+  <div class="block-head"><div><h1 style="font-size:36px">Demand report</h1><p>What collectors have on their Want lists, most wanted first. Anonymous counts; updates every 30 minutes.</p>
+    <p class="muted" id="sum" style="font-size:13px"></p></div></div>
+  <div class="controls"><div id="f"></div></div>
+  <div id="list"><div class="skeleton" style="height:240px"></div></div>
 </section></div>'''),
 "importer": ("Shopify importer · Drive Your Style Market Insights", "Add TCG products straight to the Drive Your Style Shopify store.", '''
 <div class="wrap"><section class="block">
@@ -266,7 +278,7 @@ PAGES = {
 
 for page, (title, desc, body) in PAGES.items():
     canon = "" if page == "index" else f"{page}.html"
-    head = HEAD.replace("<link rel=\"canonical\"", "<meta name=\"robots\" content=\"noindex\">\n<link rel=\"canonical\"") if page == "importer" else HEAD
+    head = HEAD.replace("<link rel=\"canonical\"", "<meta name=\"robots\" content=\"noindex\">\n<link rel=\"canonical\"") if page in ("importer", "demand") else HEAD
     html = head.replace("@@CANON@@", canon).replace("@@TITLE@@", title).replace("@@DESC@@", desc).replace("@@PAGE@@", page).replace("@@BODY@@", body)
     with open(os.path.join(ROOT, "site", f"{page}.html"), "w", encoding="utf-8") as f:
         f.write(html)

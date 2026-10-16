@@ -63,6 +63,51 @@ def fetch_binders(api):
         after = d["pageInfo"]["endCursor"]
 
 
+def write_demand(binders, data, rows):
+    """Want lists -> data/wanted.json (public Most wanted) and data/demand.json (owner's report). Counts only, no names."""
+    price = {f"{r[0]}|{code_of(sub_of(r[1]))}": (r[4], r[1], r[2]) for r in rows}
+    try:
+        stock = {s["id"]: s for s in json.load(open(os.path.join(data, "stock.json"))) if s.get("a")}
+    except (OSError, ValueError):
+        stock = {}
+    agg, wanters = {}, 0
+    for _, _, b in binders:
+        seen = set()
+        for w in b.get("want") or []:
+            try:
+                iid = int(w["id"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            k = w.get("k") if isinstance(w.get("k"), str) and w["k"].startswith(f"{iid}|") else f"{iid}|"
+            if k in seen:
+                continue
+            seen.add(k)
+            a = agg.setdefault(k, {"id": iid, "g": w.get("g"), "n": (w.get("n") or "")[:120], "c": 0, "maxes": []})
+            a["c"] += 1
+            if isinstance(w.get("max"), (int, float)) and w["max"] > 0:
+                a["maxes"].append(int(w["max"]))
+        wanters += 1 if seen else 0
+    items = []
+    for k, a in agg.items():
+        m, name, g = price.get(k) or next((v for kk, v in price.items() if kk.startswith(f"{a['id']}|")), (None, a["n"], a["g"]))
+        mx = sorted(a["maxes"])
+        st = stock.get(a["id"])
+        items.append({"id": a["id"], "g": g or a["g"], "n": name or a["n"], "c": a["c"], "m": m,
+                      "mx": mx[len(mx) // 2] if mx else None, "nm": len(mx),
+                      "st": {"p": st.get("p"), "u": st.get("u")} if st else None})
+    items.sort(key=lambda i: (-i["c"], -(i["m"] or 0)))
+    by_id = {}
+    for i in items:
+        by_id[str(i["id"])] = by_id.get(str(i["id"]), 0) + i["c"]
+    top = [{"id": i["id"], "g": i["g"], "n": i["n"], "c": i["c"], "m": i["m"], "st": bool(i["st"])} for i in items[:30]]
+    now = int(time.time() * 1000)
+    with open(os.path.join(data, "wanted.json"), "w", encoding="utf-8") as f:
+        json.dump({"updated": now, "top": top, "all": by_id}, f, separators=(",", ":"), ensure_ascii=False)
+    with open(os.path.join(data, "demand.json"), "w", encoding="utf-8") as f:
+        json.dump({"updated": now, "wanters": wanters, "items": items}, f, separators=(",", ":"), ensure_ascii=False)
+    print(f"want lists: {wanters} collectors, {len(items)} items wanted")
+
+
 def main(argv):
     site = argv[0]
     data = os.path.join(site, "data")
@@ -136,6 +181,7 @@ def main(argv):
         with open(os.path.join(data, "showcase", f"{pid}.json"), "w", encoding="utf-8") as f:
             json.dump({**prof, "items": [r for _, r in items]}, f, separators=(",", ":"), ensure_ascii=False)
 
+    write_demand(binders, data, rows)
     with open(os.path.join(data, "showcase.json"), "w", encoding="utf-8") as f:
         json.dump({"updated": int(time.time() * 1000), "profiles": profiles}, f, separators=(",", ":"), ensure_ascii=False)
     print(f"collectors: {len(profiles)} public binders out of {len(binders)} saved, {sum(likes.values())} likes, {sum(followers.values())} follows")

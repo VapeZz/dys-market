@@ -35,6 +35,38 @@ const BELOW = `<span class="badge deal">Below market</span>`;
 const WKEY = "dys-watch";
 const watchGet = () => { try { return JSON.parse(localStorage.getItem(WKEY) || "[]"); } catch { return []; } };
 const watchSet = (list) => { try { localStorage.setItem(WKEY, JSON.stringify(list)); } catch {} };
+/* ---------- Want list: saved in the binder (synced to the account), tallied anonymously into "Most wanted" ---------- */
+const wantKey = (id, n) => `${id}|${printCode(subOf(n || ""))}`;
+const wantGet = () => colGet().want || [];
+const wantHas = (k) => wantGet().some((w) => w.k === k);
+function wantToggle(it) {   // it: {id, g, n, at (market price now)}
+  const c = colGet(), list = c.want || [], k = wantKey(it.id, it.n), i = list.findIndex((w) => w.k === k);
+  if (i >= 0) list.splice(i, 1); else list.push({ k, id: it.id, g: it.g, n: it.n, at: it.at ?? null, max: null, ts: Date.now() });
+  c.want = list.slice(-300); colSet(c);
+  toast(i >= 0 ? "Removed from your Want list" : "Added to your Want list ♥ Set the most you'd pay on the Want list page");
+  return i < 0;
+}
+const HEARTS = (on) => on ? "♥" : "♡";
+/* adds a ♡ next to every "+" add button in a grid; itemOf(addKey) -> {id, g, n, at} */
+function wantButtons(root, itemOf) {
+  root.querySelectorAll(".cadd[data-add]").forEach((b) => {
+    const k = b.dataset.add, on = wantHas(k);
+    const w = document.createElement("button");
+    w.type = "button"; w.className = "cwant" + (on ? " on" : ""); w.textContent = HEARTS(on);
+    w.setAttribute("aria-label", "Add to Want list"); w.setAttribute("aria-pressed", on);
+    w.addEventListener("click", (e) => { e.preventDefault(); const it = itemOf(k); if (!it) return; const now = wantToggle(it);
+      w.classList.toggle("on", now); w.textContent = HEARTS(now); w.setAttribute("aria-pressed", now); });
+    b.before(w);
+  });
+}
+(() => {   // one-time move of the old device-only Watchlist into the Want list
+  try {
+    const old = watchGet(); if (!old.length || localStorage.getItem("dys-watch-moved")) return;
+    const c = colGet(), list = c.want || [];
+    for (const w of old) { const k = `${w.id}|`; if (!list.some((x) => x.id === w.id)) list.push({ k, id: w.id, g: w.g, n: w.n, at: w.at ?? null, max: null, ts: Date.now() }); }
+    c.want = list; localStorage.setItem("dys-collection", JSON.stringify(c)); localStorage.setItem("dys-watch-moved", "1");
+  } catch {}
+})();
 const fmtShort = (d) => d ? new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
 const bestCh = (ch) => ch?.["7"] != null ? ch["7"] : ch?.a ?? null;
 const WINDOWS = [["7", "7D"], ["30", "30D"], ["90", "90D"], ["365", "1Y"], ["all", "All"]];
@@ -51,7 +83,7 @@ document.documentElement.dataset.theme = getTheme();
 /* ---------- shell ---------- */
 const SEARCH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>`;
 function shell() {
-  const links = [["sets", "Sets"], ["trends", "Trends"], ["cards", "Movers"], ["search", "Search"], ["compare", "Compare"], ["calendar", "Calendar"], ["sneakers", "Sneakers"], ["watchlist", "Watchlist"], ["collection", "My Collection"], ["collectors", "Collectors"], ["about", "About"]];
+  const links = [["sets", "Sets"], ["trends", "Trends"], ["cards", "Movers"], ["search", "Search"], ["compare", "Compare"], ["calendar", "Calendar"], ["sneakers", "Sneakers"], ["watchlist", "Want list"], ["collection", "My Collection"], ["collectors", "Collectors"], ["about", "About"]];
   $("#top").outerHTML = `<header class="top"><div class="wrap">
     <a class="brand" href="index.html" aria-label="Drive Your Style Market Insights home"><img class="logo-img logo-on-dark" src="assets/logo-light.png" alt="Drive Your Style" width="61" height="40"><img class="logo-img logo-on-light" src="assets/logo-dark.png" alt="" width="61" height="40"><span class="brand-sub">Market<br>Insights</span></a>
     <nav class="nav" id="nav">${links.map(([p, l]) => `<a href="${p}.html"${p === PAGE ? ' aria-current="page"' : ""}>${l}</a>`).join("")}
@@ -219,6 +251,12 @@ async function pageIndex() {
     .sort((a, b) => b.pub.localeCompare(a.pub)).slice(0, 12).map((s) => setTile(s, meta.updated)).join("");
   moversPanel($("#card-movers"), { kind: "cards", meta, limit: 5 });
   moversPanel($("#sealed-movers"), { kind: "sealed", meta, limit: 5 });
+  getJSON("wanted.json").then((w) => {
+    const top = (w.top || []).slice(0, 12); if (!top.length) return;
+    $("#wanted-block").hidden = false;
+    $("#wanted").innerHTML = top.map((i) => `<a class="scard" href="${prodUrl(i.id, i.g)}"><span class="si">${imgTag(i.id, "", 1000)}<span class="badge want">♥ ${i.c} want${i.c > 1 ? "" : "s"} this</span></span>
+      <span class="t">${esc(i.n)}</span><span class="pp"><b>${money(i.m)}</b>${i.st ? `<span class="muted">In stock</span>` : ""}</span></a>`).join("");
+  }).catch(() => {});
   const stock = await getJSON("stock.json").catch(() => []);
   if (stock.length) {
     const deals = stock.slice().sort((a, b) => (below(b.p, b.m) - below(a.p, a.m)) || (b.m || 0) - (a.m || 0));
@@ -348,6 +386,7 @@ async function pageSet() {
       ex ? ex.qty++ : col.items.push({ id: it.id, g: set.id, n: it.n, qty: 1, paid: null });
       colSet(col); toast(`Added ${tab === "c" ? short(it) : it.n} to My Collection`); draw(); stats();
     }));
+    wantButtons($("#grid"), (k) => { const it = items.find((i) => ownKey(i) === k); return it && { id: it.id, g: set.id, n: it.n, at: it.p }; });
   };
 
   tabs($("#tab"), [["c", `Cards`], ["s", `Sealed`]], tab, (v) => { tab = v; lim = 60; draw(); });
@@ -492,14 +531,10 @@ async function pageProduct() {
     });
     paintCol();
     if (v.t === "c") gradeCalc($("#gcalc"), v.p, `${id}|${printCode(subOf(v.n))}`);
-    const key = `${id}:${set.id}`;
-    const paint = () => { const on = watchGet().some((w) => w.k === key); const b = $("#watch"); b.textContent = on ? "★ Watching" : "☆ Watch"; b.setAttribute("aria-pressed", on); };
-    $("#watch").addEventListener("click", () => {
-      let list = watchGet();
-      list = list.some((w) => w.k === key) ? list.filter((w) => w.k !== key) : [...list, { k: key, id, g: set.id, n: base, at: v.p, d: meta.updated }];
-      watchSet(list); paint();
-    });
+    const paint = () => { const on = wantHas(wantKey(id, v.n)); const b = $("#watch"); b.textContent = on ? "♥ On your Want list" : "♡ Want"; b.classList.toggle("wanted", on); b.setAttribute("aria-pressed", on); };
+    $("#watch").addEventListener("click", () => { wantToggle({ id, g: set.id, n: v.n, at: v.p }); paint(); });
     paint();
+    getJSON("wanted.json").then((d) => { const w = (d.all || {})[`${id}`]; if (w) $("#watch").insertAdjacentHTML("afterend", `<span class="want-count">♥ ${w} collector${w > 1 ? "s" : ""} want this</span>`); }).catch(() => {});
     if (variants.length > 1) tabs($("#var"), variants.map((x, i) => [String(i), (x.n.match(/\(([^)]+)\)$/) || [, "Normal"])[1]]), String(variants.indexOf(v)), (i) => { v = variants[+i]; draw(); });
     let range = "365";
     const plot = () => lineChart($("#chart"), set.dates, v.s || [], range);
@@ -912,25 +947,52 @@ async function pageSneakers() {
 }
 
 async function pageWatchlist() {
-  const draw = async () => {
-    const list = watchGet();
-    if (!list.length) {
-      $("#list").innerHTML = `<div class="panel empty-note">Nothing saved yet. Open any product or card and tap <b>☆ Watch</b> to track it here.</div>`;
-      return;
-    }
-    const sets = {};
-    await Promise.all([...new Set(list.map((w) => w.g))].map((g) => getJSON(`set/${g}.json`).then((d) => { sets[g] = d; }).catch(() => {})));
-    $("#list").innerHTML = `<div class="table-wrap"><table><thead><tr><th>Product</th><th class="num">Market</th><th class="num hide-sm">Since saved</th><th class="num">7D</th><th class="num hide-sm">30D</th><th></th></tr></thead><tbody>
-      ${list.map((w) => {
-        const set = sets[w.g];
-        const it = set && (set.items.find((i) => i.id === w.id && i.n.startsWith(w.n)) || set.items.find((i) => i.id === w.id));
-        const since = it && w.at ? (it.p - w.at) / w.at * 100 : null;
-        return `<tr><td class="title"><a href="${prodUrl(w.id, w.g)}">${imgTag(w.id, "")}<span>${esc(w.n)}${set ? `<span class="muted" style="display:block;font-size:12px">${esc(set.n)}</span>` : ""}</span></a></td>
-          <td class="num"><b>${money(it?.p)}</b></td><td class="num hide-sm">${chg(since)}</td><td class="num">${chg(it?.ch?.["7"])}</td><td class="num hide-sm">${chg(it?.ch?.["30"])}</td>
-          <td class="num"><button class="btn" data-rm="${esc(w.k)}" type="button" aria-label="Remove">✕</button></td></tr>`;
-      }).join("")}</tbody></table></div>`;
-    $("#list").querySelectorAll("[data-rm]").forEach((b) => b.addEventListener("click", () => { watchSet(watchGet().filter((w) => w.k !== b.dataset.rm)); draw(); }));
+  const [meta, rows, stock, wanted] = await Promise.all([getJSON("meta.json"), getJSON("search.json"), getJSON("stock.json").catch(() => []),
+    getJSON("wanted.json").catch(() => ({}))]);
+  const byKey = new Map(rows.map((r) => [`${r[0]}|${printCode(subOf(r[1]))}`, r])), byId = new Map();
+  rows.forEach((r) => { if (!byId.has(r[0])) byId.set(r[0], r); });
+  const inStock = new Map(stock.filter((x) => x.a).map((x) => [x.id, x]));
+  if (acct.enabled() && acct.signedIn()) {   // pick up wants saved on other devices
+    acct.pull().then((remote) => { if (!remote?.want?.length) return; const c = colGet(), m = new Map((c.want || []).map((w) => [w.k, w]));
+      remote.want.forEach((w) => { if (!m.has(w.k)) m.set(w.k, w); }); if (m.size !== (c.want || []).length) { c.want = [...m.values()]; colSet(c, false); draw(); } }).catch(() => {});
+  }
+  $("#acct-note").innerHTML = acct.enabled() && acct.signedIn() ? "Synced to your account." : `Saved on this device. <a href="collection.html" style="color:var(--accent)">Sign in on My Collection</a> to sync it and count toward Most wanted.`;
+  const draw = () => {
+    const list = wantGet().slice().reverse();
+    if (!list.length) { $("#list").innerHTML = `<div class="panel empty-note">Nothing on your Want list yet. Tap <b>♡</b> on any card or product (in search, a set, or its price page) to add it.</div>`; return; }
+    $("#list").innerHTML = `<div class="want-list">${list.map((w) => {
+      const r = byKey.get(w.k) || byId.get(w.id), mkt = r?.[4] ?? null, st = inStock.get(w.id), since = w.at && mkt ? (mkt - w.at) / w.at * 100 : null;
+      const under = w.max != null && mkt != null && mkt <= w.max, others = (wanted.all || {})[`${w.id}`];
+      return `<div class="want-row${st ? " has-stock" : ""}"><a href="${prodUrl(w.id, w.g)}" class="want-img">${imgTag(w.id, "", 400)}</a>
+        <div class="want-body"><a href="${prodUrl(w.id, w.g)}"><b>${esc(r?.[1] || w.n)}</b></a><span class="muted">${esc(meta.groups[w.g]?.[0] || "")}</span>
+          <div class="want-price"><b>${money(mkt)}</b><span class="muted">market</span>${since != null ? chg(since) : ""}${others > 1 ? `<span class="muted">♥ ${others}</span>` : ""}</div>
+          <label class="want-max">I'd pay up to $<input class="field" type="number" min="0" step="0.01" inputmode="decimal" value="${w.max != null ? (w.max / 100).toFixed(2) : ""}" placeholder="${mkt != null ? (mkt / 100).toFixed(2) : ""}" data-max="${esc(w.k)}"></label>
+          <div class="want-tags">${st ? `<a class="tag stock" href="${esc(st.u)}">In stock at Drive Your Style · ${money(st.p)} →</a>` : ""}${under ? `<span class="tag deal">Market is under your max</span>` : ""}</div></div>
+        <button class="btn icon want-x" type="button" data-rm="${esc(w.k)}" aria-label="Remove from Want list">✕</button></div>`; }).join("")}</div>`;
+    $("#list").querySelectorAll("[data-max]").forEach((el) => el.addEventListener("change", () => {
+      const c = colGet(), w = (c.want || []).find((x) => x.k === el.dataset.max); if (!w) return;
+      w.max = el.value === "" ? null : Math.round(Number(el.value) * 100); colSet(c); toast("Saved"); setTimeout(draw);
+    }));
+    $("#list").querySelectorAll("[data-rm]").forEach((b) => b.addEventListener("click", () => { const c = colGet(); c.want = (c.want || []).filter((x) => x.k !== b.dataset.rm); colSet(c); draw(); }));
   };
+  draw();
+}
+
+/* ---------- demand report (owner): what collectors want, anonymous ---------- */
+async function pageDemand() {
+  const [meta, d] = await Promise.all([getJSON("meta.json"), getJSON("demand.json").catch(() => null)]);
+  if (!d || !d.items?.length) { $("#list").innerHTML = `<div class="panel empty-note">No Want list data yet. It fills in as signed-in collectors tap ♡ on cards.</div>`; return; }
+  let f = "all";
+  $("#sum").textContent = `${d.wanters} collector${d.wanters === 1 ? "" : "s"} with a Want list · ${d.items.length} different items wanted · updated ${new Date(d.updated).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`;
+  const draw = () => {
+    const list = d.items.filter((i) => f === "all" || (f === "stock" ? i.st : f === "nostock" ? !i.st : i.mx != null));
+    $("#list").innerHTML = `<div class="table-wrap"><table><thead><tr><th>#</th><th>Item</th><th class="num">Want it</th><th class="num">Typical max</th><th class="num">Market</th><th class="num">Your stock</th></tr></thead><tbody>
+      ${list.map((i, ix) => `<tr><td>${ix + 1}</td><td class="title"><a href="${prodUrl(i.id, i.g)}">${imgTag(i.id, "")}<span>${esc(i.n)}<span class="muted" style="display:block;font-size:12px">${esc(meta.groups[i.g]?.[0] || "")}</span></span></a></td>
+        <td class="num"><b>${i.c}</b></td><td class="num">${i.mx != null ? `${money(i.mx)}<span class="muted" style="display:block;font-size:11px">${i.nm} set a max</span>` : "—"}</td>
+        <td class="num">${money(i.m)}</td><td class="num">${i.st ? `<a href="${esc(i.st.u)}">${money(i.st.p)}</a>${i.st.p && i.mx != null && i.st.p > i.mx ? `<span class="muted" style="display:block;font-size:11px">above their max</span>` : ""}` : `<span class="tag need">Not stocked</span>`}</td></tr>`).join("")}
+      </tbody></table></div>`;
+  };
+  tabs($("#f"), [["all", "All"], ["nostock", "Not in stock"], ["stock", "In stock"], ["max", "Has a max price"]], f, (v) => { f = v; draw(); });
   draw();
 }
 
@@ -1211,7 +1273,7 @@ const acct = (() => {
           const a = get();
           const r = await gql(`mutation($m: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $m) { userErrors { message } } }`,
             { m: [{ ownerId: a.id, namespace: "dys", key: "binder", type: "json", value: JSON.stringify({ name: c.name || "", updated: c.updated || Date.now(), items: c.items,
-              alias: c.alias || "", pub: !!c.pub, likes: c.likes || [], follows: c.follows || [] }) }] });
+              alias: c.alias || "", pub: !!c.pub, likes: c.likes || [], follows: c.follows || [], want: (c.want || []).map(({ k, id, g, n, at, max, ts }) => ({ k, id, g, n, at, max, ts })) }) }] });
           const e = r.metafieldsSet.userErrors; document.dispatchEvent(new CustomEvent("dys-sync", { detail: e.length ? "error" : "ok" }));
         } catch { document.dispatchEvent(new CustomEvent("dys-sync", { detail: "error" })); }
       }, 800);
@@ -1527,14 +1589,15 @@ async function pageCollection() {
         const local = colGet();
         if (remote && (!local.items.length || (!justSignedIn && (remote.updated || 0) > (local.updated || 0)))) {
           col = { name: remote.name || local.name || "", items: remote.items || [], updated: remote.updated,
-            alias: remote.alias || local.alias || "", pub: remote.pub ?? local.pub ?? false, likes: remote.likes || [], follows: remote.follows || [], socialAt: local.socialAt };
+            alias: remote.alias || local.alias || "", pub: remote.pub ?? local.pub ?? false, likes: remote.likes || [], follows: remote.follows || [], want: remote.want || local.want || [], socialAt: local.socialAt };
           colSet(col, false);
         } else if (remote && justSignedIn) {          // first sign-in on this device: combine both
           const key = (x) => `${x.id}|${printCode(subOf(x.n || ""))}${x.gr ? "|" + x.gr : ""}`, m = new Map(remote.items.map((x) => [key(x), x]));
           for (const x of local.items) { const r = m.get(key(x)); m.set(key(x), r ? { ...r, qty: Math.max(r.qty, x.qty), paid: r.paid ?? x.paid } : x); }
           const uni = (k) => [...new Set([...(remote[k] || []), ...(local[k] || [])])];
           col = { name: local.name || remote.name || "", items: [...m.values()], alias: local.alias || remote.alias || "", pub: local.pub ?? remote.pub ?? false,
-            likes: uni("likes"), follows: uni("follows"), socialAt: local.socialAt };
+            likes: uni("likes"), follows: uni("follows"), socialAt: local.socialAt,
+            want: [...new Map([...(remote.want || []), ...(local.want || [])].map((w) => [w.k, w])).values()] };
           colSet(col);
         } else { col = local; acct.push(local); }
         $("#name").value = col.name || ""; await loadChanges();
@@ -1619,6 +1682,7 @@ async function pageSearch() {
       ex ? ex.qty++ : col.items.push({ id: r[0], g: r[2], n: r[1], qty: 1, paid: null });
       colSet(col); toast(`Added ${r[1]} to My Collection`); draw();
     }));
+    wantButtons($("#sres"), (k) => { const r = out.find((x) => `${x[0]}|${printCode(subOf(x[1]))}` === k); return r && { id: r[0], g: r[2], n: r[1], at: r[4] }; });
   };
   let t = 0;
   $("#sq").addEventListener("input", (e) => { q = e.target.value.trim(); lim = 60; clearTimeout(t); t = setTimeout(() => { draw(); history.replaceState(null, "", q ? `?q=${encodeURIComponent(q)}` : "search.html"); }, 180); });
@@ -1629,7 +1693,7 @@ async function pageSearch() {
   if (!q) $("#sq").focus();
 }
 
-const pages = { search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, importer: pageImporter, collection: pageCollection, collectors: pageCollectors };
+const pages = { search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, demand: pageDemand, importer: pageImporter, collection: pageCollection, collectors: pageCollectors };
 (pages[PAGE] || (async () => {}))().catch((err) => {
   console.error(err);
   const main = $("main");

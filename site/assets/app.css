@@ -626,3 +626,29 @@ tr.grp td{background:var(--surface-2);font-size:13px;padding-top:8px;padding-bot
 .cview-nav.prev{left:-6px}.cview-nav.next{right:-6px}
 .cview-count{font-size:12px;color:rgba(255,255,255,.6)}
 @media (max-width:560px){.cview-nav{display:none}}
+/* want list */
+.cwant{position:absolute;top:8px;right:50px;width:36px;height:36px;border-radius:999px;border:1px solid rgba(255,255,255,.25);background:rgba(10,12,18,.62);color:#fff;font-size:18px;line-height:1;cursor:pointer;backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center}
+.cwant.on{background:#ff5d8f;border-color:#ff5d8f;color:#fff}
+.crow .cwant{position:static;width:34px;height:34px;flex:0 0 34px;background:var(--chip);color:var(--ink);border-color:var(--line);margin-right:6px}
+.crow .cwant.on{background:#ff5d8f;color:#fff;border-color:#ff5d8f}
+.btn.wanted{border-color:#ff5d8f;color:#ff5d8f}
+.want-count{align-self:center;font-size:13px;color:#ff5d8f;font-weight:600}
+.badge.want{position:absolute;left:6px;bottom:6px;background:#ff5d8f;color:#fff}
+.want-list{display:flex;flex-direction:column;gap:10px}
+.want-row{display:flex;gap:14px;align-items:flex-start;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.want-row.has-stock{border-color:rgba(61,220,151,.55)}
+.want-img{flex:0 0 86px;width:86px;aspect-ratio:5/7;border-radius:8px;overflow:hidden;background:var(--surface-2)}
+.want-img img{width:100%;height:100%;object-fit:contain}
+.want-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.want-body > a{color:inherit}
+.want-body .muted{font-size:12.5px}
+.want-price{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-top:4px}
+.want-price b{font-family:var(--display);font-size:18px}
+.want-max{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-2);margin-top:6px}
+.want-max .field{width:100px;padding:6px 8px}
+.want-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.tag{font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px}
+.tag.stock{background:rgba(61,220,151,.16);color:var(--up)}
+.tag.deal{background:rgba(245,185,66,.16);color:#f5b942}
+.tag.need{background:rgba(255,93,143,.14);color:#ff5d8f}
+.want-x{flex:0 0 auto}
