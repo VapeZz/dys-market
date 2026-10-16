@@ -81,7 +81,8 @@ def main(argv):
         history = {}
     recent = {int(k) for k, d in history.items() if (today - date.fromisoformat(d)).days < 21}
     cards, win, _ = pick(site_data, today, limit=40)
-    fresh = [c for c in cards if c["id"] not in recent]
+    sideways = re.compile(r"\bBREAK\b|\bLEGEND\b|jumbo|oversize", re.I)   # landscape cards don't fit the portrait slides
+    fresh = [c for c in cards if c["id"] not in recent and not sideways.search(c["name"])]
     if not fresh:
         print("daily card: nothing new to feature today; skipping")
         return
