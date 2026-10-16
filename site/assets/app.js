@@ -1387,6 +1387,9 @@ async function pageCollection() {
     $("#mine").hidden = true; $("#shared-note").hidden = false;
   }
   const keyOf = (it) => `${it.id}|${it.code ?? printCode(subOf(it.n || ""))}${it.gr ? "|" + it.gr : ""}`;
+  if (!shared) window.dysCollectionAdd = async (r) => {
+    const it = { id: r[0], g: r[2], n: r[1], qty: 1, paid: null }, ex = col.items.find((x) => !x.gr && keyOf(x) === keyOf(it));
+    ex ? ex.qty++ : col.items.push(it); save(); toast(`Added ${r[1]}`); await loadChanges(); draw(); };
   const rawKey = (it) => `${it.id}|${it.code ?? printCode(subOf(it.n || ""))}`;
   const changes = {}, series = {}, setCards = {};
   let dates = null, cq = "", csort = "value", grouped = false, range = "90";
@@ -1644,8 +1647,27 @@ async function pageCollectors() {
   draw();
 }
 
+/* ---------- scan a card (assets/scan.js loads on first tap) ---------- */
+window.dysAddToCollection = (r) => { const c = colGet(), k = `${r[0]}|${printCode(subOf(r[1]))}`;
+  const ex = c.items.find((x) => !x.gr && `${x.id}|${printCode(subOf(x.n || ""))}` === k);
+  ex ? ex.qty++ : c.items.push({ id: r[0], g: r[2], n: r[1], qty: 1, paid: null }); colSet(c); toast(`Added ${r[1]} to My Collection`); };
+window.dysWant = (r) => { if (!wantHas(wantKey(r[0], r[1]))) wantToggle({ id: r[0], g: r[2], n: r[1], at: r[4] }); };
+const CAMERA = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
+function scanButton(box) {
+  if (!box || box.querySelector(".scan-btn")) return;
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "scan-btn"; b.innerHTML = CAMERA + "<span>Scan</span>"; b.setAttribute("aria-label", "Scan a card with your camera");
+  b.addEventListener("click", async (e) => {
+    e.preventDefault();
+    if (!window.dysScan) await new Promise((ok, bad) => { const s = document.createElement("script"); s.src = "assets/scan.js?v=" + (document.querySelector('script[src*="app.js"]')?.src.split("v=")[1] || "1"); s.onload = ok; s.onerror = bad; document.head.appendChild(s); });
+    window.dysScan();
+  });
+  box.classList.add("has-scan"); box.appendChild(b);
+}
+
 /* ---------- boot ---------- */
 shell();
+[["search", ".big-q"], ["collection", "#add-box"], ["index", ".hero [data-search]"]].forEach(([pg, sel]) => { if (PAGE === pg) scanButton(document.querySelector(sel)); });
 document.querySelectorAll("[data-search]").forEach(initSearch);
 const normNum = (t) => t.replace(/\b0+(\d)/g, "$1");
 const ptcgFromLogo = (lg) => (lg || "").match(/^https:\/\/images\.pokemontcg\.io\/([^/]+)\/logo\.png/)?.[1];
