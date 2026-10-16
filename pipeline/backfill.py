@@ -19,6 +19,7 @@ import snapshots
 import tcgcsv
 
 CATS = {str(g["category"]) for g in config.GAMES}
+MERGE = False   # --merge 71,89: add these games' prices into snapshots we already have
 
 
 def default_dates(today):
@@ -28,7 +29,7 @@ def default_dates(today):
 
 
 def backfill_day(day, log=print):
-    if snapshots.exists(day):
+    if snapshots.exists(day) and not MERGE:
         log(f"backfill {day}: already have it")
         return True
     url = f"{config.BASE_URL}/archive/tcgplayer/prices-{day}.ppmd.7z"
@@ -68,6 +69,13 @@ def backfill_day(day, log=print):
                 if len(sample) > 8:
                     break
             log(f"backfill {day}: no price files for tracked games; archive layout sample: {sample}")
+        if snap and MERGE and snapshots.exists(day):
+            base = snapshots.load(day)
+            added = {k: v for k, v in snap.items() if k not in base}
+            base.update(added)
+            snapshots.save(day, base)
+            log(f"backfill {day}: merged {len(added)} prices")
+            return True
         if snap:
             snapshots.save(day, snap)
             log(f"backfill {day}: {len(snap)} prices")
@@ -79,8 +87,15 @@ def backfill_day(day, log=print):
 
 
 def main(argv):
+    global CATS, MERGE
     today = date.today().isoformat()
-    days = argv or default_dates(today)
+    if "--merge" in argv:   # e.g. --merge 71,89,91  (new games: fill in every day we already have)
+        i = argv.index("--merge")
+        CATS, MERGE = set(argv[i + 1].split(",")), True
+        argv = argv[:i] + argv[i + 2:]
+        days = argv or sorted(set(snapshots.available()) | set(default_dates(today)))
+    else:
+        days = argv or default_dates(today)
     os.makedirs(config.DATA_DIR, exist_ok=True)
     log_path = os.path.join(config.DATA_DIR, "backfill-log.txt")
     with open(log_path, "w", encoding="utf-8") as logf:

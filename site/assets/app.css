@@ -320,6 +320,9 @@ table.cmp th:first-child,table.cmp td:first-child{width:32%}
 .gtile.gt0{background:linear-gradient(135deg,#1d3fa8,#2b6de0 55%,#f2c230)}
 .gtile.gt1{background:linear-gradient(135deg,#7a1028,#c8243f 60%,#f2f2f2)}
 .gtile.gt2{background:linear-gradient(135deg,#101a3a,#24356f 60%,#c99b3a)}
+.gtile.gt3{background:linear-gradient(135deg,#0d1b4d,#3b2a8a 55%,#d8b25a)}
+.gtile.gt4{background:linear-gradient(135deg,#071d24,#0f5a6b 55%,#c9a227)}
+.gtile.gt5{background:linear-gradient(135deg,#0c3b2e,#1f8a5a 55%,#7fd6ff)}
 .gtile:hover{filter:brightness(1.08)}
 .srow{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(170px,190px);gap:12px;overflow-x:auto;padding-bottom:8px;scroll-snap-type:x mandatory}
 .srow .stile{scroll-snap-align:start}

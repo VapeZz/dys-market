@@ -96,7 +96,7 @@ function shell() {
   $("#foot").outerHTML = `<footer><div class="wrap cols">
     <div style="max-width:560px">
       <p><b style="color:var(--ink)">Drive Your Style Market Insights</b> · Beta</p>
-      <p>Market prices are recorded nightly from public TCGplayer market data and may lag by a day. For research only, not financial advice. These are not Drive Your Style's prices. Not affiliated with or endorsed by The Pokémon Company, Bandai, or TCGplayer.</p>
+      <p>Market prices are recorded nightly from public TCGplayer market data and may lag by a day. For research only, not financial advice. These are not Drive Your Style's prices. Not affiliated with or endorsed by The Pokémon Company, Bandai, Disney, Ravensburger, Riot Games, Pocketpair or TCGplayer.</p>
       <p id="updated-line"></p>
     </div>
     <div>
@@ -244,7 +244,7 @@ async function pageIndex() {
   const meta = await getJSON("meta.json");
   $("#stats").textContent = `Tracking ${meta.cards.toLocaleString()} cards and ${meta.sealed.toLocaleString()} sealed products across ${meta.sets.toLocaleString()} sets · prices updated ${fmtDate(meta.updated)}`;
   const allSets = await getJSON("sets.json");
-  const GT = { "pokemon": "Pokémon TCG", "pokemon-jp": "Pokémon Japan", "one-piece": "One Piece Card Game" };
+  const GT = { "pokemon": "Pokémon TCG", "pokemon-jp": "Pokémon Japan", "one-piece": "One Piece Card Game", "lorcana": "Disney Lorcana", "riftbound": "Riftbound", "palworld": "Palworld Card Game" };
   $("#gtiles").innerHTML = meta.games.map((g, i) => `<a class="gtile gt${i}" href="sets.html?game=${g.slug}"><b>${esc(GT[g.slug] || g.label)}</b><span>${g.sets} sets<i> · browse cards &amp; prices</i> →</span></a>`).join("");
   const horizon = new Date(Date.now() + 45 * 864e5).toISOString().slice(0, 10);
   $("#newsets").innerHTML = allSets.filter((s) => s.pub && s.pub <= horizon && !SPECIAL.test(s.n) && (s.lg || s.bbId || s.tc?.length))
@@ -285,6 +285,12 @@ function eraOf(s) {
     if (a.startsWith("ST") || a.startsWith("SD")) return "Starter Decks";
     return "Other";
   }
+  if (["lorcana", "riftbound", "palworld"].includes(s.k)) {   // newer games: main sets vs. everything else, newest first
+    const n = s.n.toLowerCase();
+    if (/promo|judge|organized play|prototype|championship|event|league/.test(n)) return "Promos & Events";
+    if (/illumineer|quest|starter|deck|bundle|gift|sleeve|collection|tin|box set/.test(n) && !/^bp\d/i.test(s.n)) return "Products & Extras";
+    return "Main Sets";
+  }
   if (SPECIAL.test(s.n)) return PROMO_GROUP;
   if (!s.pub) return "Other";
   const e = (ERAS[s.k] || []).find(([d]) => s.pub >= d);
@@ -309,8 +315,8 @@ async function pageSets() {
       .sort((a, b) => (b.pub || "").localeCompare(a.pub || ""));
     const groups = new Map();
     for (const s of list) { const e = eraOf(s); if (!groups.has(e)) groups.set(e, []); groups.get(e).push(s); }
-    if (game === "one-piece") for (const k of ["Promos & Events", "Other"]) if (groups.has(k)) { const v = groups.get(k); groups.delete(k); groups.set(k, v); }
-    if (game !== "one-piece") for (const k of [PROMO_GROUP, "Other"]) if (groups.has(k)) { const v = groups.get(k); groups.delete(k); groups.set(k, v); }
+    if (!ERAS[game]) for (const k of ["Products & Extras", "Promos & Events", "Other"]) if (groups.has(k)) { const v = groups.get(k); groups.delete(k); groups.set(k, v); }
+    if (ERAS[game]) for (const k of [PROMO_GROUP, "Other"]) if (groups.has(k)) { const v = groups.get(k); groups.delete(k); groups.set(k, v); }
     const eras = [...groups.keys()];
     if (era !== "all" && !groups.has(era)) era = "all";
     $("#eras").innerHTML = [["all", "All"], ...eras.map((e) => [e, e])].map(([v, l]) => `<button type="button" class="chip${v === era ? " on" : ""}" data-e="${esc(v)}">${esc(l)}</button>`).join("");
@@ -424,7 +430,7 @@ function pullsHtml(set) {
 
 function gradedHtml(base, set, v) {
   const setName = set.n.replace(/^[A-Z0-9]+[a-z]?\s*[:\-–]\s*/, "");
-  const q = `${set.k === "one-piece" ? "One Piece" : "Pokemon"} ${base.replace(/ - /, " ")} ${base.includes(v.no || "~") ? "" : v.no || ""} ${setName}`.replace(/\s+/g, " ").trim();
+  const q = `${({ "one-piece": "One Piece", lorcana: "Lorcana", riftbound: "Riftbound", palworld: "Palworld" })[set.k] || "Pokemon"} ${base.replace(/ - /, " ")} ${base.includes(v.no || "~") ? "" : v.no || ""} ${setName}`.replace(/\s+/g, " ").trim();
   const ebay = (g) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q + " " + g)}&LH_Sold=1&LH_Complete=1&_sop=13`;
   const link = (h, t, s) => `<a class="glink" href="${h}" target="_blank" rel="noopener"><b>${t}</b><span>${s}</span></a>`;
   return `<section class="graded"><h2 style="font-size:24px">Graded prices &amp; gem rate</h2>
@@ -1003,6 +1009,9 @@ const GAME_META = {
   "pokemon": { vendor: "The Pokémon Company", tag: "Pokemon", sealed: "Pokémon Sealed", single: "Pokémon Single" },
   "pokemon-jp": { vendor: "The Pokémon Company", tag: "Pokemon", extra: "Pokemon Japan", sealed: "Pokémon Japan Sealed", single: "Pokémon Japan Single" },
   "one-piece": { vendor: "Bandai", tag: "One Piece", sealed: "One Piece Sealed", single: "One Piece Single" },
+  "lorcana": { vendor: "Ravensburger", tag: "Lorcana", sealed: "Lorcana Sealed", single: "Lorcana Single" },
+  "riftbound": { vendor: "Riot Games", tag: "Riftbound", sealed: "Riftbound Sealed", single: "Riftbound Single" },
+  "palworld": { vendor: "Pocketpair", tag: "Palworld", sealed: "Palworld Sealed", single: "Palworld Single" },
 };
 const slugify = (t) => t.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 200);
 const csvCell = (v) => { const t = String(v ?? ""); return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };

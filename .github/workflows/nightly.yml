@@ -10,6 +10,10 @@ on:
         description: "Download past prices (first run only, takes ~10-20 min)"
         type: boolean
         default: false
+      merge_games:
+        description: "Add past prices for newly added games (TCGplayer category ids, e.g. 71,89,91)"
+        type: string
+        default: ""
       social:
         description: "Make this week's Trending cards carousel now (runs automatically on Sundays)"
         type: boolean
@@ -55,6 +59,12 @@ jobs:
         run: |
           which 7z || sudo apt-get install -y p7zip-full
           python pipeline/backfill.py
+
+      - name: Backfill past prices for new games
+        if: ${{ inputs.merge_games != '' }}
+        run: |
+          which 7z || sudo apt-get install -y p7zip-full
+          python pipeline/backfill.py --merge "${{ inputs.merge_games }}"
 
       - name: Download today's prices and build site data
         run: python pipeline/run.py

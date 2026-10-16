@@ -39,6 +39,7 @@ WANTED = [
     ("union-arena", r"union arena"),
     ("sorcery", r"sorcery"),
     ("weiss-schwarz", r"weiss"),
+    ("palworld", r"palworld"),
 ]
 SKIP_CATEGORIES = {g["category"] for g in config.GAMES}
 
