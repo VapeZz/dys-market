@@ -30,6 +30,7 @@ jobs:
           SHOPIFY_CLIENT_ID: ${{ secrets.SHOPIFY_CLIENT_ID }}
           SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
         run: |
+          set -o pipefail
           git clone -q --depth 1 --branch gh-pages "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" /tmp/pages
           cp site/showcase-hidden.json /tmp/pages/showcase-hidden.json
           python pipeline/showcase.py /tmp/pages | tee /tmp/col.log

@@ -78,7 +78,11 @@ def main(argv):
     if not shop:
         print("::warning title=Collectors::SHOPIFY_SHOP not set; skipping")
         return
-    binders = fetch_binders(Shopify(shop))
+    try:
+        binders = fetch_binders(Shopify(shop))
+    except Exception as err:  # e.g. the app can't read customers yet
+        print(f"::error title=Collectors::{str(err)[:500]}")
+        raise SystemExit(1)
     sdir = os.path.join(data, "showcase")
     if os.path.isdir(sdir):                      # binders made private since last run disappear
         for f in os.listdir(sdir):
