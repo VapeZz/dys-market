@@ -74,9 +74,10 @@ def build(groups, products, stock, log=print):
     # TCGplayer sometimes stamps many old sets with the same "published" date when it
     # re-imports them. Treat a date shared by 15+ sets as unknown.
     from collections import Counter
-    bulk = {d for d, n in Counter(g["pub"] for g in groups.values()).items() if d and n >= 15}
+    # Counted per game, so a real release that happens to share that date in another game keeps it.
+    bulk = {kd for kd, n in Counter((g["k"], g["pub"]) for g in groups.values()).items() if kd[1] and n >= 15}
     for g in groups.values():
-        if g["pub"] in bulk:
+        if (g["k"], g["pub"]) in bulk:
             g["pub"] = ""
 
     # ---- window anchors -------------------------------------------------
