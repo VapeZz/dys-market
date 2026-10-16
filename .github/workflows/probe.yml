@@ -5,4 +5,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: python tools/probe_nike.py
+      - run: python tools/probe_nike.py | while IFS= read -r l; do echo "::notice::$l"; done
