@@ -59,6 +59,16 @@ jobs:
       - name: Download today's prices and build site data
         run: python pipeline/run.py
 
+      - name: Collectors page (public binders, likes, follows)
+        continue-on-error: true
+        env:
+          SHOPIFY_SHOP: ${{ secrets.SHOPIFY_SHOP }}
+          SHOPIFY_CLIENT_ID: ${{ secrets.SHOPIFY_CLIENT_ID }}
+          SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
+        run: |
+          python pipeline/showcase.py site 2>&1 | tee /tmp/col.log
+          echo "::notice title=Collectors::$(tail -n 1 /tmp/col.log)"
+
       - name: Sneaker release photos
         continue-on-error: true
         run: |

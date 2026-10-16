@@ -1,0 +1,43 @@
+name: Collectors refresh
+
+# Re-tallies public binders, likes and follows every 30 minutes and updates
+# just those files on the live site. The nightly job does the same as part of
+# its full rebuild.
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Tally collectors and publish
+        env:
+          SHOPIFY_SHOP: ${{ secrets.SHOPIFY_SHOP }}
+          SHOPIFY_CLIENT_ID: ${{ secrets.SHOPIFY_CLIENT_ID }}
+          SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
+        run: |
+          git clone -q --depth 1 --branch gh-pages "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" /tmp/pages
+          cp site/showcase-hidden.json /tmp/pages/showcase-hidden.json
+          python pipeline/showcase.py /tmp/pages | tee /tmp/col.log
+          cd /tmp/pages
+          git config user.name "dys-market-bot"
+          git config user.email "dys-market-bot@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet -- data/showcase.json data/showcase showcase-hidden.json; then echo "No changes"; exit 0; fi
+          git commit -q -m "Collectors $(date -u +%FT%H:%MZ)"
+          git push -q origin gh-pages
+          echo "::notice title=Collectors::$(tail -n 1 /tmp/col.log)"
