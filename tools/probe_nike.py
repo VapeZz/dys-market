@@ -12,7 +12,8 @@ os.makedirs("probe-out", exist_ok=True)
 for o in d["objects"]:
     for pi in o["productInfo"]:
         sc = pi["merchProduct"]["styleColor"]
-        urls = re.findall(r'https://static\.nike\.com/a/images/[^"]+', json.dumps(pi))
+        urls = re.findall(r'https://static\.nike\.com/a/images/[^"]+', json.dumps(pi)) or re.findall(r'https://static\.nike\.com/a/images/[^"]+', json.dumps(o))
+        print(sc, "keys", list(o.get("publishedContent", {}).keys())[:6], [list((n.get("properties") or {}).keys())[:8] for n in o.get("publishedContent", {}).get("nodes", [])[:1]])
         nodes = [n.get("properties", {}).get("squarishURL") for n in o.get("publishedContent", {}).get("nodes", [])[:1]]
         print(sc, "n_urls", len(urls), "node0", (nodes[0] or "")[:60])
         for i, x in enumerate(urls[:3]):
