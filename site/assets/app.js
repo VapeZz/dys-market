@@ -1276,7 +1276,8 @@ async function pageCollection() {
     document.title = prof ? `${prof.a} · Collectors · Drive Your Style` : "Collector not found · Drive Your Style";
     $("#shared-note").hidden = false;
     $("#shared-note").innerHTML = prof ? `<span class="prof-line">${col.name ? `${esc(col.name)} · ` : ""}<a href="collectors.html" style="color:var(--accent)">All collectors →</a></span><span class="soc-row" id="prof-soc"></span>`
-      : `This binder isn't public anymore. <a href="collectors.html" style="color:var(--accent)">Browse collectors →</a>`;
+      : viewPid === await myPid() ? `Your public page is being set up. It goes live within 30 minutes of turning on <b>Show my binder</b>. <a href="collection.html" style="color:var(--accent)">Back to my collection →</a>`
+      : `This binder isn't public. <a href="collectors.html" style="color:var(--accent)">Browse collectors →</a>`;
     if (prof) socialButtons($("#prof-soc"), prof, tallied);
   } else if (shared) {
     try { const d = b64d(location.hash.slice(3)); col = { name: d.n || "", items: (d.i || []).map(([id, g, qty, code, gr, gv]) => ({ id, g, qty, code, ...(gr ? { gr, gv: gv ?? null } : {}) })) }; }
