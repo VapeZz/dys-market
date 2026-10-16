@@ -21,7 +21,7 @@ FONTS = os.path.join(ROOT, "tools", "social-fonts")
 LOGO = os.path.join(ROOT, "tools", "social-logo.png")
 SITE = "https://market.driveyourstyle.net"
 SKIP = re.compile(r"prerelease|\[staff\]|code card|jumbo|oversize", re.I)
-HASHTAGS = "#pokemontcg #pokemoncards #pokemon #onepiecetcg #onepiececardgame #tcg #tradingcards #cardcollector #pokemoncollector #lasvegas #vegaspokemon #driveyourstyle"
+HASHTAGS = "#pokemontcg #pokemoncards #pokemon #pokemontcgcommunity #pokemoncollection #tcg #tradingcards #cardcollector #pokemoncollector #lasvegas #vegaspokemon #driveyourstyle"
 
 
 def esc(t):
@@ -76,8 +76,7 @@ def pick(site_data, today):
             quota[bucket] -= 1
             used.add(i["id"])
             out.append({"id": i["id"], "name": clean_name(i["n"]), "set": short_set(s["n"]), "gid": s["id"], "game": s["k"], "now": i["p"], "old": old, "pct": pct})
-    take(3, 2)   # aim for 3 Pokémon + 2 One Piece
-    take(5, 5)   # fill any gap from either game
+    take(5, 0)   # Pokémon only: TCGplayer's One Piece photos carry a "SAMPLE" watermark
     out.sort(key=lambda c: -c["pct"])
     since = meta.get("anchors", {}).get("7") if win == "7" else meta.get("first")
     return out, ("7" if win == "7" else "all"), since
@@ -141,7 +140,7 @@ def cta():
     return f"""<div class="slide" style="justify-content:center;align-items:center;text-align:center">
 <img src="file://{LOGO}" style="height:200px">
 <div style="margin-top:70px;font-family:'Barlow Condensed';font-weight:800;font-size:110px;line-height:.95;text-transform:uppercase">What's <span class="holo">your</span><br>card worth?</div>
-<div style="margin-top:34px;font-size:40px;color:#d8d5cf;max-width:820px">Free live prices on 59,000+ Pokémon &amp; One Piece cards, updated every night.</div>
+<div style="margin-top:34px;font-size:40px;color:#d8d5cf;max-width:820px">Free live prices on 59,000+ Pokémon &amp; One Piece cards and sealed, updated every night.</div>
 <div style="margin-top:56px;font-family:'Barlow Condensed';font-weight:700;font-size:58px;letter-spacing:.04em;border:4px solid #f2f0eb;padding:16px 36px 12px">market.driveyourstyle.net</div>
 <div class="bar" style="width:100%;margin-top:80px"></div>
 <div class="foot" style="width:100%;margin-top:26px"><span>Shop + all links in bio</span><span>DM @drive.yourstyle</span></div></div>"""
