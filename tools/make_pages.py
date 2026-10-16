@@ -217,6 +217,7 @@ PAGES = {
   <div class="block-head"><div><span class="eyebrow"><b>●</b> Members</span><h1 id="title" style="font-size:36px;margin-top:8px">My collection</h1>
     <p id="shared-note" class="muted" hidden>A collection shared from Drive Your Style. <a href="collection.html" style="color:var(--accent)">Start your own →</a></p></div></div>
   <div id="acct" class="panel acct-bar" hidden></div>
+  <div id="prof" class="panel prof-panel" hidden></div>
   <div id="mine">
     <div class="search" id="add-box" style="max-width:640px">''' + SEARCH + '''<input id="add-q" type="search" placeholder="Search a card or product to add" aria-label="Search a card or product to add" autocomplete="off"><div class="results" id="add-results"></div></div>
     <p class="muted" id="added" style="min-height:20px;font-size:14px;margin:8px 0 0" role="status"></p>
@@ -236,6 +237,16 @@ PAGES = {
     <label class="btn" style="cursor:pointer">Restore<input id="restore" type="file" accept="application/json,.json" hidden></label>
   </div>
   <p class="muted" style="font-size:13px;margin-top:10px">Your collection saves on this device. Use <b>Back up</b> to keep a copy or move it to another phone. Tap the camera on any item to use your own photo; photos stay on this phone. Raw cards use the nightly TCGplayer market price (Near Mint). For a slab, pick its grade under the card and enter what it's worth; the eBay sold link shows recent sales for that grade. Values aren't an offer to buy.</p>
+</section></div>'''),
+"collectors": ("Collectors · Drive Your Style Market Insights", "Browse Pokémon and One Piece collections from Drive Your Style collectors. Like your favorites and follow collectors.", '''
+<div class="wrap"><section class="block">
+  <div class="block-head"><div><span class="eyebrow"><b>●</b> Community</span><h1 style="font-size:36px;margin-top:8px">Collectors</h1>
+    <p>Binders collectors chose to share. Tap one to see every card, like it, or follow the collector.</p></div>
+    <a class="btn primary" href="collection.html" id="join">Share your binder →</a></div>
+  <div class="controls"><div id="ctab"></div><input class="field" id="cfind" type="search" placeholder="Find a collector" aria-label="Find a collector"></div>
+  <p class="muted" id="cnote" style="font-size:13px;margin:4px 0 12px"></p>
+  <div id="clist" class="col-grid"><div class="skeleton" style="height:220px"></div></div>
+  <p class="muted" style="font-size:12px;margin-top:18px">Values use nightly market prices for raw cards and each collector's own value for slabs. Likes and follows need a free account and update every 30 minutes.</p>
 </section></div>'''),
 "about": ("About the data · Drive Your Style Market Insights", "Where Drive Your Style market prices come from.", '''
 <div class="wrap"><article class="prose">

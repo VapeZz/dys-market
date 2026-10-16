@@ -51,7 +51,7 @@ document.documentElement.dataset.theme = getTheme();
 /* ---------- shell ---------- */
 const SEARCH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>`;
 function shell() {
-  const links = [["sets", "Sets"], ["trends", "Trends"], ["cards", "Movers"], ["search", "Search"], ["compare", "Compare"], ["calendar", "Calendar"], ["sneakers", "Sneakers"], ["watchlist", "Watchlist"], ["collection", "My Collection"], ["about", "About"]];
+  const links = [["sets", "Sets"], ["trends", "Trends"], ["cards", "Movers"], ["search", "Search"], ["compare", "Compare"], ["calendar", "Calendar"], ["sneakers", "Sneakers"], ["watchlist", "Watchlist"], ["collection", "My Collection"], ["collectors", "Collectors"], ["about", "About"]];
   $("#top").outerHTML = `<header class="top"><div class="wrap">
     <a class="brand" href="index.html" aria-label="Drive Your Style Market Insights home"><img class="logo-img logo-on-dark" src="assets/logo-light.png" alt="Drive Your Style" width="61" height="40"><img class="logo-img logo-on-light" src="assets/logo-dark.png" alt="" width="61" height="40"><span class="brand-sub">Market<br>Insights</span></a>
     <nav class="nav" id="nav">${links.map(([p, l]) => `<a href="${p}.html"${p === PAGE ? ' aria-current="page"' : ""}>${l}</a>`).join("")}
@@ -1210,7 +1210,8 @@ const acct = (() => {
         try {
           const a = get();
           const r = await gql(`mutation($m: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $m) { userErrors { message } } }`,
-            { m: [{ ownerId: a.id, namespace: "dys", key: "binder", type: "json", value: JSON.stringify({ name: c.name || "", updated: c.updated || Date.now(), items: c.items }) }] });
+            { m: [{ ownerId: a.id, namespace: "dys", key: "binder", type: "json", value: JSON.stringify({ name: c.name || "", updated: c.updated || Date.now(), items: c.items,
+              alias: c.alias || "", pub: !!c.pub, likes: c.likes || [], follows: c.follows || [] }) }] });
           const e = r.metafieldsSet.userErrors; document.dispatchEvent(new CustomEvent("dys-sync", { detail: e.length ? "error" : "ok" }));
         } catch { document.dispatchEvent(new CustomEvent("dys-sync", { detail: "error" })); }
       }, 800);
@@ -1220,6 +1221,37 @@ const acct = (() => {
 const subOf = (n) => (n.match(/ \(([^)]+)\)$/) || [, "Normal"])[1];
 const b64e = (o) => btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const b64d = (t) => JSON.parse(decodeURIComponent(escape(atob(t.replace(/-/g, "+").replace(/_/g, "/")))));
+
+/* ---------- collectors: public binders, likes, follows ----------
+   Your likes / follows live in your binder (synced to your account); a job tallies everyone's every 30 minutes. */
+const ALIAS_OK = /^[A-Za-z0-9_.]{3,20}$/;
+const myPid = async () => { const a = acct.info(); if (!a?.id) return null;
+  const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("dys:" + a.id));
+  return [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 12); };
+const social = {
+  has: (kind, pid) => (colGet()[kind] || []).includes(pid),
+  /* counts from the last tally, plus your own change if you made it after that tally */
+  count: (kind, pid, base, tallied) => { const c = colGet(), t = (c.socialAt || {})[`${kind}:${pid}`] || 0, on = (c[kind] || []).includes(pid);
+    return Math.max(0, base + (t > tallied ? (on ? 1 : -1) : 0)); },
+  async toggle(kind, pid) {
+    if (!acct.enabled() || !acct.signedIn()) { toast("Sign in on My Collection to like and follow collectors"); setTimeout(() => { location.href = "collection.html"; }, 1400); return null; }
+    if (pid === await myPid()) { toast("That's your binder 🙂"); return null; }
+    const c = colGet(), list = new Set(c[kind] || []), on = !list.has(pid);
+    on ? list.add(pid) : list.delete(pid);
+    c[kind] = [...list].slice(-500); c.socialAt = { ...(c.socialAt || {}), [`${kind}:${pid}`]: Date.now() };
+    colSet(c); return on;
+  },
+};
+const HEART = (on) => `<svg viewBox="0 0 24 24" width="16" height="16" fill="${on ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.8 4.5c2.1 0 3.6 1.1 5.2 3 1.6-1.9 3.1-3 5.2-3 3.8 0 5.9 3.9 4.4 7.3C19.5 16.4 12 21 12 21z"/></svg>`;
+function socialButtons(el, prof, tallied) {
+  const paint = () => {
+    const liked = social.has("likes", prof.p), fol = social.has("follows", prof.p);
+    el.innerHTML = `<button type="button" class="soc-btn${liked ? " on" : ""}" data-k="likes" aria-pressed="${liked}">${HEART(liked)} <b>${social.count("likes", prof.p, prof.l || 0, tallied)}</b><span>${liked ? "Liked" : "Like"}</span></button>
+      <button type="button" class="soc-btn follow${fol ? " on" : ""}" data-k="follows" aria-pressed="${fol}"><b>${social.count("follows", prof.p, prof.f || 0, tallied)}</b><span>${fol ? "Following" : "Follow"}</span></button>`;
+    el.querySelectorAll("[data-k]").forEach((b) => b.addEventListener("click", async (e) => { e.preventDefault(); e.stopPropagation(); if (await social.toggle(b.dataset.k, prof.p) != null) paint(); }));
+  };
+  paint();
+}
 
 /* graded slabs: each grade is its own line in the collection, valued at the owner's number (eBay sold is one tap away) */
 const GRADES = [["PSA", ["10", "9", "8", "7", "6", "5"]], ["CGC", ["10 Pristine", "10", "9.5", "9", "8.5", "8"]], ["BGS", ["10 Black Label", "10", "9.5", "9", "8.5"]],
@@ -1233,9 +1265,19 @@ async function pageCollection() {
   const [meta, rows] = await Promise.all([getJSON("meta.json"), getJSON("search.json")]);
   const byKey = new Map(rows.map((r) => [`${r[0]}|${printCode(subOf(r[1]))}`, r]));
   const setName = (g) => meta.groups[g]?.[0] || "";
-  const shared = location.hash.startsWith("#c=");
-  let col = colGet();
-  if (shared) {
+  const viewPid = (params.get("p") || "").replace(/[^a-f0-9]/g, "").slice(0, 12);
+  const shared = location.hash.startsWith("#c=") || !!viewPid;
+  let col = colGet(), prof = null, tallied = 0;
+  if (viewPid) {
+    [prof, tallied] = await Promise.all([getJSON(`showcase/${viewPid}.json`).catch(() => null), getJSON("showcase.json").then((d) => d.updated).catch(() => 0)]);
+    col = prof ? { name: prof.bn || "", items: prof.items } : { name: "", items: [] };
+    $("#mine").hidden = true; $("#tools").hidden = true;
+    document.title = prof ? `@${prof.a} · Collectors · Drive Your Style` : "Collector not found · Drive Your Style";
+    $("#shared-note").hidden = false;
+    $("#shared-note").innerHTML = prof ? `<span class="prof-line">${col.name ? `${esc(col.name)} · ` : ""}<a href="collectors.html" style="color:var(--accent)">All collectors →</a></span><span class="soc-row" id="prof-soc"></span>`
+      : `This binder isn't public anymore. <a href="collectors.html" style="color:var(--accent)">Browse collectors →</a>`;
+    if (prof) socialButtons($("#prof-soc"), prof, tallied);
+  } else if (shared) {
     try { const d = b64d(location.hash.slice(3)); col = { name: d.n || "", items: (d.i || []).map(([id, g, qty, code, gr, gv]) => ({ id, g, qty, code, ...(gr ? { gr, gv: gv ?? null } : {}) })) }; }
     catch { col = { name: "", items: [] }; }
     $("#mine").hidden = true; $("#shared-note").hidden = false;
@@ -1286,13 +1328,16 @@ async function pageCollection() {
     const paid = paidItems.reduce((a, i) => a + i.paid * i.qty, 0);
     const paidValue = paidItems.reduce((a, i) => a + (i.mkt || 0) * i.qty, 0);
     const count = items.reduce((a, i) => a + i.qty, 0);
-    $("#title").textContent = col.name || (shared ? "Shared collection" : "My collection");
-    $("#stats").innerHTML = [
+    $("#title").textContent = prof ? `@${prof.a}` : col.name || (shared ? "Shared collection" : "My collection");
+    $("#stats").innerHTML = (prof ? [
+      [money(value), "Collection value"], [count.toLocaleString(), "Items"], [String(new Set(items.map((i) => i.g)).size), "Sets"],
+      [String(items.filter((i) => i.gr).reduce((a, i) => a + i.qty, 0)), "Graded slabs"],
+    ] : [
       [money(value), items.some((i) => i.gr) ? "Collection value" : "Market value"],
       [count.toLocaleString(), "Items"],
       [paidItems.length ? money(paid) : "—", "You paid"],
       [paidItems.length ? `${paidValue - paid >= 0 ? "+" : "−"}${money(Math.abs(paidValue - paid))}` : "—", paidItems.length && paid ? `Gain ${((paidValue - paid) / paid * 100).toFixed(1)}%` : "Gain / loss"],
-    ].map(([v, l]) => `<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+    ]).map(([v, l]) => `<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
     let lastG = null;
     const grpRow = (i) => { if (!grouped || i.g === lastG) return ""; lastG = i.g; const st = sets.find((x) => x.g === i.g);
       return `<tr class="grp"><td colspan="6"><b>${esc(setName(i.g))}</b>${st ? ` <span class="muted">· ${st.have}/${st.total || "?"} cards</span>` : ""}</td></tr>`; };
@@ -1386,12 +1431,37 @@ async function pageCollection() {
       catch { $("#added").textContent = "That file isn't a collection backup."; }
     });
   }
+  const profilePanel = async () => {
+    const box = $("#prof"), pid = await myPid(); if (!box || !pid) return;
+    box.hidden = false;
+    box.innerHTML = `<div class="prof-head"><b>Your collector profile</b><a href="collectors.html" class="more">Browse collectors →</a></div>
+      <div class="prof-grid"><label class="muted">Collector name (public)<input class="field" id="alias" maxlength="20" autocomplete="nickname" placeholder="e.g. vegas_pulls" value="${esc(col.alias || "")}"></label>
+      <label class="toggle"><input type="checkbox" id="pub"${col.pub ? " checked" : ""}> Show my binder on the Collectors page</label></div>
+      <p class="muted prof-note" id="alias-msg">Letters, numbers, _ and . (3–20). Your email and what you paid are never shown. Changes show up within 30 minutes.</p>
+      <p class="prof-links" id="prof-links"></p>`;
+    const links = () => { $("#prof-links").innerHTML = col.pub && ALIAS_OK.test(col.alias || "") ? `<a href="collection.html?p=${pid}">View my public page →</a>` : ""; };
+    const taken = async (al) => { const d = await getJSON("showcase.json").catch(() => null); return !!d?.profiles?.some((p) => p.p !== pid && p.a.toLowerCase() === al.toLowerCase()); };
+    $("#alias").addEventListener("change", async (e) => {
+      const al = e.target.value.trim().replace(/^@/, "");
+      if (al && !ALIAS_OK.test(al)) { $("#alias-msg").textContent = "Use 3–20 letters, numbers, _ or . (no spaces)."; return; }
+      if (al && await taken(al)) { $("#alias-msg").textContent = `@${al} is taken. Try another.`; return; }
+      col.alias = al; save(); links(); $("#alias-msg").textContent = al ? `Saved. You're @${al}.` : "Collector name removed.";
+      document.dispatchEvent(new CustomEvent("dys-sync", { detail: "ok" }));
+    });
+    $("#pub").addEventListener("change", (e) => {
+      if (e.target.checked && !ALIAS_OK.test(col.alias || "")) { e.target.checked = false; $("#alias-msg").textContent = "Pick a collector name first."; $("#alias").focus(); return; }
+      col.pub = e.target.checked; save(); links();
+      $("#alias-msg").textContent = col.pub ? "Your binder will appear on the Collectors page within 30 minutes." : "Your binder is private. It leaves the Collectors page within 30 minutes.";
+    });
+    links();
+  };
   if (!shared && acct.enabled()) {
     const bar = $("#acct");
     const paint = (msg) => {
       bar.hidden = false;
       const a = acct.info();
-      bar.innerHTML = a ? `<span><b>Saved to your account</b>${a.email ? ` · ${esc(a.email)}` : ""}${msg ? ` · <span class="muted">${esc(msg)}</span>` : ""}</span><button class="btn" id="acct-out" type="button">Sign out</button>`
+      const al = colGet().alias;
+      bar.innerHTML = a ? `<span><b>${al ? `Signed in as @${esc(al)}` : "Saved to your account"}</b>${msg ? ` · <span class="muted">${esc(msg)}</span>` : ""}${al ? "" : `<span class="muted" style="display:block;font-size:13px">Pick a collector name below so people see that instead of your email.</span>`}</span><button class="btn" id="acct-out" type="button">Sign out</button>`
         : `<span><b>Save your binder to your Drive Your Style account</b><span class="muted" style="display:block;font-size:13px">Sign in with the email you shop with. Your binder syncs to every phone and computer.</span></span><button class="btn primary" id="acct-in" type="button">Sign in</button>`;
       $("#acct-in")?.addEventListener("click", () => acct.signIn());
       $("#acct-out")?.addEventListener("click", () => acct.signOut());
@@ -1404,20 +1474,49 @@ async function pageCollection() {
         const remote = await acct.pull();
         const local = colGet();
         if (remote && (!local.items.length || (!justSignedIn && (remote.updated || 0) > (local.updated || 0)))) {
-          col = { name: remote.name || local.name || "", items: remote.items || [], updated: remote.updated };
+          col = { name: remote.name || local.name || "", items: remote.items || [], updated: remote.updated,
+            alias: remote.alias || local.alias || "", pub: remote.pub ?? local.pub ?? false, likes: remote.likes || [], follows: remote.follows || [], socialAt: local.socialAt };
           colSet(col, false);
         } else if (remote && justSignedIn) {          // first sign-in on this device: combine both
           const key = (x) => `${x.id}|${printCode(subOf(x.n || ""))}${x.gr ? "|" + x.gr : ""}`, m = new Map(remote.items.map((x) => [key(x), x]));
           for (const x of local.items) { const r = m.get(key(x)); m.set(key(x), r ? { ...r, qty: Math.max(r.qty, x.qty), paid: r.paid ?? x.paid } : x); }
-          col = { name: local.name || remote.name || "", items: [...m.values()] };
+          const uni = (k) => [...new Set([...(remote[k] || []), ...(local[k] || [])])];
+          col = { name: local.name || remote.name || "", items: [...m.values()], alias: local.alias || remote.alias || "", pub: local.pub ?? remote.pub ?? false,
+            likes: uni("likes"), follows: uni("follows"), socialAt: local.socialAt };
           colSet(col);
         } else { col = local; acct.push(local); }
         $("#name").value = col.name || ""; await loadChanges();
         paint(remote ? "Synced" : "Saved");
+        profilePanel();
       } else paint();
-    } catch (err) { paint(); $("#added").textContent = String(err.message || err).startsWith("Sign-in") ? err.message : "Couldn't reach your account. Your binder is still saved on this device."; }
+    } catch (err) { paint(); if (acct.signedIn()) profilePanel(); $("#added").textContent = String(err.message || err).startsWith("Sign-in") ? err.message : "Couldn't reach your account. Your binder is still saved on this device."; }
   }
   draw(); await loadChanges(); draw();
+}
+
+async function pageCollectors() {
+  const [data, me] = await Promise.all([getJSON("showcase.json").catch(() => ({ profiles: [], updated: 0 })), myPid()]);
+  const all = data.profiles || [];
+  let tab = params.get("tab") || "value", q = "";
+  if (me && all.some((p) => p.p === me)) { $("#join").textContent = "My public page →"; $("#join").href = `collection.html?p=${me}`; }
+  const draw = () => {
+    const follows = new Set(colGet().follows || []);
+    let list = all.filter((p) => !q || p.a.toLowerCase().includes(q) || (p.bn || "").toLowerCase().includes(q));
+    if (tab === "following") list = list.filter((p) => follows.has(p.p));
+    const by = { value: (a, b) => b.v - a.v, liked: (a, b) => b.l - a.l || b.v - a.v, followed: (a, b) => b.f - a.f || b.v - a.v, new: (a, b) => b.u - a.u, following: (a, b) => b.u - a.u };
+    list.sort(by[tab] || by.value);
+    $("#cnote").textContent = all.length ? `${all.length} public binder${all.length > 1 ? "s" : ""}${data.updated ? ` · updated ${new Date(data.updated).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}` : "";
+    $("#clist").innerHTML = list.length ? list.map((p) => `<a class="col-card" href="collection.html?p=${p.p}">
+        <span class="col-thumbs">${p.top.map(([id, gr]) => `<span>${imgTag(id, "", 400)}${gr ? `<i class="slab-badge">${esc(gr)}</i>` : ""}</span>`).join("")}</span>
+        <span class="col-meta"><b>@${esc(p.a)}${p.p === me ? ` <small class="muted">(you)</small>` : ""}</b>${p.bn ? `<span class="muted col-bn">${esc(p.bn)}</span>` : ""}
+          <span class="col-figs"><b>${money(p.v)}</b><span class="muted">${p.n.toLocaleString()} item${p.n > 1 ? "s" : ""}</span></span></span>
+        <span class="soc-row" data-soc="${p.p}"></span></a>`).join("")
+      : `<div class="panel empty-note" style="grid-column:1/-1">${tab === "following" ? "You're not following anyone yet. Open a binder and tap <b>Follow</b>." : all.length ? "No collectors match." : "No public binders yet. Be the first: sign in on My Collection, pick a collector name and turn on <b>Show my binder on the Collectors page</b>."}</div>`;
+    $("#clist").querySelectorAll("[data-soc]").forEach((el) => socialButtons(el, all.find((p) => p.p === el.dataset.soc), data.updated || 0));
+  };
+  tabs($("#ctab"), [["value", "Top value"], ["liked", "Most liked"], ["followed", "Most followed"], ["new", "Recently updated"], ["following", "Following"]], tab, (v) => { tab = v; draw(); });
+  $("#cfind").addEventListener("input", (e) => { q = e.target.value.trim().toLowerCase().replace(/^@/, ""); draw(); });
+  draw();
 }
 
 /* ---------- boot ---------- */
@@ -1478,7 +1577,7 @@ async function pageSearch() {
   if (!q) $("#sq").focus();
 }
 
-const pages = { search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, importer: pageImporter, collection: pageCollection };
+const pages = { search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, importer: pageImporter, collection: pageCollection, collectors: pageCollectors };
 (pages[PAGE] || (async () => {}))().catch((err) => {
   console.error(err);
   const main = $("main");

@@ -81,8 +81,9 @@ def main(argv):
     try:
         binders = fetch_binders(Shopify(shop))
     except Exception as err:  # e.g. the app can't read customers yet
-        print(f"::error title=Collectors::{str(err)[:500]}")
-        raise SystemExit(1)
+        # warn instead of failing so a missing permission doesn't send failure emails every 30 minutes
+        print(f"::warning title=Collectors::{str(err)[:400]}")
+        return
     sdir = os.path.join(data, "showcase")
     if os.path.isdir(sdir):                      # binders made private since last run disappear
         for f in os.listdir(sdir):
