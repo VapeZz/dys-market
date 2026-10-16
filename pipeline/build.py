@@ -211,7 +211,8 @@ def build(groups, products, stock, log=print):
             "bbN": products[bb_key.split(":")[0]]["n"] if bb_key else None,
             "c7": sealed_change.get(gid),
             **({"lg": g["lg"]} if g.get("lg") else {}),
-            **({"tc": top_cards(gid, keys)} if not g.get("lg") and not bb_key else {}),
+            # newer games: show the set's top cards rather than a booster box when there's no logo
+            **({"tc": top_cards(gid, keys)} if not g.get("lg") and (not bb_key or g["k"] in ("lorcana", "riftbound", "palworld")) else {}),
         })
     sets_out.sort(key=lambda s: s["pub"] or "", reverse=True)
     write("sets.json", sets_out)

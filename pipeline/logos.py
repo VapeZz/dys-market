@@ -108,6 +108,89 @@ def attach(groups, log=print):
             g["lg"] = pick["lg"]
             matched += 1
     log(f"logos: matched {matched} Pokémon sets")
+    attach_scrydex(groups, log)
+
+
+# ---- Lorcana / Riftbound set logos (images.scrydex.com) -----------------------------
+# The CDN answers every path, returning the game's own logo when it has no set logo, so each
+# guess is checked against that placeholder. Results are cached; misses are retried weekly.
+SCRYDEX = "https://images.scrydex.com/{game}/{code}-logo/logo"
+SCRYDEX_CACHE = os.path.join(config.DATA_DIR, "catalog", "scrydex-logos.json")
+KNOWN = {"The First Chapter": "TFC", "Rise of the Floodborn": "ROF", "Into the Inklands": "ITI", "Ursula's Return": "URR",
+         "Shimmering Skies": "SSK", "Azurite Sea": "AZS", "Archazia's Island": "ARI", "Reign of Jafar": "ROJ", "Fabled": "FAB"}
+SMALL = {"of", "the", "in", "a", "an", "and", "to", "on"}
+SKIP_LOGO = re.compile(r"promo|judge|prototype|bundle|sleeve|champion|worlds|organized|quest|deck|gift", re.I)
+
+
+def _get(url):
+    import hashlib
+    req = urllib.request.Request(url, headers={"User-Agent": config.USER_AGENT})
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        return hashlib.md5(resp.read()).hexdigest() if resp.headers.get("content-type", "").startswith("image/") else None
+
+
+def guesses(name, abbr):
+    words = re.findall(r"[A-Za-z]+", name.replace("'s", ""))
+    big = [w for w in words if w.lower() not in SMALL]
+    c = [abbr or "", KNOWN.get(name, "")]
+    c += ["".join(w[0] for w in words), "".join(w[0] for w in big),
+          "".join(w[0] for w in words if w.lower() not in ("the", "a", "an")), (big[0][0] + big[-1][:2]) if len(big) >= 2 else ""]
+    if len(big) == 1:
+        w = big[0].upper()
+        c += [w[:3], w[0] + "".join(ch for ch in w[1:] if ch not in "AEIOU")[:2], w[:2] + w[-1]]
+    if len(big) >= 2:
+        a, b = big[0].upper(), big[1].upper()
+        c += [a[:2] + b[0], a[0] + b[:2], a[0] + b[0] + b[-1], a[0] + a[-1] + b[0]]
+    out = []
+    for x in c:
+        x = x.upper()
+        if 2 <= len(x) <= 5 and x not in out:
+            out.append(x)
+    return out
+
+
+def attach_scrydex(groups, log=print):
+    try:
+        with open(SCRYDEX_CACHE, encoding="utf-8") as f:
+            cache = json.load(f)
+    except (OSError, ValueError):
+        cache = {}
+    now, placeholder, found = time.time(), {}, 0
+    used = {(k.split("|")[0], v["code"]): k for k, v in cache.items() if v.get("code")}   # a code belongs to one set
+    for g in groups.values():
+        game = g.get("k")
+        if game not in ("lorcana", "riftbound") or SKIP_LOGO.search(g["name"]):
+            continue
+        key = f"{game}|{g['name']}"
+        hit = cache.get(key)
+        if hit and hit.get("code"):
+            g["lg"] = SCRYDEX.format(game=game, code=hit["code"]); found += 1
+            continue
+        if hit and now - hit.get("t", 0) < 7 * 86400:
+            continue
+        try:
+            if game not in placeholder:
+                placeholder[game] = _get(SCRYDEX.format(game=game, code="ZZZQ"))
+            code = None
+            for cand in guesses(g["name"], g.get("abbr")):
+                if used.get((game, cand), key) != key or (cand in KNOWN.values() and KNOWN.get(g["name"]) != cand):
+                    continue
+                h = _get(SCRYDEX.format(game=game, code=cand))
+                if h and h != placeholder[game]:
+                    code = cand
+                    break
+        except Exception as err:  # never break the build over logos
+            log(f"logos: scrydex check failed ({err})")
+            break
+        cache[key] = {"code": code, "t": now}
+        if code:
+            used[(game, code)] = key
+        if code:
+            g["lg"] = SCRYDEX.format(game=game, code=code); found += 1
+    os.makedirs(os.path.dirname(SCRYDEX_CACHE), exist_ok=True)
+    with open(SCRYDEX_CACHE, "w", encoding="utf-8") as f:
+        json.dump(cache, f)
+    log(f"logos: {found} Lorcana/Riftbound set logos")
 
 
 def norm_keep(name):
