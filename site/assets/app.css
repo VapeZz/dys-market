@@ -441,3 +441,26 @@ tr.grp td{background:var(--surface-2);font-size:13px;padding-top:8px;padding-bot
 .row-acts .btn.icon{width:38px;height:38px}
 .row-acts .btn.icon svg{width:18px;height:18px}
 @media (max-width:560px){.row-acts{flex-direction:column;gap:4px}.row-acts .btn.icon{width:34px;height:34px}#list .btn[data-rm]{width:34px;height:34px;padding:0;justify-content:center}}
+/* install as an app */
+.install-btn{border:1px solid color-mix(in srgb,var(--accent) 60%,transparent);background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--ink);font:inherit;font-weight:700;font-size:13px;padding:8px 14px;border-radius:999px;cursor:pointer;white-space:nowrap}
+.install-btn:hover{background:color-mix(in srgb,var(--accent) 26%,transparent)}
+@media (display-mode:standalone){.shop-btn{display:none}body{padding-bottom:env(safe-area-inset-bottom)}}
+/* iPhone install steps */
+.ios-sheet{position:fixed;inset:0;z-index:200;background:rgba(5,6,12,.62);display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding:16px max(16px,env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+.ios-card{width:100%;max-width:440px;background:var(--surface);border:1px solid var(--line-strong);border-radius:20px;padding:18px;display:flex;flex-direction:column;gap:14px;box-shadow:var(--shadow)}
+.ios-head{display:flex;gap:12px;align-items:center}
+.ios-head img{border-radius:12px;flex:0 0 48px}
+.ios-head div{flex:1;display:flex;flex-direction:column;min-width:0}
+.ios-head b{font-family:var(--display);font-size:18px}
+.ios-head span{font-size:13px;color:var(--ink-3)}
+.ios-x{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:none;color:var(--ink);font-size:14px;cursor:pointer}
+.ios-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.ios-steps li{display:flex;gap:12px;align-items:flex-start;font-size:15px;line-height:1.45}
+.ios-n{flex:0 0 26px;height:26px;border-radius:50%;background:color-mix(in srgb,var(--accent) 20%,transparent);color:var(--ink);display:grid;place-items:center;font-size:13px;font-weight:700}
+.ios-ic{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:6px;background:var(--chip);vertical-align:-6px;color:var(--accent-2)}
+.ios-ic svg{width:16px;height:16px}
+.ios-ok{justify-content:center}
+.ios-arrow{margin-top:10px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#fff;font-size:12px;font-weight:700}
+.ios-arrow svg{width:26px;height:26px;animation:ios-bob 1.2s ease-in-out infinite}
+.ios-arrow::after{content:"";width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:11px solid #fff}
+@keyframes ios-bob{50%{transform:translateY(4px)}}

@@ -1341,4 +1341,36 @@ window.addEventListener("beforeinstallprompt", (e) => {
   $(".top-actions")?.prepend(b);
 });
 window.addEventListener("appinstalled", () => { installEvt = null; $("#install-app")?.remove(); });
+
+/* iPhone/iPad can't install from a button, so the button opens the steps instead */
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const standalone = window.navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
+if (isIOS && !standalone && $(".top-actions") && !$("#install-app")) {
+  const safari = !/CriOS|FxiOS|EdgiOS|OPiOS/.test(navigator.userAgent);
+  const SHARE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M6 11v9h12v-9"/></svg>`;
+  const ADD = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/></svg>`;
+  const b = document.createElement("button");
+  b.id = "install-app"; b.type = "button"; b.className = "install-btn"; b.textContent = "Install app";
+  $(".top-actions").prepend(b);
+  b.addEventListener("click", () => {
+    if ($("#ios-install")) return;
+    const s = document.createElement("div");
+    s.id = "ios-install"; s.className = "ios-sheet"; s.setAttribute("role", "dialog"); s.setAttribute("aria-modal", "true"); s.setAttribute("aria-labelledby", "ios-t");
+    s.innerHTML = `<div class="ios-card">
+        <div class="ios-head"><img src="assets/icons/icon-192.png" alt="" width="48" height="48"><div><b id="ios-t">Install DYS Market</b><span>Add it to your Home Screen in 3 taps.</span></div>
+          <button type="button" class="ios-x" aria-label="Close">✕</button></div>
+        <ol class="ios-steps">
+          <li><span class="ios-n">1</span><span>Tap the <b>Share</b> button <i class="ios-ic">${SHARE}</i> ${safari ? "in Safari's toolbar" : "next to the address bar"}${safari ? "" : ". Don't see it? Open this page in <b>Safari</b>"}.</span></li>
+          <li><span class="ios-n">2</span><span>Scroll down and tap <b>Add to Home Screen</b> <i class="ios-ic">${ADD}</i>.</span></li>
+          <li><span class="ios-n">3</span><span>Tap <b>Add</b>. DYS Market appears on your Home Screen.</span></li>
+        </ol>
+        <button type="button" class="btn primary ios-ok">Got it</button>
+      </div>${safari ? `<div class="ios-arrow" aria-hidden="true">${SHARE}<span>Share is down here</span></div>` : ""}`;
+    const close = () => { s.remove(); b.focus(); };
+    s.addEventListener("click", (e) => { if (e.target === s || e.target.closest(".ios-x, .ios-ok")) close(); });
+    document.addEventListener("keydown", function k(e) { if (e.key === "Escape") { close(); document.removeEventListener("keydown", k); } });
+    document.body.appendChild(s);
+    $(".ios-ok", s).focus();
+  });
+}
 })();
