@@ -997,7 +997,7 @@ const shrinkPhoto = (file) => new Promise((res, rej) => {
 
 /* ---------- customer accounts (Shopify Customer Account API, public client + PKCE) ---------- */
 const ACCT = {
-  clientId: "",                 // Headless channel > Customer Account API > Client ID
+  clientId: "c51d986b-2da8-4405-96a5-a0f4f97e2d75", // Headless channel > Customer Account API > Client ID
   shopId: "73346351331",
   apiVersion: "2026-01",
   redirect: "https://market.driveyourstyle.net/collection.html",
