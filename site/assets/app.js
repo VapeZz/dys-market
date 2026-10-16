@@ -1262,6 +1262,36 @@ const cleanCard = (n) => n.replace(/ \((Holofoil|Normal|Foil|Reverse Holofoil)\)
 const soldUrl = (name, gr) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(`${cleanCard(name)} ${gr === "Other slab" ? "graded" : gr}`)}&LH_Sold=1&LH_Complete=1&_sop=13`;
 const sumOwned = () => { const m = new Map(); for (const x of colGet().items) { const k = `${x.id}|${printCode(subOf(x.n || ""))}`; m.set(k, (m.get(k) || 0) + x.qty); } return m; };
 
+/* full-screen card viewer for binders: swipe/arrow through cards */
+function cardView(list, start, opts = {}) {
+  let i = start;
+  const box = document.createElement("div");
+  box.className = "cview"; box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true");
+  const paint = () => {
+    const c = list[i], set = opts.setName ? opts.setName(c.g) : "";
+    box.innerHTML = `<div class="cview-in"><button type="button" class="cview-x" aria-label="Close">✕</button>
+      <div class="cview-img${c.t === "s" ? " sealed" : ""}">${imgTag(c.id, "", 1000)}${c.gr ? `<span class="slab-badge">${esc(c.gr)}</span>` : ""}</div>
+      <div class="cview-meta"><b>${esc(c.name)}</b><span class="muted">${esc(set)}${c.qty > 1 ? ` · ×${c.qty}` : ""}</span>
+        <span class="cview-val">${money(c.mkt)}<small class="muted">${c.gr ? (c.est ? " raw price" : " owner's value") : " market"}</small></span>
+        <span class="cview-links"><a href="${prodUrl(c.id, c.g)}">Price history →</a>${c.gr ? `<a href="${esc(soldUrl(c.name, c.gr))}" target="_blank" rel="noopener">eBay sold ${esc(c.gr)} →</a>` : ""}</span></div>
+      ${list.length > 1 ? `<button type="button" class="cview-nav prev" aria-label="Previous">‹</button><button type="button" class="cview-nav next" aria-label="Next">›</button><span class="cview-count">${i + 1} / ${list.length}</span>` : ""}</div>`;
+    const ph = opts.photo && opts.photo(c); if (ph) ph.then((u) => { if (u) $(".cview-img img", box).src = u; });
+  };
+  const go = (d) => { i = (i + d + list.length) % list.length; paint(); };
+  const close = () => { box.remove(); document.removeEventListener("keydown", key); document.body.style.overflow = ""; };
+  const key = (e) => { if (e.key === "Escape") close(); else if (e.key === "ArrowRight") go(1); else if (e.key === "ArrowLeft") go(-1); };
+  box.addEventListener("click", (e) => {
+    if (e.target === box || e.target.closest(".cview-x")) close();
+    else if (e.target.closest(".prev")) go(-1); else if (e.target.closest(".next")) go(1);
+  });
+  let x0 = null;
+  box.addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+  box.addEventListener("touchend", (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1); x0 = null; });
+  document.addEventListener("keydown", key);
+  document.body.style.overflow = "hidden";
+  paint(); document.body.appendChild(box);
+}
+
 async function pageCollection() {
   const [meta, rows] = await Promise.all([getJSON("meta.json"), getJSON("search.json")]);
   const byKey = new Map(rows.map((r) => [`${r[0]}|${printCode(subOf(r[1]))}`, r]));
@@ -1288,6 +1318,8 @@ async function pageCollection() {
   const rawKey = (it) => `${it.id}|${it.code ?? printCode(subOf(it.n || ""))}`;
   const changes = {}, series = {}, setCards = {};
   let dates = null, cq = "", csort = "value", grouped = false, range = "90";
+  let view = shared ? "binder" : (() => { try { return localStorage.getItem("dys-cview") || "list"; } catch { return "list"; } })();
+  let shownNow = [];
   const loadChanges = async () => {
     const gids = [...new Set(col.items.map((i) => i.g))].filter((g) => !setCards[g]).slice(0, 60);
     await Promise.all(gids.map((g) => getJSON(`set/${g}.json`).then((d) => {
@@ -1355,6 +1387,17 @@ async function pageCollection() {
         <td class="num hide-sm">${chg(bestCh(i.ch))}</td>
         ${shared ? "" : `<td class="num"><div class="row-acts"><button class="btn icon" type="button" data-unph="${esc(keyOf(i))}" aria-label="Use the official image for ${esc(i.name)}" title="Use official image" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button><button class="btn" type="button" data-rm="${esc(keyOf(i))}" aria-label="Remove ${esc(i.name)}">✕</button></div></td>`}</tr>`).join("")}
       </tbody></table></div>` : `<div class="panel empty-note">${shared ? "This shared collection is empty." : "Your collection is empty. Search above to add your first card or sealed product."}</div>`;
+    shownNow = list;
+    if (view === "binder" && list.length) {
+      let lastSet = null;
+      $("#list").innerHTML = `<div class="binder">${list.map((i, ix) => {
+        const head = grouped && i.g !== lastSet ? (lastSet = i.g, `<h3 class="binder-set">${esc(setName(i.g))}</h3>`) : "";
+        return `${head}<button type="button" class="bslot${i.t === "s" ? " sealed" : ""}${i.gr ? " slab" : ""}" data-bi="${ix}" aria-label="${esc(i.name)}">
+          <span class="bimg"${shared ? "" : ` data-ph="${esc(keyOf(i))}"`}>${imgTag(i.id, "", 1000)}</span>
+          ${i.gr ? `<span class="slab-badge">${esc(i.gr)}</span>` : ""}${i.qty > 1 ? `<span class="bqty">×${i.qty}</span>` : ""}
+          <span class="bval">${money(i.mkt == null ? null : i.mkt * i.qty)}</span></button>`; }).join("")}</div>`;
+      $("#list").querySelectorAll("[data-bi]").forEach((b) => b.addEventListener("click", () => cardView(shownNow, +b.dataset.bi, { setName, photo: shared ? null : (c) => photos.get(keyOf(c)).then((bl) => bl ? URL.createObjectURL(bl) : null) })));
+    }
     plot();
     if (shared) return;
     const find = (k) => col.items.find((x) => keyOf(x) === k);
@@ -1395,6 +1438,7 @@ async function pageCollection() {
   $("#cq").addEventListener("input", (e) => { cq = e.target.value.trim().toLowerCase(); draw(); });
   $("#csort").addEventListener("change", (e) => { csort = e.target.value; draw(); });
   $("#cgroup").addEventListener("change", (e) => { grouped = e.target.checked; draw(); });
+  tabs($("#cview"), [["binder", "Binder"], ["list", "List"]], view, (v) => { view = v; if (!shared) { try { localStorage.setItem("dys-cview", v); } catch {} } draw(); });
   tabs($("#crange"), [["30", "1M"], ["90", "3M"], ["365", "1Y"]], range, (r) => { range = r; plot(); });
   if (!shared) {
     const input = $("#add-q"), out = $("#add-results");
