@@ -148,8 +148,11 @@ def main(argv):
             pg.goto("file://" + tmp, wait_until="networkidle")
             pg.evaluate("document.fonts.ready")
             pg.screenshot(path=os.path.join(out, f"slide-{i}.jpg"), type="jpeg", quality=92)
-        b.close()
         os.remove(tmp)
+        from tiktok import full_screen
+        tt = full_screen(pg, [os.path.join(out, f"slide-{i}.jpg") for i in range(1, len(slides) + 1)], out,
+                         foot="Release dates & resale · market.driveyourstyle.net")
+        b.close()
     lines = [f"👟 Sneaker drops {span}", ""]
     for r in sorted(week, key=lambda r: (r["d"], -r["h"])):
         if r["h"] >= 2 or r in feat:
@@ -160,7 +163,12 @@ def main(argv):
               "", HASHTAGS]
     caption = "\n".join(lines)
     open(os.path.join(out, "caption.txt"), "w").write(caption)
-    post = {"date": today.isoformat(), "span": span, "caption": caption,
+    hot = next((r for r in feat if r["h"] == 3), feat[0])
+    caption_tt = (f"Sneaker drops this week 👟 {hot['n']} {day(hot['d'], '%a %-m/%-d')} at {usd(hot.get('r'))}\n\n"
+                  "Which pair are you copping? 👇 Full calendar at market.driveyourstyle.net\n\n"
+                  "#sneakers #sneakerreleases #jordan #nike #kicks")
+    post = {"date": today.isoformat(), "span": span, "caption": caption, "caption_tiktok": caption_tt,
+            "slides_tiktok": [f"{SITE}/social-sneakers/{today.isoformat()}/tt-{i}.jpg" for i in range(1, len(tt) + 1)],
             "drops": [{k: r.get(k) for k in ("d", "n", "c", "r", "h")} for r in feat],
             "slides": [f"{SITE}/social-sneakers/{today.isoformat()}/slide-{i}.jpg" for i in range(1, len(slides) + 1)]}
     json.dump(post, open(os.path.join(out, "post.json"), "w"), indent=1, ensure_ascii=False)

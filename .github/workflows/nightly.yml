@@ -110,10 +110,21 @@ jobs:
           if [ $rc -ne 0 ]; then echo "::error title=Sneaker carousel::$(tail -c 600 /tmp/snks.log | tr '\n' ' ')"; exit 1; fi
           echo "::notice title=Sneaker carousel::$(tail -n 1 /tmp/snks.log)"
 
+      - name: Card of the Day (TikTok, daily)
+        continue-on-error: true
+        run: |
+          set +e
+          python -c "import playwright" 2>/dev/null || { pip install -q playwright==1.56.0 && python -m playwright install --with-deps chromium; } > /tmp/daily.log 2>&1
+          python tools/daily_card.py site/data data/social-daily --date "$(date -u +%F)" > /tmp/daily.log 2>&1; rc=$?
+          cat /tmp/daily.log
+          if [ $rc -ne 0 ]; then echo "::error title=Card of the Day::$(tail -c 600 /tmp/daily.log | tr '\n' ' ')"; exit 1; fi
+          echo "::notice title=Card of the Day::$(tail -n 1 /tmp/daily.log)"
+
       - name: Copy social images into the site
         run: |
           if [ -d data/social ]; then mkdir -p site/social && cp -r data/social/. site/social/; fi
           if [ -d data/social-sneakers ]; then mkdir -p site/social-sneakers && cp -r data/social-sneakers/. site/social-sneakers/; fi
+          if [ -d data/social-daily ]; then mkdir -p site/social-daily && cp -r data/social-daily/. site/social-daily/; fi
 
       - name: Sync Shopify prices to market
         continue-on-error: true

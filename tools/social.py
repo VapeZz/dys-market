@@ -41,7 +41,7 @@ def clean_name(n):
     return n.replace(" (Reverse Holofoil)", " (Reverse Holo)")
 
 
-def pick(site_data, today):
+def pick(site_data, today, limit=5):
     """Top 5 card risers from sets released in the last 3 years (priced $15+), max 2 per set."""
     meta = json.load(open(os.path.join(site_data, "meta.json")))
     recent = (today - timedelta(days=3 * 365)).isoformat()
@@ -67,7 +67,7 @@ def pick(site_data, today):
     def take(limit_pokemon, limit_other):
         quota = {"pokemon": limit_pokemon, "other": limit_other}
         for pct, s, i, old in rows:
-            if len(out) == 5:
+            if len(out) == limit:
                 return
             bucket = "pokemon" if s["k"].startswith("pokemon") else "other"
             if i["id"] in used or per_set.get(s["id"], 0) >= 2 or quota[bucket] <= 0:
@@ -76,7 +76,7 @@ def pick(site_data, today):
             quota[bucket] -= 1
             used.add(i["id"])
             out.append({"id": i["id"], "name": clean_name(i["n"]), "set": short_set(s["n"]), "gid": s["id"], "game": s["k"], "now": i["p"], "old": old, "pct": pct})
-    take(5, 0)   # Pokémon only: TCGplayer's One Piece photos carry a "SAMPLE" watermark
+    take(limit, 0)   # Pokémon only: TCGplayer's One Piece photos carry a "SAMPLE" watermark
     out.sort(key=lambda c: -c["pct"])
     since = meta.get("anchors", {}).get("7") if win == "7" else meta.get("first")
     return out, ("7" if win == "7" else "all"), since
@@ -175,8 +175,10 @@ def main(argv):
             pg.goto("file://" + tmp, wait_until="networkidle")
             pg.evaluate("document.fonts.ready")
             pg.screenshot(path=os.path.join(out, f"slide-{i}.jpg"), type="jpeg", quality=92)
-        b.close()
         os.remove(tmp)
+        from tiktok import full_screen
+        tt = full_screen(pg, [os.path.join(out, f"slide-{i}.jpg") for i in range(1, len(slides) + 1)], out)
+        b.close()
     lines = [f"📈 Trending cards {span}", ""]
     lines += [f"{i}. {c['name']} ({c['set']}): {money(c['now'])}, up {c['pct']:.0f}%" for i, c in enumerate(cards, 1)]
     lines += ["", "Which one are you chasing? 👇", "",
@@ -184,8 +186,13 @@ def main(argv):
               "", HASHTAGS]
     caption = "\n".join(lines)
     open(os.path.join(out, "caption.txt"), "w").write(caption)
-    post = {"date": today.isoformat(), "span": span, "caption": caption, "cards": cards,
-            "slides": [f"{SITE}/social/{today.isoformat()}/slide-{i}.jpg" for i in range(1, len(slides) + 1)]}
+    top = cards[0]
+    caption_tt = (f"These Pokémon cards jumped {period} 📈 #1 is up {top['pct']:.0f}%\n\n"
+                  "Which one do you have? 👇 Free prices at market.driveyourstyle.net (link in bio)\n\n"
+                  "#pokemon #pokemoncards #pokemontcg #cardcollecting #tcg")
+    post = {"date": today.isoformat(), "span": span, "caption": caption, "caption_tiktok": caption_tt, "cards": cards,
+            "slides": [f"{SITE}/social/{today.isoformat()}/slide-{i}.jpg" for i in range(1, len(slides) + 1)],
+            "slides_tiktok": [f"{SITE}/social/{today.isoformat()}/tt-{i}.jpg" for i in range(1, len(tt) + 1)]}
     json.dump(post, open(os.path.join(out, "post.json"), "w"), indent=1, ensure_ascii=False)
     json.dump(post, open(os.path.join(out_root, "latest.json"), "w"), indent=1, ensure_ascii=False)
     # keep the last 8 weeks
