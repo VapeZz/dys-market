@@ -170,7 +170,7 @@ def main(argv):
         pg = b.new_page(viewport={"width": 1080, "height": 1350})
         if offline:  # local testing without network: stand-in card images
             pg.route(re.compile(r"tcgplayer-cdn"), lambda r: r.fulfill(path=os.environ["FAKE_CARD"], content_type="image/jpeg"))
-        tmp = os.path.join(out, "_slide.html")
+        tmp = os.path.abspath(os.path.join(out, "_slide.html"))
         for i, body in enumerate(slides, 1):
             open(tmp, "w", encoding="utf-8").write(BASE % (FONT_CSS, body))
             pg.goto("file://" + tmp, wait_until="networkidle")
