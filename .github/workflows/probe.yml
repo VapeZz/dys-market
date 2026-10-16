@@ -1,28 +1,17 @@
 name: probe
 on: workflow_dispatch
+permissions:
+  contents: write
 jobs:
   p:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          python3 - <<'PY'
-          import urllib.request, itertools
-          def ok(u):
-              try:
-                  r = urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"}), timeout=15)
-                  return r.headers.get("content-type"), len(r.read())
-              except Exception as e:
-                  return None, str(getattr(e, "code", e))
-          print("::notice::example", ok("https://images.scrydex.com/lorcana/ROJ-logo/logo"))
-          L = {"The First Chapter": ["TFC","1"], "Rise of the Floodborn": ["ROF","RFB","2"], "Into the Inklands": ["ITI","3"], "Ursula's Return": ["URR","URS","UR","4"],
-               "Shimmering Skies": ["SSK","SS","5"], "Azurite Sea": ["AZS","AS","6"], "Archazia's Island": ["ARI","AI","7"], "Reign of Jafar": ["ROJ","8"], "Fabled": ["FAB","9"],
-               "Whispers in the Well": ["WIW","WITW","WTW","10"], "Winterspell": ["WSP","WIN","WNS","11"], "Wilds Unknown": ["WDU","WUN","WU","12"], "Attack of the Vine": ["AOV","ATV","13"],
-               "Hyperia City": ["HYC","HPC","HYP","14"], "Into the Inkdark": ["ITD","15"]}
-          R = {"Origins": ["OGN","ORI"], "Spiritforged": ["SFD","SPF"], "Unleashed": ["UNL"], "Vendetta": ["VEN"], "Radiance": ["RAD"], "Proving Grounds": ["OGS"]}
-          for game, sets in (("lorcana", L), ("riftbound", R), ("palworld", {"BP01": ["BP01","bp01"], "BP02": ["BP02"]})):
-              out = []
-              for n, codes in sets.items():
-                  hit = [c for c in codes if ok(f"https://images.scrydex.com/{game}/{c}-logo/logo")[0]]
-                  out.append(f"{n}={hit[0] if hit else '-'}")
-              print(f"::notice::{game}: " + "; ".join(out))
-          PY
+          mkdir out && cd out
+          for p in lorcana/ZZQ lorcana/TFC lorcana/HYC lorcana/WDU riftbound/OGN riftbound/RAD palworld/BP01 palworld/BP02 palworld/ZZQ; do
+            f=$(echo $p | tr / _).png
+            code=$(curl -s -o $f -w "%{http_code} %{content_type} %{size_download}" -A Mozilla/5.0 "https://images.scrydex.com/$p-logo/logo")
+            echo "::notice::$p $code $(md5sum $f | cut -c1-8)"
+          done
+          git init -q -b probe && git config user.name b && git config user.email b@x && git add -A && git commit -qm p
+          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" probe
