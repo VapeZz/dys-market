@@ -79,6 +79,12 @@ def main(argv):
         history = json.load(open(hist_path))
     except (OSError, ValueError):
         history = {}
+    done = os.path.join(out_root, today.isoformat(), "post.json")
+    if os.path.exists(done) and "--force" not in argv:   # one card per day, even if the site is rebuilt again
+        post = json.load(open(done))
+        json.dump(post, open(os.path.join(out_root, "latest.json"), "w"), indent=1, ensure_ascii=False)
+        print(f"daily card: already made for {today} ({post['card']['name']})")
+        return
     recent = {int(k) for k, d in history.items() if (today - date.fromisoformat(d)).days < 21}
     cards, win, _ = pick(site_data, today, limit=40)
     sideways = re.compile(r"\bBREAK\b|\bLEGEND\b|jumbo|oversize", re.I)   # landscape cards don't fit the portrait slides
