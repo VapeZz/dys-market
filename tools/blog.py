@@ -87,8 +87,10 @@ def movers(site_data, name, tier, n=6, sets=None, modern_after=None):
 
 
 def card_grid(cards):
+    if len(cards) > 4:
+        cards = cards[:len(cards) // 4 * 4]   # full rows only (4 across on desktop, 2 on phones)
     return '<div class="rp-grid">' + "".join(
-        f'<a class="rp-card" href="{prod(c["id"], c["gid"])}"><img src="{img(c["id"], 400)}" alt="{esc(c["name"])}" loading="lazy" width="200" height="280">'
+        f'<a class="rp-card" href="{prod(c["id"], c["gid"])}"><img src="{img(c["id"], 1000)}" alt="{esc(c["name"])}" loading="lazy" width="200" height="280" onerror="window.dysImg&&dysImg(this)">'
         f'<span class="rp-n">{esc(c["name"])}</span><span class="rp-s">{esc(c["set"])}</span>'
         f'<span class="rp-p">{money(c["now"])} <b class="chg {"up" if c["pct"] > 0 else "down"}">{"▲" if c["pct"] > 0 else "▼"} {abs(c["pct"]):.0f}%</b></span>'
         f'<span class="rp-o">was {money(c["old"])}</span></a>' for c in cards) + "</div>"
@@ -112,7 +114,7 @@ def build_post(site, today):
     start = today - timedelta(days=6)
     span = f"{start.strftime('%b %-d')}–{today.strftime('%b %-d, %Y')}"
     up, win, _ = pick(sd, today, limit=8)
-    down = fallers(sd, today)
+    down = fallers(sd, today, limit=8)
     modern = (today - timedelta(days=3 * 365)).isoformat()
     s_up, s_down = movers(sd, "sealed-pokemon", "20", 6, sets, modern)
     v_up, v_down = movers(sd, "cards-pokemon", "100", 5)
