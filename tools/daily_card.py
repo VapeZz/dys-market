@@ -47,18 +47,24 @@ def pick_game(site_data, today, game, limit=40):
         except (OSError, ValueError):
             continue
         for i in items:
-            if i["t"] == "c" and (i.get("p") or 0) >= 500 and i.get("ch") and not SKIP.search(i["n"]):
-                has7 = has7 or i["ch"].get("7") is not None
+            if i["t"] == "c" and (i.get("p") or 0) >= 500 and not SKIP.search(i["n"]):
+                has7 = has7 or (i.get("ch") or {}).get("7") is not None
                 rows.append((st, i))
     win = "7" if has7 else "a"
     out = []
     for st, i in rows:
-        pct = i["ch"].get(win)
+        pct = (i.get("ch") or {}).get(win)
         if pct is None or not (3 <= pct <= 150):
             continue
         out.append({"id": i["id"], "name": clean_name(i["n"]), "set": short_set(st["n"]), "gid": st["id"], "game": game,
                     "now": i["p"], "old": round(i["p"] / (1 + pct / 100)), "pct": pct})
     out.sort(key=lambda c: -c["pct"])
+    if not out:   # no price moves yet (new game / short history): feature the newest set's chase cards
+        newest = sorted(sets, key=lambda st: st.get("pub") or "", reverse=True)
+        for st in newest[:3]:
+            for st2, i in sorted((r for r in rows if r[0]["id"] == st["id"]), key=lambda r: -r[1]["p"])[:5]:
+                out.append({"id": i["id"], "name": clean_name(i["n"]), "set": short_set(st2["n"]), "gid": st2["id"], "game": game,
+                            "now": i["p"], "old": None, "pct": None})
     return out[:limit], win
 B = BASE.replace("height:1350px", "height:1920px")
 
@@ -101,7 +107,7 @@ def slides(c, period, vals, game="pokemon"):
     hook = f"""<div class="slide" style="height:1920px;padding:170px 80px 400px;align-items:center;text-align:center">
 <img src="file://{LOGO}" style="height:100px">
 <div class="tag" style="margin-top:50px">{esc(label)} card of the day</div>
-<div style="margin-top:44px;font-family:'Barlow Condensed';font-weight:800;font-size:120px;line-height:.95;text-transform:uppercase">This card is<br><span style="color:#3ee08f">up {c['pct']:.0f}%</span><br>{esc(period)}</div>
+<div style="margin-top:44px;font-family:'Barlow Condensed';font-weight:800;font-size:120px;line-height:.95;text-transform:uppercase">{f"This card is<br><span style='color:#3ee08f'>up {c['pct']:.0f}%</span><br>{esc(period)}" if c.get("pct") is not None else f"Chase card<br><span class='holo'>of the set</span>"}</div>
 {art_hook}
 <div style="margin-top:auto;font-size:38px;color:#bdb9b2">Swipe for the price →</div></div>"""
     price = f"""<div class="slide" style="height:1920px;padding:170px 80px 400px;align-items:center;text-align:center">
@@ -110,7 +116,7 @@ def slides(c, period, vals, game="pokemon"):
 <div style="margin-top:12px;font-size:36px;color:#bdb9b2">{esc(c['set'])}</div>
 <div style="margin-top:40px;display:flex;gap:60px;align-items:flex-end;justify-content:center">
  <div><div style="font-size:32px;color:#bdb9b2">Market price</div><div style="font-family:'Barlow Condensed';font-weight:800;font-size:130px;line-height:1">{money(c['now'])}</div></div>
- <div><div style="font-family:'Barlow Condensed';font-weight:800;font-size:96px;line-height:1;color:#3ee08f">▲ {c['pct']:.0f}%</div><div style="font-size:32px;color:#bdb9b2">was {money(c['old'])}</div></div></div>
+ {f"<div><div style=\"font-family:'Barlow Condensed';font-weight:800;font-size:96px;line-height:1;color:#3ee08f\">▲ {c['pct']:.0f}%</div><div style=\"font-size:32px;color:#bdb9b2\">was {money(c['old'])}</div></div>" if c.get("pct") is not None else ""}</div>
 <div style="margin-top:30px">{spark_svg(vals, 900, 170)}</div></div>"""
     cta = f"""<div class="slide" style="height:1920px;justify-content:center;align-items:center;text-align:center;padding:170px 80px 400px">
 <img src="file://{LOGO}" style="height:200px">
@@ -157,7 +163,7 @@ def main(argv):
             out = os.path.join(out_root, "samples", game)
             os.makedirs(out, exist_ok=True)
             render(site_data, cards[0], "this week" if win == "7" else "lately", game, out, "--offline" in argv)
-            print(f"sample {game}: {cards[0]['name']} (+{cards[0]['pct']:.0f}%)")
+            print(f"sample {game}: {cards[0]['name']} ({'+%.0f%%' % cards[0]['pct'] if cards[0]['pct'] is not None else 'chase'})")
         return
     hist_path = os.path.join(out_root, "history.json")
     try:
@@ -192,13 +198,15 @@ def main(argv):
     os.makedirs(out, exist_ok=True)
     video = render(site_data, c, period, game, out, "--offline" in argv)
     short = re.sub(r"\s*-\s*\S+/\S+$", "", c["name"])
-    caption = (f"{short} is up {c['pct']:.0f}% {period} 📈 now {money(c['now'])}\n\n"
+    hook = (f"{short} is up {c['pct']:.0f}% {period} 📈 now {money(c['now'])}" if c["pct"] is not None
+            else f"{short} is the chase card of {c['set']} 🔥 worth {money(c['now'])}")
+    caption = (f"{hook}\n\n"
                f"Do you have one? 👇 Check your {label} cards free at market.driveyourstyle.net (link in bio)\n\n{tags}")
     first_tag = tags.split()[0]
     post = {"date": today.isoformat(), "game": game, "card": c, "caption": caption,
             "slides": [f"{web}/{today.isoformat()}/slide-{n}.jpg" for n in range(1, 4)],
             "short": f"{web}/{today.isoformat()}/short.mp4" if video else None,
-            "short_title": f"{short} is up {c['pct']:.0f}% {period} 📈 {first_tag} #shorts"[:100],
+            "short_title": f"{hook} {first_tag} #shorts"[:100],
             "title": f"{label} card of the day 📈"}
     json.dump(post, open(os.path.join(out, "post.json"), "w"), indent=1, ensure_ascii=False)
     json.dump(post, open(os.path.join(out_root, "latest.json"), "w"), indent=1, ensure_ascii=False)
@@ -209,7 +217,7 @@ def main(argv):
         for f in os.listdir(os.path.join(out_root, d)):
             os.remove(os.path.join(out_root, d, f))
         os.rmdir(os.path.join(out_root, d))
-    print(f"daily card ({game}): {c['name']} (+{c['pct']:.0f}%) -> {out}")
+    print(f"daily card ({game}): {c['name']} ({hook}) -> {out}")
 
 
 if __name__ == "__main__":
