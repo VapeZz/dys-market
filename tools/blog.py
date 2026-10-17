@@ -21,6 +21,7 @@ SITE = "https://market.driveyourstyle.net"
 STORE = "https://driveyourstyle.net"
 GAME = {"pokemon": "Pokémon", "pokemon-jp": "Pokémon Japan", "one-piece": "One Piece",
         "lorcana": "Lorcana", "riftbound": "Riftbound", "palworld": "Palworld"}
+SIDEWAYS = re.compile(r"\bBREAK\b|\bLEGEND\b|jumbo|oversize", re.I)   # landscape cards look half-size in the grid
 VERDICT = {"cop": "Cop", "wear": "Wear", "wait": "Wait"}
 
 
@@ -113,8 +114,9 @@ def build_post(site, today):
     sets = {s["id"]: s for s in sets_list}
     start = today - timedelta(days=6)
     span = f"{start.strftime('%b %-d')}–{today.strftime('%b %-d, %Y')}"
-    up, win, _ = pick(sd, today, limit=8)
-    down = fallers(sd, today, limit=8)
+    up, win, _ = pick(sd, today, limit=12)
+    up = [c for c in up if not SIDEWAYS.search(c["name"])][:8]
+    down = [c for c in fallers(sd, today, limit=12) if not SIDEWAYS.search(c["name"])][:8]
     modern = (today - timedelta(days=3 * 365)).isoformat()
     s_up, s_down = movers(sd, "sealed-pokemon", "20", 6, sets, modern)
     v_up, v_down = movers(sd, "cards-pokemon", "100", 5)
