@@ -1,0 +1,13 @@
+name: Probe DNS
+on: workflow_dispatch
+jobs:
+  dns:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for ns in 8.8.8.8 1.1.1.1; do
+            dig +short TXT driveyourstyle.net @$ns | while read -r l; do echo "::notice title=TXT@$ns::$l"; done
+          done
+          echo "::notice title=NS::$(dig +short NS driveyourstyle.net | tr '\n' ' ')"
+          AUTH=$(dig +short NS driveyourstyle.net | head -1)
+          dig +short TXT driveyourstyle.net @$AUTH | while read -r l; do echo "::notice title=TXT@auth::$l"; done
