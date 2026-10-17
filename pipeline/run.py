@@ -23,7 +23,16 @@ def main(argv):
     if "--rebuild" not in argv:
         day = tcgcsv.source_date()
         if snapshots.exists(day):
-            print(f"prices: snapshot for {day} already saved; skipping download")
+            snap = snapshots.load(day)
+            have = {products.get(k.split(":", 1)[0], {}).get("k") for k in snap}
+            missing = {gid: g for gid, g in groups.items() if g.get("k") not in have}
+            if missing:   # a game was just added: fetch its prices for today too
+                extra = tcgcsv.fetch_prices(missing)
+                snap.update({k: v for k, v in extra.items() if k not in snap})
+                snapshots.save(day, snap)
+                print(f"prices: added {len(extra)} prices for newly added games to {day}")
+            else:
+                print(f"prices: snapshot for {day} already saved; skipping download")
         else:
             snapshots.save(day, tcgcsv.fetch_prices(groups))
             lows = getattr(tcgcsv.fetch_prices, "lows", None)
