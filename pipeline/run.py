@@ -3,6 +3,8 @@
     python pipeline/run.py            # normal nightly run
     python pipeline/run.py --rebuild  # just rebuild site data from saved snapshots
 """
+import json
+import os
 import sys
 
 import build
@@ -24,6 +26,11 @@ def main(argv):
             print(f"prices: snapshot for {day} already saved; skipping download")
         else:
             snapshots.save(day, tcgcsv.fetch_prices(groups))
+            lows = getattr(tcgcsv.fetch_prices, "lows", None)
+            if lows:
+                os.makedirs(os.path.join(config.DATA_DIR, "lows"), exist_ok=True)
+                with open(os.path.join(config.DATA_DIR, "lows", "latest.json"), "w", encoding="utf-8") as f:
+                    json.dump({"day": day, "lows": lows}, f, separators=(",", ":"))
         removed = snapshots.prune(day)
         if removed:
             print(f"snapshots: pruned {removed} old files")

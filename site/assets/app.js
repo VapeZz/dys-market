@@ -1838,7 +1838,40 @@ async function pageSell() {
   draw();
 }
 
-const pages = { search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, demand: pageDemand, importer: pageImporter, collection: pageCollection, collectors: pageCollectors, sell: pageSell };
+async function pageBuyer() {
+  const [b, dem] = await Promise.all([getJSON("buyer.json").catch(() => null), getJSON("demand.json").catch(() => null)]);
+  if (!b) { $("#bpanel").innerHTML = `<p class="panel empty-note">The buyer data builds with tonight's market update.</p>`; return; }
+  const tcg = (id) => `https://www.tcgplayer.com/product/${id}`;
+  const sold = (n) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(n.replace(/ \((Holofoil|Reverse Holofoil|Normal)\)$/, ""))}&LH_Sold=1&LH_Complete=1&_sop=13`;
+  const line = (r, metric, links) => `<tr><td class="title"><a href="${prodUrl(r.id, r.g)}">${imgTag(r.id, "")}<span>${esc(r.n)}<span class="muted" style="display:block;font-size:12px;font-weight:400">${esc(r.sn || "")}${r.t === "s" ? " · sealed" : ""}</span></span></a><span class="b-links">${links}</span></td>
+    <td class="num">${money(r.p)}</td><td class="num">${metric}</td></tr>`;
+  const table = (head, rows) => rows.length ? `<div class="table-wrap"><table class="b-table"><thead><tr><th>Item</th><th class="num">Market</th><th class="num">${head}</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>` : `<p class="panel empty-note">Nothing here right now.</p>`;
+  const L = (u, t) => `<a href="${u}" target="_blank" rel="noopener">${t}</a>`;
+  const want = (dem && dem.items) || [];
+  const tabs = {
+    under: ["Listed under market", `Lowest TCGplayer listing at least 20% under market (cards $10+, sealed $20+). Check the listing's condition before buying.${b.lows_day ? ` Listings as of ${fmtDate(b.lows_day)}.` : ""}`,
+      () => table("Lowest", b.under.map((r) => line(r, `<b>${money(r.lo)}</b><span class="chg up" style="display:block">−${r.off}%</span><span class="muted" style="display:block;font-size:12px">save ${money(r.save)}</span>`, L(tcg(r.id), "TCGplayer") + L(sold(r.n), "eBay sold"))))],
+    dips: ["Dips", "Items trading 12%+ under their recent high. Good buys if the drop is just a cooldown, not a reprint.",
+      () => table("Recent high", b.dips.map((r) => line(r, `${money(r.hi)}<span class="chg down" style="display:block">▼ ${r.drop}%</span>`, L(tcg(r.id), "TCGplayer") + L(sold(r.n), "eBay sold"))))],
+    want: ["Want lists", `What collectors on the site want, how many, and the most they said they'd pay. Stock these. ${dem ? `${dem.wanters} collector${dem.wanters === 1 ? "" : "s"} with want lists.` : ""}`,
+      () => table("Wanted by", want.map((r) => line({ ...r, p: r.m, sn: "" }, `<b>♥ ${r.c}</b>${r.mx ? `<span class="muted" style="display:block;font-size:12px">pays up to ${money(r.mx)}</span>` : ""}${r.st ? `<span class="badge" style="display:block;margin-top:4px">In stock</span>` : ""}`, L(tcg(r.id), "TCGplayer"))))],
+    store: ["My store", "Your Shopify price vs today's market. Under market = raise it or it sells too cheap. 15%+ over = it may sit. Rising = items you hold that are climbing.",
+      () => `<h3 class="b-h">Price check</h3>` + table("Your price", b.fix.map((r) => line(r, `<b>${money(r.dys)}</b><span class="chg ${r.gap < 0 ? "down" : "up"}" style="display:block">${r.gap > 0 ? "+" : ""}${r.gap}%</span>`, L(r.u, "Store") + L(tcg(r.id), "TCGplayer"))))
+        + `<h3 class="b-h">Rising, you hold these</h3>` + table("Change", b.rising.map((r) => line(r, `<span class="chg up">▲ ${r.ch.toFixed(1)}%</span><span class="muted" style="display:block;font-size:12px">yours ${money(r.dys)}</span>`, L(r.u, "Store"))))],
+  };
+  const counts = { under: b.under.length, dips: b.dips.length, want: want.length, store: b.fix.length + b.rising.length };
+  let cur = new URLSearchParams(location.search).get("tab") || "under";
+  const draw = () => {
+    $("#btabs").innerHTML = Object.entries(tabs).map(([k, [t]]) => `<button type="button" class="chip" aria-pressed="${k === cur}" data-t="${k}">${t} <b>${counts[k]}</b></button>`).join("");
+    $("#bnote").textContent = tabs[cur][1];
+    $("#bpanel").innerHTML = tabs[cur][2]();
+    $("#btabs").querySelectorAll("[data-t]").forEach((x) => x.addEventListener("click", () => { cur = x.dataset.t; history.replaceState(null, "", `?tab=${cur}`); draw(); }));
+  };
+  $("#bupd").textContent = `Updated ${fmtDate(b.updated)}`;
+  draw();
+}
+
+const pages = { search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, demand: pageDemand, importer: pageImporter, collection: pageCollection, collectors: pageCollectors, sell: pageSell, buyer: pageBuyer };
 (pages[PAGE] || (async () => {}))().catch((err) => {
   console.error(err);
   const main = $("main");

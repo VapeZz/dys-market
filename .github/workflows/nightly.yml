@@ -83,6 +83,12 @@ jobs:
           python pipeline/showcase.py site 2>&1 | tee /tmp/col.log
           echo "::notice title=Collectors::$(tail -n 1 /tmp/col.log)"
 
+      - name: Buyer dashboard (owner only)
+        continue-on-error: true
+        run: |
+          python pipeline/buyer.py 2>&1 | tee /tmp/buyer.log
+          echo "::notice title=Buyer::$(tail -n 1 /tmp/buyer.log)"
+
       - name: Sneaker release photos
         continue-on-error: true
         run: |

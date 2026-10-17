@@ -290,6 +290,14 @@ PAGES = {
   </form>
   <p class="muted" style="font-size:13px;margin-top:18px">Prefer to consign high-end items instead? <a href="https://driveyourstyle.net/pages/sell-with-us">Consign with us</a> and keep up to 85% of the sale.</p>
 </section></div>'''),
+"buyer": ("Buyer dashboard · Drive Your Style", "Owner's buyer dashboard.", '''
+<div class="wrap"><section class="block">
+  <div class="block-head"><div><span class="eyebrow"><b>●</b> Owner only · unlisted</span><h1 style="font-size:34px;margin-top:8px">Buyer dashboard</h1>
+    <p class="muted" id="bupd"></p></div></div>
+  <div class="b-tabs" id="btabs"></div>
+  <p class="muted" id="bnote" style="font-size:13.5px;margin:10px 0 14px"></p>
+  <div id="bpanel"><div class="skeleton" style="height:240px"></div></div>
+</section></div>'''),
 "about": ("About the data · Drive Your Style Market Insights", "Where Drive Your Style market prices come from.", '''
 <div class="wrap"><article class="prose">
   <h1>Where this data comes from</h1>
@@ -309,7 +317,7 @@ PAGES = {
 def main():
     for page, (title, desc, body) in PAGES.items():
         canon = "" if page == "index" else f"{page}.html"
-        head = HEAD.replace("<link rel=\"canonical\"", "<meta name=\"robots\" content=\"noindex\">\n<link rel=\"canonical\"") if page in ("importer", "demand") else HEAD
+        head = HEAD.replace("<link rel=\"canonical\"", "<meta name=\"robots\" content=\"noindex\">\n<link rel=\"canonical\"") if page in ("importer", "demand", "buyer") else HEAD
         html = head.replace("@@CANON@@", canon).replace("@@TITLE@@", title).replace("@@DESC@@", desc).replace("@@PAGE@@", page).replace("@@BODY@@", body)
         with open(os.path.join(ROOT, "site", f"{page}.html"), "w", encoding="utf-8") as f:
             f.write(html)

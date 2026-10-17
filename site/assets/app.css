@@ -747,3 +747,19 @@ tr.grp td{background:var(--surface-2);font-size:13px;padding-top:8px;padding-bot
 .sell-ctl .field{width:64px;margin-left:4px}
 .sell-ctl .select{max-width:190px}
 .sell-form textarea{font-family:inherit}
+
+/* buyer dashboard */
+.b-tabs{display:flex;flex-wrap:wrap;gap:8px}
+.b-tabs .chip b{margin-left:4px;opacity:.7}
+.b-links{display:flex;gap:14px;margin:6px 0 0 50px;font-size:13px}
+.b-table td.title{white-space:normal}
+.b-table td.title>a{display:flex;gap:10px;align-items:center}
+.b-table td.num{white-space:nowrap;vertical-align:top}
+.b-links a{color:var(--ink-2)}
+.b-h{font-size:17px;margin:20px 0 8px}
+.b-tabs .chip{cursor:pointer;font:inherit;font-size:14px;font-weight:600}
+.b-tabs .chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.b-table{min-width:0!important;width:100%}.b-table td,.b-table th{padding-left:8px;padding-right:8px}
+.b-table td.title .muted{white-space:normal}
+.b-table td.title>a>span{min-width:0;overflow-wrap:anywhere}.b-table td.title>a>img{flex-shrink:0}@media(max-width:420px){.b-table{font-size:13px}.b-table td,.b-table th{padding-left:6px;padding-right:6px}}
+.b-links a{white-space:nowrap}

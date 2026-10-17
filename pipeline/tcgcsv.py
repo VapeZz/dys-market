@@ -148,17 +148,25 @@ def load_catalog():
 
 def fetch_prices(groups, log=print):
     """Return {"productId:subType": cents} for every set's market price."""
-    snap = {}
+    snap, lows = {}, {}
     for i, (gid, g) in enumerate(groups.items()):
         for row in _results(get_json(f"tcgplayer/{g['cat']}/{gid}/prices")):
-            add_price(snap, row)
+            add_price(snap, row, lows)
         if (i + 1) % 100 == 0:
             log(f"prices: {i + 1}/{len(groups)} sets")
     log(f"prices: {len(snap)} price points")
+    fetch_prices.lows = lows   # lowest current listing per product (for the buyer dashboard)
     return snap
 
 
-def add_price(snap, row):
+def add_price(snap, row, lows=None):
+    if lows is not None:
+        try:
+            lo = int(round(float(row.get("lowPrice")) * 100))
+            if lo > 0:
+                lows[f"{row['productId']}:{row.get('subTypeName') or 'Normal'}"] = lo
+        except (TypeError, ValueError):
+            pass
     price = row.get("marketPrice")
     if price is None:
         return
