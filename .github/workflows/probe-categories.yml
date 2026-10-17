@@ -9,6 +9,6 @@ jobs:
           import json,sys
           for c in json.load(sys.stdin)['results']:
               n=(c.get('name','')+' '+(c.get('displayName') or '')).lower()
-              if any(k in n for k in ['gundam','union arena','dragon ball','digimon','star wars','yugioh','yu-gi-oh','magic']):
+              if c['categoryId'] >= 82 or 'gund' in n or 'mobile suit' in n:
                   print('::notice title=cat::'+str(c['categoryId'])+' | '+c['name']+' | '+str(c.get('displayName')))
           "
