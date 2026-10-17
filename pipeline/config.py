@@ -15,6 +15,8 @@ GAMES = [
     {"slug": "lorcana", "label": "Lorcana", "category": 71},
     {"slug": "riftbound", "label": "Riftbound", "category": 89},
     {"slug": "palworld", "label": "Palworld", "category": 91},
+    {"slug": "gundam", "label": "Gundam", "category": 86},
+    {"slug": "union-arena", "label": "Union Arena", "category": 81},
 ]
 
 # Your Shopify store, used to mark "In stock at Drive Your Style".

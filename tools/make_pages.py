@@ -51,11 +51,11 @@ MOVERS = '''<div class="movers"><div class="panel"><h3><span class="chg up">▲<
 
 PAGES = {
 "index": ("Market Insights · Drive Your Style",
-          "Nightly market prices, biggest movers and set values for Pokémon, One Piece, Lorcana, Riftbound and Palworld sealed product and cards.", f'''
+          "Nightly market prices, biggest movers and set values for Pokémon, One Piece, Lorcana, Riftbound, Gundam, Union Arena and Palworld sealed product and cards.", f'''
 <section class="hero hero-tight"><div class="wrap">
   <span class="eyebrow"><b>●</b> Live market data · Beta</span>
   <h1>Know the market <span class="holo">before you rip.</span></h1>
-  <p class="lead">Nightly market prices for Pokémon, One Piece, Lorcana, Riftbound and Palworld cards and sealed product.</p>
+  <p class="lead">Nightly market prices for Pokémon, One Piece, Lorcana, Riftbound, Gundam, Union Arena and Palworld cards and sealed product.</p>
   <div class="search" data-search>{SEARCH}<input type="search" placeholder="Search any card or product" aria-label="Search products and cards" autocomplete="off"><div class="results"></div></div>
 </div></section>
 <section class="block" style="padding-top:4px"><div class="wrap"><div class="gtiles" id="gtiles"></div></div></section>
@@ -94,7 +94,7 @@ PAGES = {
 </div></section>
 <div class="wrap"><p class="stats-line" id="stats"></p></div>'''),
 "sets": ("All sets · Drive Your Style Market Insights",
-         "Every Pokémon, Pokémon Japan, One Piece, Lorcana, Riftbound and Palworld set by era, with sealed and card market prices.", '''
+         "Every Pokémon, Pokémon Japan, One Piece, Lorcana, Riftbound, Gundam, Union Arena and Palworld set by era, with sealed and card market prices.", '''
 <div class="wrap"><section class="block">
   <div class="block-head"><div><h1 style="font-size:36px">Sets</h1><p id="count"></p></div></div>
   <div class="controls"><div id="game"></div><input class="field" id="q" type="search" placeholder="Search sets" aria-label="Search sets"></div>
@@ -120,7 +120,7 @@ PAGES = {
 "product": ("Price history · Drive Your Style Market Insights", "Market price history.", '''
 <div class="wrap"><div class="crumbs" id="crumbs"></div><div class="prod" id="prod"><div class="skeleton" style="height:320px"></div></div></div>'''),
 "trends": ("Trends · Drive Your Style Market Insights",
-           "Biggest sealed product price movers across Pokémon, One Piece, Lorcana, Riftbound and Palworld.", '''
+           "Biggest sealed product price movers across Pokémon, One Piece, Lorcana, Riftbound, Gundam, Union Arena and Palworld.", '''
 <div class="wrap"><section class="block">
   <div class="block-head"><div><h1 style="font-size:36px">Trends</h1><p>The 50 biggest sealed price moves for each game and time window. Defaults to products over $20.</p></div></div>
   <div id="sealed"></div>
@@ -134,7 +134,7 @@ PAGES = {
   <p class="muted" id="note" style="margin:-6px 0 12px;font-size:13px"></p>
   {MOVERS}
 </section></div>'''),
-"search": ("Card search · Drive Your Style Market Insights", "Search every Pokémon, Pokémon Japan, One Piece, Lorcana, Riftbound and Palworld card and sealed product by name, set, number or rarity, with today's market price.", '''
+"search": ("Card search · Drive Your Style Market Insights", "Search every Pokémon, Pokémon Japan, One Piece, Lorcana, Riftbound, Gundam, Union Arena and Palworld card and sealed product by name, set, number or rarity, with today's market price.", '''
 <div class="wrap"><section class="block">
   <div class="block-head"><div><h1 style="font-size:36px">Card search</h1><p>Every card and sealed product we track. Search by name, set, card number or rarity.</p></div></div>
   <div class="search big-q">''' + SEARCH + '''<input id="sq" type="search" placeholder="e.g. Charizard ex 199, Umbreon VMAX, 25/102" aria-label="Search cards" autocomplete="off" enterkeyhint="search"></div>
@@ -151,7 +151,7 @@ PAGES = {
   <div id="slots" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin:8px 0 18px"></div>
   <div id="result"></div>
 </section></div>'''),
-"calendar": ("Release calendar · Drive Your Style Market Insights", "Upcoming and recent Pokémon, Pokémon Japan, One Piece, Lorcana, Riftbound and Palworld TCG set release dates with current sealed prices.", '''
+"calendar": ("Release calendar · Drive Your Style Market Insights", "Upcoming and recent Pokémon, Pokémon Japan, One Piece, Lorcana, Riftbound, Gundam, Union Arena and Palworld TCG set release dates with current sealed prices.", '''
 <div class="wrap"><section class="block">
   <div class="block-head"><div><h1 style="font-size:36px">Release calendar</h1><p>Upcoming sets and everything released in the last 90 days. Dates come from TCGplayer and can shift.</p></div></div>
   <div class="controls"><div id="game"></div></div>
@@ -225,7 +225,7 @@ PAGES = {
       <button class="btn" id="clear" type="button">Clear</button><button class="btn" id="dl" type="button">CSV</button><button class="btn primary" id="add" type="button">Add to store</button></div>
   </div>
 </section></div>'''),
-"collection": ("My Collection · Drive Your Style Market Insights", "Track your Pokémon, One Piece, Lorcana, Riftbound and Palworld card collection with live market values.", '''
+"collection": ("My Collection · Drive Your Style Market Insights", "Track your Pokémon, One Piece, Lorcana, Riftbound, Gundam, Union Arena and Palworld card collection with live market values.", '''
 <div class="wrap"><section class="block">
   <div class="block-head"><div><span class="eyebrow"><b>●</b> Members</span><h1 id="title" style="font-size:36px;margin-top:8px">My collection</h1>
     <p id="shared-note" class="muted" hidden>A collection shared from Drive Your Style. <a href="collection.html" style="color:var(--accent)">Start your own →</a></p></div></div>
@@ -252,7 +252,7 @@ PAGES = {
   </div>
   <p class="muted" style="font-size:13px;margin-top:10px">Your collection saves on this device. Use <b>Back up</b> to keep a copy or move it to another phone. Tap the camera on any item to use your own photo; photos stay on this phone. Raw cards use the nightly TCGplayer market price (Near Mint). For a slab, pick its grade under the card and enter what it's worth; the eBay sold link shows recent sales for that grade. Values aren't an offer to buy.</p>
 </section></div>'''),
-"collectors": ("Collectors · Drive Your Style Market Insights", "Browse Pokémon, One Piece, Lorcana, Riftbound and Palworld collections from Drive Your Style collectors. Like your favorites and follow collectors.", '''
+"collectors": ("Collectors · Drive Your Style Market Insights", "Browse Pokémon, One Piece, Lorcana, Riftbound, Gundam, Union Arena and Palworld collections from Drive Your Style collectors. Like your favorites and follow collectors.", '''
 <div class="wrap"><section class="block">
   <div class="block-head"><div><span class="eyebrow"><b>●</b> Community</span><h1 style="font-size:36px;margin-top:8px">Collectors</h1>
     <p>Binders collectors chose to share. Tap one to see every card, like it, or follow the collector.</p></div>
@@ -301,7 +301,7 @@ PAGES = {
 "about": ("About the data · Drive Your Style Market Insights", "Where Drive Your Style market prices come from.", '''
 <div class="wrap"><article class="prose">
   <h1>Where this data comes from</h1>
-  <p>Every night we save the TCGplayer <b>market price</b> for each Pokémon, Pokémon Japan, One Piece, Lorcana, Riftbound and Palworld product, using the public daily data published by <a href="https://tcgcsv.com" style="color:var(--accent)">TCGCSV</a>. Market price reflects recent completed sales on TCGplayer.</p>
+  <p>Every night we save the TCGplayer <b>market price</b> for each Pokémon, Pokémon Japan, One Piece, Lorcana, Riftbound, Gundam, Union Arena and Palworld product, using the public daily data published by <a href="https://tcgcsv.com" style="color:var(--accent)">TCGCSV</a>. Market price reflects recent completed sales on TCGplayer.</p>
   <h2>How movers are calculated</h2>
   <p>A mover's change compares today's market price with the price saved closest to 7, 30, 90 or 365 days ago. Items under $5 today, or under $1 at the start of the window, are left out so tiny prices don't produce huge percentages.</p>
   <h2>Sets</h2>
@@ -310,7 +310,7 @@ PAGES = {
   <ul><li>Prices can lag by about a day and swing on thin sales, especially right after release.</li>
   <li>These are market reference prices, not Drive Your Style's prices. Items marked "In stock" link to our store.</li>
   <li>For research only. Not financial advice.</li>
-  <li>Not affiliated with or endorsed by The Pokémon Company, Nintendo, Bandai, Disney, Ravensburger, Riot Games, Pocketpair or TCGplayer.</li></ul>
+  <li>Not affiliated with or endorsed by The Pokémon Company, Nintendo, Bandai, Disney, Ravensburger, Riot Games, Sunrise, Pocketpair or TCGplayer.</li></ul>
 </article></div>'''),
 }
 

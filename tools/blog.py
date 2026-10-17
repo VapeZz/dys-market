@@ -20,7 +20,7 @@ from social import SKIP, clean_name, img, money, pick, short_set  # noqa: E402
 SITE = "https://market.driveyourstyle.net"
 STORE = "https://driveyourstyle.net"
 GAME = {"pokemon": "Pokémon", "pokemon-jp": "Pokémon Japan", "one-piece": "One Piece",
-        "lorcana": "Lorcana", "riftbound": "Riftbound", "palworld": "Palworld"}
+        "lorcana": "Lorcana", "riftbound": "Riftbound", "palworld": "Palworld", "gundam": "Gundam", "union-arena": "Union Arena"}
 SIDEWAYS = re.compile(r"\bBREAK\b|\bLEGEND\b|jumbo|oversize", re.I)   # landscape cards look half-size in the grid
 VERDICT = {"cop": "Cop", "wear": "Wear", "wait": "Wait"}
 

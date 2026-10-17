@@ -14,6 +14,10 @@ on:
         description: "Add past prices for newly added games (TCGplayer category ids, e.g. 71,89,91)"
         type: string
         default: ""
+      merge_archive:
+        description: "Add archived past prices for newly added games (archive slugs, e.g. gundam,union-arena)"
+        type: string
+        default: ""
       social:
         description: "Make this week's Trending cards carousel now (runs automatically on Sundays)"
         type: boolean
@@ -69,6 +73,11 @@ jobs:
         run: |
           which 7z || sudo apt-get install -y p7zip-full
           python pipeline/backfill.py --merge "${{ inputs.merge_games }}"
+
+      - name: Past prices for new games from our price archive
+        if: ${{ inputs.merge_archive != '' }}
+        continue-on-error: true
+        run: python pipeline/merge_archive.py "${{ inputs.merge_archive }}"
 
       - name: Download today's prices and build site data
         run: python pipeline/run.py

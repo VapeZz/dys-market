@@ -327,6 +327,8 @@ table.cmp th:first-child,table.cmp td:first-child{width:32%}
 .gtile.gt3{background:linear-gradient(135deg,#0d1b4d,#3b2a8a 55%,#d8b25a)}
 .gtile.gt4{background:linear-gradient(135deg,#071d24,#0f5a6b 55%,#c9a227)}
 .gtile.gt5{background:linear-gradient(135deg,#0c3b2e,#1f8a5a 55%,#7fd6ff)}
+.gtile.gt6{background:linear-gradient(135deg,#1a1f2b,#3a4a63 55%,#e0463b)}
+.gtile.gt7{background:linear-gradient(135deg,#2a0f3d,#7a2bb0 55%,#ff9f43)}
 .gtile:hover{filter:brightness(1.08)}
 .srow{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(170px,190px);gap:12px;overflow-x:auto;padding-bottom:8px;scroll-snap-type:x mandatory}
 .srow .stile{scroll-snap-align:start}
