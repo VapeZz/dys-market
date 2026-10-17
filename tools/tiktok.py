@@ -36,11 +36,19 @@ def make_short(slide_paths, out_path, per=3.2, fade=0.4, fps=30):
     Silent track included so every platform accepts it. Returns out_path, or None if ffmpeg fails."""
     import shutil
     import subprocess
-    if not slide_paths or not shutil.which("ffmpeg"):
+    exe = shutil.which("ffmpeg")
+    if not exe:
+        try:
+            import imageio_ffmpeg          # pip wheel with a static ffmpeg (runners don't always ship one)
+            exe = imageio_ffmpeg.get_ffmpeg_exe()
+        except Exception as e:
+            print("make_short: no ffmpeg:", e)
+            return None
+    if not slide_paths:
         return None
     n = len(slide_paths)
     frames = int((per + fade) * fps)
-    args = ["ffmpeg", "-y", "-loglevel", "error"]
+    args = [exe, "-y", "-loglevel", "error"]
     for p in slide_paths:
         args += ["-i", p]
     args += ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo"]
