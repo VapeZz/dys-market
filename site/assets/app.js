@@ -48,6 +48,54 @@ function wantToggle(it) {   // it: {id, g, n, at (market price now)}
 }
 const HEARTS = (on) => on ? "♥" : "♡";
 /* adds a ♡ next to every "+" add button in a grid; itemOf(addKey) -> {id, g, n, at} */
+
+/* ---------- Affiliate links ----------
+   Fill these in once each program approves you; links rewrite on click and the footer shows a disclosure.
+   tcgplayer / stockx / goat: the program's "deep link" prefix that ends in ?u= (Impact style), e.g.
+     "https://partner.tcgplayer.com/c/1234567/1830156/21018?u="
+   ebay: your eBay Partner Network campaign id (campid), e.g. "5339123456". */
+const AFF = { tcgplayer: "", stockx: "", goat: "", ebay: "" };
+const AFF_ON = Object.values(AFF).some(Boolean);
+function affUrl(href) {
+  let u; try { u = new URL(href); } catch (e) { return href; }
+  const h = u.hostname.replace(/^www\./, "");
+  const deep = (k) => AFF[k] ? AFF[k] + encodeURIComponent(href) : href;
+  if (h === "tcgplayer.com" || h.endsWith(".tcgplayer.com") && !h.startsWith("partner") && !h.includes("cdn")) return deep("tcgplayer");
+  if (h === "stockx.com") return deep("stockx");
+  if (h === "goat.com") return deep("goat");
+  if (h === "ebay.com" && AFF.ebay && !u.searchParams.has("campid")) {
+    u.searchParams.set("mkcid", "1"); u.searchParams.set("mkrid", "711-53200-19255-0"); u.searchParams.set("siteid", "0");
+    u.searchParams.set("campid", AFF.ebay); u.searchParams.set("toolid", "10001"); u.searchParams.set("mkevt", "1");
+    return u.toString();
+  }
+  return href;
+}
+if (AFF_ON) ["click", "auxclick", "contextmenu"].forEach((ev) => document.addEventListener(ev, (e) => {
+  const a = e.target.closest && e.target.closest("a[href^='http']"); if (!a || a.dataset.aff) return;
+  const n = affUrl(a.href); if (n !== a.href) { a.href = n; a.rel = "noopener sponsored"; a.dataset.aff = "1"; }
+}, true));
+
+/* ---------- Sell list (cash / store-credit offers) ----------
+   Rates are estimates shown to the seller; the final offer is made after you see the cards. */
+const BUY = { cash: 0.6, credit: 0.72, minEach: 300, cond: { NM: 1, LP: 0.85, MP: 0.7, HP: 0.5, DMG: 0.3 },
+  email: "consign@driveyourstyle.net", formAction: "https://driveyourstyle.net/contact#ContactForm" };
+const SELL_KEY = "dys-sell";
+const sellGet = () => { try { return JSON.parse(localStorage.getItem(SELL_KEY)) || []; } catch (e) { return []; } };
+const sellSet = (l) => { try { localStorage.setItem(SELL_KEY, JSON.stringify(l)); } catch (e) {} sellBadge(); };
+const sellKey = (r) => `${r.id}|${r.n}|${r.gr || ""}`;
+function sellAdd(r) {
+  const l = sellGet(), k = sellKey(r), x = l.find((y) => sellKey(y) === k);
+  x ? x.qty++ : l.push({ id: r.id, g: r.g, n: r.n, mkt: r.mkt ?? null, qty: r.qty || 1, gr: r.gr || "", cond: "NM" });
+  sellSet(l);
+  toast("Added to your sell list");
+}
+function sellBadge() {
+  const n = sellGet().reduce((a, i) => a + i.qty, 0), el = $("#sell-fab");
+  if (!el && n && PAGE !== "sell") { document.body.insertAdjacentHTML("beforeend", `<a id="sell-fab" class="sell-fab" href="sell.html">💵 Sell list <b>${n}</b></a>`); return; }
+  if (el) { el.hidden = !n || PAGE === "sell"; const b = el.querySelector("b"); if (b) b.textContent = n; }
+}
+window.dysSell = (r) => sellAdd({ id: r[0], g: r[2], n: r[1], mkt: r[4] });
+
 function wantButtons(root, itemOf) {
   root.querySelectorAll(".cadd[data-add]").forEach((b) => {
     const k = b.dataset.add, on = wantHas(k);
@@ -103,10 +151,10 @@ function shell() {
     <div style="max-width:560px">
       <p><b style="color:var(--ink)">Drive Your Style Market Insights</b> · Beta</p>
       <p>Market prices are recorded nightly from public TCGplayer market data and may lag by a day. For research only, not financial advice. These are not Drive Your Style's prices. Not affiliated with or endorsed by The Pokémon Company, Bandai, Disney, Ravensburger, Riot Games, Pocketpair or TCGplayer.</p>
-      <p id="updated-line"></p>
+      <p id="updated-line"></p>${AFF_ON ? `<p>Some outbound links (TCGplayer, eBay, StockX, GOAT) are affiliate links. If you buy through them we may earn a small commission at no extra cost to you.</p>` : ""}
     </div>
     <div>
-      <p><a href="${STORE}">Shop Drive Your Style</a> · <a href="blog/">Market reports</a> · <a href="about.html">Where this data comes from</a></p>
+      <p><a href="${STORE}">Shop Drive Your Style</a> · <a href="sell.html">Sell to us</a> · <a href="blog/">Market reports</a> · <a href="about.html">Where this data comes from</a></p>
       <div class="socials" aria-label="Follow Drive Your Style">${SOCIALS.map(([n, u, d]) => `<a href="${u}" target="_blank" rel="noopener" aria-label="${n}" title="${n}"><svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg></a>`).join("")}</div>
       <div class="theme-switch" role="group" aria-label="Theme"><button data-t="dark">Dark</button><button data-t="light">Light</button></div>
     </div></div></footer>`;
@@ -530,6 +578,7 @@ async function pageProduct() {
         <div class="btns">${v.dys ? `<a class="btn primary" href="${esc(v.dys.u)}">Buy at Drive Your Style · ${money(v.dys.p)}</a>`
           : `<a class="btn primary" href="mailto:customerservice@driveyourstyle.net?subject=${encodeURIComponent("Request: " + v.n)}&body=${encodeURIComponent(`Hi Drive Your Style,\n\nI'm interested in: ${v.n} (${set.n}).\nMarket price today: ${money(v.p)}\nQuantity: 1\n\nPlease let me know if you can get it.\n\nThanks!`)}">Request from Drive Your Style</a>`}
           <button class="btn" id="addcol" type="button"></button>
+          <button class="btn" id="sellit" type="button" title="Get a cash or store-credit offer from Drive Your Style">💵 Sell to us</button>
           <a class="btn" href="https://www.tcgplayer.com/product/${id}" target="_blank" rel="noopener">View on TCGplayer ↗</a>
           <a class="btn" href="compare.html?a=${id}:${set.id}">Compare ⇄</a>
           <button class="btn" id="watch" type="button"></button></div>
@@ -544,6 +593,7 @@ async function pageProduct() {
       colSet(c); paintCol(); toast(`Added to My Collection`);
     });
     paintCol();
+    $("#sellit").addEventListener("click", () => sellAdd({ id, g: set.id, n: v.n, mkt: v.p }));
     if (v.t === "c") gradeCalc($("#gcalc"), v.p, `${id}|${printCode(subOf(v.n))}`);
     const paint = () => { const on = wantHas(wantKey(id, v.n)); const b = $("#watch"); b.textContent = on ? "♥ On your Want list" : "♡ Want"; b.classList.toggle("wanted", on); b.setAttribute("aria-pressed", on); };
     $("#watch").addEventListener("click", () => { wantToggle({ id, g: set.id, n: v.n, at: v.p }); paint(); });
@@ -1482,6 +1532,13 @@ async function pageCollection() {
     }
     plot();
     if (shared) return;
+    if ($("#sell-cta")) {
+      $("#sell-cta").hidden = !items.some((i) => i.mkt);
+      $("#sell-col").onclick = () => {
+        sellSet(items.filter((i) => i.mkt).map((i) => ({ id: i.id, g: i.g, n: i.name, mkt: i.mkt, qty: i.qty, gr: i.gr || "", cond: "NM" })));
+        location.href = "sell.html";
+      };
+    }
     const find = (k) => col.items.find((x) => keyOf(x) === k);
     $("#list").querySelectorAll("[data-qty]").forEach((el) => el.addEventListener("change", () => { const it = find(el.dataset.qty); it.qty = Math.max(1, Number(el.value) || 1); save(); setTimeout(draw); }));
     $("#list").querySelectorAll("[data-paid]").forEach((el) => el.addEventListener("change", () => { const it = find(el.dataset.paid); it.paid = el.value === "" ? null : Math.round(Number(el.value) * 100); save(); setTimeout(draw); }));
@@ -1674,6 +1731,7 @@ function scanButton(box) {
 
 /* ---------- boot ---------- */
 shell();
+sellBadge();
 if (PAGE === "index") fetch("blog/latest.json", { cache: "no-cache" }).then((r) => r.ok ? r.json() : null).then((p) => {
   if (!p || !p.slug || !$("#report-block")) return;
   $("#report-link").href = `blog/${p.slug}.html`;
@@ -1738,7 +1796,49 @@ async function pageSearch() {
   if (!q) $("#sq").focus();
 }
 
-const pages = { search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, demand: pageDemand, importer: pageImporter, collection: pageCollection, collectors: pageCollectors };
+
+async function pageSell() {
+  const COND = [["NM", "Near Mint"], ["LP", "Lightly Played"], ["MP", "Moderately Played"], ["HP", "Heavily Played"], ["DMG", "Damaged"]];
+  const each = (i) => i.mkt == null ? 0 : Math.round(i.mkt * (i.gr ? 1 : BUY.cond[i.cond] || 1));
+  const draw = () => {
+    const l = sellGet();
+    const pay = (rate) => l.reduce((a, i) => a + (each(i) >= BUY.minEach ? Math.round(each(i) * rate) * i.qty : 0), 0);
+    const bulk = l.filter((i) => each(i) < BUY.minEach).reduce((a, i) => a + i.qty, 0);
+    const mv = l.reduce((a, i) => a + (i.mkt || 0) * i.qty, 0);
+    $("#sell-list").innerHTML = l.length ? `<div class="table-wrap"><table class="sell-table"><thead><tr><th>Item</th><th class="num">Market</th><th></th></tr></thead><tbody>${l.map((i, ix) => `<tr>
+      <td class="title"><a href="${prodUrl(i.id, i.g)}">${imgTag(i.id, "")}<span>${i.gr ? `<span class="slab-badge">${esc(i.gr)}</span> ` : ""}${esc(i.n)}</span></a>
+        <div class="sell-ctl"><label>Qty <input class="field" type="number" min="1" max="999" value="${i.qty}" data-sq="${ix}" aria-label="Quantity"></label>
+        ${i.gr ? `<span class="muted">Graded</span>` : `<select class="select" data-sc="${ix}" aria-label="Condition">${COND.map(([k, t]) => `<option value="${k}"${i.cond === k ? " selected" : ""}>${t}</option>`).join("")}</select>`}</div></td>
+      <td class="num">${money(i.mkt)}${each(i) < BUY.minEach ? `<span class="muted mkt-note">bulk</span>` : ""}</td>
+      <td class="num"><button class="btn" type="button" data-sr="${ix}" aria-label="Remove ${esc(i.n)}">✕</button></td></tr>`).join("")}</tbody></table></div>`
+      : `<div class="panel empty-note">Your sell list is empty. Tap <b>💵 Sell to us</b> on any card, or <b>Get an offer</b> on <a href="collection.html">My Collection</a>.</div>`;
+    $("#sell-est").innerHTML = l.length ? `<div class="stat"><div class="v">${money(pay(BUY.cash))}</div><div class="l">Estimated cash offer</div></div>
+      <div class="stat"><div class="v">${money(pay(BUY.credit))}</div><div class="l">Estimated store credit</div></div>
+      <div class="stat"><div class="v">${money(mv)}</div><div class="l">Market value</div></div>` : "";
+    $("#sell-bulk").textContent = bulk ? `${bulk} item${bulk > 1 ? "s" : ""} under ${money(BUY.minEach)} count as bulk; we'll quote bulk separately.` : "";
+    $("#sell-form").hidden = !l.length;
+    $("#sell-body").value = [
+      `SELL REQUEST (${l.reduce((a, i) => a + i.qty, 0)} items) from market.driveyourstyle.net`, "",
+      ...l.map((i) => `- ${i.qty} x ${i.n}${i.gr ? ` [${i.gr}]` : ` [${i.cond}]`} | market ${money(i.mkt)} | ${location.origin}/${prodUrl(i.id, i.g)}`), "",
+      `Market value: ${money(mv)}`, `Estimate shown: ${money(pay(BUY.cash))} cash / ${money(pay(BUY.credit))} store credit`].join("\n");
+    $("#sell-list").querySelectorAll("[data-sq]").forEach((x) => x.addEventListener("change", () => { const l2 = sellGet(); l2[+x.dataset.sq].qty = Math.max(1, Math.min(999, +x.value || 1)); sellSet(l2); draw(); }));
+    $("#sell-list").querySelectorAll("[data-sc]").forEach((x) => x.addEventListener("change", () => { const l2 = sellGet(); l2[+x.dataset.sc].cond = x.value; sellSet(l2); draw(); }));
+    $("#sell-list").querySelectorAll("[data-sr]").forEach((x) => x.addEventListener("click", () => { const l2 = sellGet(); l2.splice(+x.dataset.sr, 1); sellSet(l2); draw(); }));
+  };
+  $("#sell-form").action = BUY.formAction;
+  $("#sell-mail").href = `mailto:${BUY.email}`;
+  $("#sell-mail").textContent = BUY.email;
+  $("#sell-form").addEventListener("submit", (e) => {
+    const f = e.target, extra = [`Payout: ${f.payout.value}`, `Phone: ${f["contact[phone]"].value || "—"}`, `Notes: ${f.notes.value || "—"}`].join("\n");
+    $("#sell-body").value += "\n" + extra;
+    try { localStorage.setItem("dys-sell-sent", new Date().toISOString()); } catch (er) {}
+  });
+  $("#sell-clear").addEventListener("click", () => { sellSet([]); draw(); });
+  $("#sell-rates").textContent = `Estimates use ${Math.round(BUY.cash * 100)}% of market for cash and ${Math.round(BUY.credit * 100)}% for store credit, adjusted for condition.`;
+  draw();
+}
+
+const pages = { search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, demand: pageDemand, importer: pageImporter, collection: pageCollection, collectors: pageCollectors, sell: pageSell };
 (pages[PAGE] || (async () => {}))().catch((err) => {
   console.error(err);
   const main = $("main");

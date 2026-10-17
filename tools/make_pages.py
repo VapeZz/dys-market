@@ -236,6 +236,7 @@ PAGES = {
     <p class="muted" id="added" style="min-height:20px;font-size:14px;margin:8px 0 0" role="status"></p>
   </div>
   <div class="stats" id="stats" style="margin:18px 0"></div>
+  <div class="panel sell-cta" id="sell-cta" hidden><div><b>Thinking of selling?</b><span>Get a cash or store-credit offer from Drive Your Style for your whole collection.</span></div><button class="btn primary" id="sell-col" type="button">💵 Get an offer</button></div>
   <div class="chart-card" id="cchart-wrap" hidden style="margin-bottom:18px"><div class="chart-head"><b>Collection value</b><div id="crange"></div></div><div class="chart" id="cchart"></div>
     <p class="muted" style="font-size:12px;margin:6px 0 4px">Your current quantities at each day's market price.</p></div>
   <div id="csets" style="margin-bottom:18px"></div>
@@ -260,6 +261,34 @@ PAGES = {
   <p class="muted" id="cnote" style="font-size:13px;margin:4px 0 12px"></p>
   <div id="clist" class="col-grid"><div class="skeleton" style="height:220px"></div></div>
   <p class="muted" style="font-size:12px;margin-top:18px">Values use nightly market prices for raw cards and each collector's own value for slabs. Likes and follows need a free account and update every 30 minutes.</p>
+</section></div>'''),
+"sell": ("Sell your cards · Drive Your Style", "Get a cash or store-credit offer for your Pokémon, One Piece, Lorcana and other TCG cards, slabs and sealed product from Drive Your Style in Las Vegas.", '''
+<section class="hero hero-tight"><div class="wrap">
+  <span class="eyebrow"><b>●</b> We buy cards · Las Vegas</span>
+  <h1>Sell your cards <span class="holo">for cash or credit.</span></h1>
+  <p class="lead">Build your list from any card page or your collection, check the estimate, and send it. We reply within 24–48 hours with a firm offer.</p>
+</div></section>
+<div class="wrap"><section class="block" style="padding-top:8px">
+  <div class="stats" id="sell-est" style="margin:0 0 14px"></div>
+  <p class="muted" id="sell-bulk" style="font-size:13px;margin:0 0 10px"></p>
+  <div id="sell-list"><div class="skeleton" style="height:160px"></div></div>
+  <form id="sell-form" class="panel sell-form" method="post" hidden accept-charset="UTF-8">
+    <input type="hidden" name="form_type" value="contact"><input type="hidden" name="utf8" value="✓">
+    <input type="hidden" name="contact[tags]" value="sell-request">
+    <textarea id="sell-body" name="contact[body]" hidden></textarea>
+    <h2 style="font-size:22px;margin:0 0 4px">Send your list</h2>
+    <p class="muted" style="margin:0 0 14px;font-size:14px">No obligation. You'll get our offer by email.</p>
+    <div class="sell-grid">
+      <label>Name<input class="field" name="contact[name]" required autocomplete="name"></label>
+      <label>Email<input class="field" type="email" name="contact[email]" required autocomplete="email"></label>
+      <label>Phone (optional)<input class="field" type="tel" name="contact[phone]" autocomplete="tel"></label>
+      <label>I'd like<select class="select" name="payout"><option>Cash (PayPal / Zelle / cash)</option><option>Store credit (higher offer)</option><option>Either, show me both</option></select></label>
+    </div>
+    <label style="display:block;margin-top:10px">Notes<textarea class="field" name="notes" rows="3" placeholder="Anything we should know: local pickup, photos available, condition details" style="width:100%"></textarea></label>
+    <div class="btns" style="margin-top:14px"><button class="btn primary" type="submit">Send for an offer</button><button class="btn" type="button" id="sell-clear">Clear list</button></div>
+    <p class="muted" style="font-size:12.5px;margin:12px 0 0"><span id="sell-rates"></span> Final offers depend on condition once we see the cards. Have photos? Email them to <a id="sell-mail" href="#"></a>. Local sellers can meet in Las Vegas.</p>
+  </form>
+  <p class="muted" style="font-size:13px;margin-top:18px">Prefer to consign high-end items instead? <a href="https://driveyourstyle.net/pages/sell-with-us">Consign with us</a> and keep up to 85% of the sale.</p>
 </section></div>'''),
 "about": ("About the data · Drive Your Style Market Insights", "Where Drive Your Style market prices come from.", '''
 <div class="wrap"><article class="prose">

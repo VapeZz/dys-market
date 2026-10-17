@@ -729,3 +729,21 @@ tr.grp td{background:var(--surface-2);font-size:13px;padding-top:8px;padding-bot
 .report-banner{display:flex;gap:14px;align-items:center;justify-content:space-between;padding:16px 18px;border:1px solid var(--line);border-radius:14px;text-decoration:none;color:var(--ink)}
 .report-banner b{display:block}
 .report-banner span{color:var(--ink-3);font-size:14px}
+
+/* sell to us */
+.sell-cta{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin:0 0 18px;padding:14px 16px}
+.sell-cta b{display:block}.sell-cta span{color:var(--ink-3);font-size:14px}
+.sell-form{margin-top:18px;padding:18px}
+.sell-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sell-grid label,.sell-form>label{font-size:13px;color:var(--ink-3)}
+.sell-grid .field,.sell-grid .select{width:100%;margin-top:4px}
+@media(max-width:640px){.sell-grid{grid-template-columns:1fr}}
+.sell-fab{position:fixed;right:16px;bottom:150px;z-index:40;display:inline-flex;gap:8px;align-items:center;padding:10px 14px;border-radius:999px;background:var(--ink);color:var(--bg);font-weight:700;font-size:14px;text-decoration:none;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.sell-fab b{background:var(--bg);color:var(--ink);border-radius:999px;padding:0 7px;font-size:12px}
+@media(min-width:900px){.sell-fab{bottom:24px}}
+.sell-table td.title{white-space:normal}
+.sell-table td.title a{display:flex;gap:10px;align-items:center}
+.sell-ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;font-size:13px;color:var(--ink-3)}
+.sell-ctl .field{width:64px;margin-left:4px}
+.sell-ctl .select{max-width:190px}
+.sell-form textarea{font-family:inherit}

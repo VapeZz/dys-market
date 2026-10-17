@@ -181,8 +181,9 @@
       box.querySelector(".scan-res").innerHTML = list.slice(0, 9).map((r, i) => `<div class="scan-hit${i === 0 && sure ? " best" : ""}">
         <a href="product.html?id=${r[0]}&set=${r[2]}"><img src="https://tcgplayer-cdn.tcgplayer.com/product/${r[0]}_200w.jpg" alt="" loading="lazy">
         <span><b>${esc(r[1])}</b><small>${esc(meta.groups[r[2]]?.[0] || "")}${r[5] ? " · " + esc(r[5]) : ""}</small><em>${money(r[4])}</em></span></a>
-        <span class="scan-acts"><button type="button" class="btn" data-add="${i}">＋ Collection</button><button type="button" class="btn" data-want="${i}">♡ Want</button></span></div>`).join("");
+        <span class="scan-acts"><button type="button" class="btn" data-add="${i}">＋ Collection</button><button type="button" class="btn" data-want="${i}">♡ Want</button><button type="button" class="btn" data-sell="${i}">💵 Sell</button></span></div>`).join("");
       box.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => { (window.dysCollectionAdd || window.dysAddToCollection)?.(list[+b.dataset.add]); b.textContent = "✓ Added"; b.disabled = true; }));
+      box.querySelectorAll("[data-sell]").forEach((b) => b.addEventListener("click", () => { window.dysSell?.(list[+b.dataset.sell]); b.textContent = "✓ On sell list"; b.disabled = true; }));
       box.querySelectorAll("[data-want]").forEach((b) => b.addEventListener("click", () => { window.dysWant?.(list[+b.dataset.want]); b.textContent = "♥ Wanted"; b.disabled = true; }));
     };
     const refine = box.querySelector(".scan-refine input");
