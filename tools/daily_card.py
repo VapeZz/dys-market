@@ -104,11 +104,15 @@ def main(argv):
             pg.screenshot(path=os.path.join(out, f"slide-{i}.jpg"), type="jpeg", quality=90)
         b.close()
         os.remove(tmp)
+    from tiktok import make_short
+    video = make_short([os.path.join(out, f"slide-{i}.jpg") for i in range(1, 4)], os.path.join(out, "short.mp4"))
     short = re.sub(r"\s*-\s*\d+/\d+$", "", c["name"])
     caption = (f"{short} is up {c['pct']:.0f}% {period} 📈 now {money(c['now'])}\n\n"
                f"Do you have one? 👇 Check your cards free at market.driveyourstyle.net (link in bio)\n\n{TAGS}")
     post = {"date": today.isoformat(), "card": c, "caption": caption,
-            "slides": [f"{SITE}/social-daily/{today.isoformat()}/slide-{i}.jpg" for i in range(1, 4)]}
+            "slides": [f"{SITE}/social-daily/{today.isoformat()}/slide-{i}.jpg" for i in range(1, 4)],
+            "short": f"{SITE}/social-daily/{today.isoformat()}/short.mp4" if video else None,
+            "short_title": f"{short} is up {c['pct']:.0f}% {period} 📈 #pokemon #shorts"[:100]}
     json.dump(post, open(os.path.join(out, "post.json"), "w"), indent=1, ensure_ascii=False)
     json.dump(post, open(os.path.join(out_root, "latest.json"), "w"), indent=1, ensure_ascii=False)
     history[str(c["id"])] = today.isoformat()

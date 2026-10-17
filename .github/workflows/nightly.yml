@@ -138,6 +138,7 @@ jobs:
         run: |
           rm -rf /tmp/data-out && mkdir -p /tmp/data-out
           cp -r data /tmp/data-out/data
+          find /tmp/data-out/data -name '*.mp4' -delete   # videos only live on the site (gh-pages)
           cd /tmp/data-out
           git init -q -b data
           git config user.name "dys-market-bot"

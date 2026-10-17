@@ -153,6 +153,8 @@ def main(argv):
         tt = full_screen(pg, [os.path.join(out, f"slide-{i}.jpg") for i in range(1, len(slides) + 1)], out,
                          foot="Release dates & resale · market.driveyourstyle.net")
         b.close()
+    from tiktok import make_short
+    video = make_short(tt, os.path.join(out, "short.mp4"), per=3.6)
     lines = [f"👟 Sneaker drops {span}", ""]
     for r in sorted(week, key=lambda r: (r["d"], -r["h"])):
         if r["h"] >= 2 or r in feat:
@@ -169,6 +171,8 @@ def main(argv):
                   "#sneakers #sneakerreleases #jordan #nike #kicks")
     post = {"date": today.isoformat(), "span": span, "caption": caption, "caption_tiktok": caption_tt,
             "slides_tiktok": [f"{SITE}/social-sneakers/{today.isoformat()}/tt-{i}.jpg" for i in range(1, len(tt) + 1)],
+            "short": f"{SITE}/social-sneakers/{today.isoformat()}/short.mp4" if video else None,
+            "short_title": f"Sneaker drops this week 👟 {span} #sneakers #shorts"[:100],
             "drops": [{k: r.get(k) for k in ("d", "n", "c", "r", "h")} for r in feat],
             "slides": [f"{SITE}/social-sneakers/{today.isoformat()}/slide-{i}.jpg" for i in range(1, len(slides) + 1)]}
     json.dump(post, open(os.path.join(out, "post.json"), "w"), indent=1, ensure_ascii=False)

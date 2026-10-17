@@ -179,6 +179,8 @@ def main(argv):
         from tiktok import full_screen
         tt = full_screen(pg, [os.path.join(out, f"slide-{i}.jpg") for i in range(1, len(slides) + 1)], out)
         b.close()
+    from tiktok import make_short
+    video = make_short(tt, os.path.join(out, "short.mp4"), per=3.6)
     lines = [f"📈 Trending cards {span}", ""]
     lines += [f"{i}. {c['name']} ({c['set']}): {money(c['now'])}, up {c['pct']:.0f}%" for i, c in enumerate(cards, 1)]
     lines += ["", "Which one are you chasing? 👇", "",
@@ -192,7 +194,9 @@ def main(argv):
                   "#pokemon #pokemoncards #pokemontcg #cardcollecting #tcg")
     post = {"date": today.isoformat(), "span": span, "caption": caption, "caption_tiktok": caption_tt, "cards": cards,
             "slides": [f"{SITE}/social/{today.isoformat()}/slide-{i}.jpg" for i in range(1, len(slides) + 1)],
-            "slides_tiktok": [f"{SITE}/social/{today.isoformat()}/tt-{i}.jpg" for i in range(1, len(tt) + 1)]}
+            "slides_tiktok": [f"{SITE}/social/{today.isoformat()}/tt-{i}.jpg" for i in range(1, len(tt) + 1)],
+            "short": f"{SITE}/social/{today.isoformat()}/short.mp4" if video else None,
+            "short_title": f"Trending Pokémon cards this week 📈 #1 is up {top['pct']:.0f}% #pokemon #shorts"}
     json.dump(post, open(os.path.join(out, "post.json"), "w"), indent=1, ensure_ascii=False)
     json.dump(post, open(os.path.join(out_root, "latest.json"), "w"), indent=1, ensure_ascii=False)
     # keep the last 8 weeks

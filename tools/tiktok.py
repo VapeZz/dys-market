@@ -29,3 +29,33 @@ def full_screen(page, slide_paths, out_dir, foot="Free card prices · market.dri
     os.remove(tmp)
     page.set_viewport_size({"width": 1080, "height": 1350})
     return outs
+
+
+def make_short(slide_paths, out_path, per=3.2, fade=0.4, fps=30):
+    """Stitch 1080x1920 slides into a vertical MP4 (slow zoom + crossfades) for YouTube Shorts.
+    Silent track included so every platform accepts it. Returns out_path, or None if ffmpeg fails."""
+    import shutil
+    import subprocess
+    if not slide_paths or not shutil.which("ffmpeg"):
+        return None
+    n = len(slide_paths)
+    frames = int((per + fade) * fps)
+    args = ["ffmpeg", "-y", "-loglevel", "error"]
+    for p in slide_paths:
+        args += ["-i", p]
+    args += ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo"]
+    f = [f"[{i}:v]scale=2160:3840,zoompan=z='min(zoom+0.0007,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+         f":d={frames}:s=1080x1920:fps={fps},setsar=1,format=yuv420p[v{i}]" for i in range(n)]
+    last, t = "v0", per
+    for i in range(1, n):
+        f.append(f"[{last}][v{i}]xfade=transition=fade:duration={fade}:offset={t:.2f}[x{i}]")
+        last, t = f"x{i}", t + per
+    args += ["-filter_complex", ";".join(f), "-map", f"[{last}]", "-map", f"{n}:a", "-shortest",
+             "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-r", str(fps),
+             "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", out_path]
+    try:
+        subprocess.run(args, check=True, timeout=600)
+        return out_path
+    except (subprocess.SubprocessError, OSError) as e:
+        print("make_short failed:", e)
+        return None
