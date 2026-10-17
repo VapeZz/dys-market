@@ -26,6 +26,10 @@ on:
         description: "Make next week's Sneaker drops carousel now (runs automatically on Sundays)"
         type: boolean
         default: false
+      daily_samples:
+        description: "Render a sample Card of the Day for every game (preview only)"
+        type: boolean
+        default: false
       report:
         description: "Publish this week's Market Report blog post now (runs automatically on Sundays)"
         type: boolean
@@ -145,6 +149,16 @@ jobs:
           if [ $rc -ne 0 ]; then echo "::error title=Card of the Day::$(tail -c 600 /tmp/daily.log | tr '\n' ' ')"; exit 1; fi
           echo "::notice title=Card of the Day::$(tail -n 1 /tmp/daily.log)"
 
+      - name: Card of the Day, other TCGs (midday, rotates games)
+        continue-on-error: true
+        run: |
+          set +e
+          python tools/daily_card.py site/data data/social-daily-other --rotate --date "$(date -u +%F)" > /tmp/daily2.log 2>&1; rc=$?
+          if [ "${{ inputs.daily_samples }}" = "true" ]; then python tools/daily_card.py site/data data/social-daily-other --sample --date "$(date -u +%F)" >> /tmp/daily2.log 2>&1; fi
+          cat /tmp/daily2.log
+          if [ $rc -ne 0 ]; then echo "::error title=Card of the Day (other)::$(tail -c 600 /tmp/daily2.log | tr '\n' ' ')"; exit 1; fi
+          echo "::notice title=Card of the Day (other)::$(tr '\n' ' ' < /tmp/daily2.log | tail -c 900)"
+
       - name: Weekly market report (blog, Sundays)
         continue-on-error: true
         run: |
@@ -160,6 +174,7 @@ jobs:
           if [ -d data/social ]; then mkdir -p site/social && cp -r data/social/. site/social/; fi
           if [ -d data/social-sneakers ]; then mkdir -p site/social-sneakers && cp -r data/social-sneakers/. site/social-sneakers/; fi
           if [ -d data/social-daily ]; then mkdir -p site/social-daily && cp -r data/social-daily/. site/social-daily/; fi
+          if [ -d data/social-daily-other ]; then mkdir -p site/social-daily-other && cp -r data/social-daily-other/. site/social-daily-other/; fi
 
       - name: Sync Shopify prices to market
         continue-on-error: true
