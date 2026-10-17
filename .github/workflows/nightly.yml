@@ -98,6 +98,12 @@ jobs:
           python pipeline/buyer.py 2>&1 | tee /tmp/buyer.log
           echo "::notice title=Buyer::$(tail -n 1 /tmp/buyer.log)"
 
+      - name: Price pages for search engines
+        continue-on-error: true
+        run: |
+          python tools/price_pages.py site 2>&1 | tee /tmp/pp.log
+          echo "::notice title=Price pages::$(tail -n 1 /tmp/pp.log)"
+
       - name: Sneaker release photos
         continue-on-error: true
         run: |
