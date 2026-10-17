@@ -1,0 +1,14 @@
+name: Probe TCGplayer categories
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -s https://tcgcsv.com/tcgplayer/categories | python3 -c "
+          import json,sys
+          for c in json.load(sys.stdin)['results']:
+              n=(c.get('name','')+' '+(c.get('displayName') or '')).lower()
+              if any(k in n for k in ['gundam','union arena','dragon ball','digimon','star wars','yugioh','yu-gi-oh','magic']):
+                  print('::notice title=cat::'+str(c['categoryId'])+' | '+c['name']+' | '+str(c.get('displayName')))
+          "
