@@ -299,6 +299,7 @@ async function pageIndex() {
   const meta = await getJSON("meta.json");
   $("#stats").textContent = `Tracking ${meta.cards.toLocaleString()} cards and ${meta.sealed.toLocaleString()} sealed products across ${meta.sets.toLocaleString()} sets · prices updated ${fmtDate(meta.updated)}`;
   const allSets = await getJSON("sets.json");
+  heroFan(meta, allSets);
   const GT = { "pokemon": "Pokémon TCG", "pokemon-jp": "Pokémon Japan", "one-piece": "One Piece Card Game", "lorcana": "Disney Lorcana", "riftbound": "Riftbound", "palworld": "Palworld Card Game", "gundam": "Gundam Card Game", "union-arena": "Union Arena" };
   $("#gtiles").innerHTML = meta.games.map((g, i) => `<a class="gtile gt${i}" href="sets.html?game=${g.slug}"><b>${esc(GT[g.slug] || g.label)}</b><span>${g.sets} sets<i> · browse cards &amp; prices</i> →</span></a>`).join("");
   const horizon = new Date(Date.now() + 45 * 864e5).toISOString().slice(0, 10);
@@ -320,6 +321,32 @@ async function pageIndex() {
   } else {
     $("#stock-block").hidden = true;
   }
+}
+
+async function heroFan(meta, allSets) {
+  const fan = $("#hd-fan"); if (!fan) return;
+  $("#hd-lead").textContent = `Market prices for ${meta.cards.toLocaleString()} cards and ${meta.sealed.toLocaleString()} sealed products across ${meta.games.length} games, updated every night.`;
+  $("#hd-note").textContent = `Prices from ${fmtDate(meta.updated)}. Tap Scan to check a card with your camera.`;
+  const pub = Object.fromEntries(allSets.map((s) => [s.id, s.pub || ""]));
+  const since = new Date(Date.now() - 3 * 365 * 864e5).toISOString().slice(0, 10);
+  let rows = [];
+  try {
+    const m = await getJSON("movers/cards-pokemon.json");
+    const w = m.windows[m.windows["7"] ? "7" : Object.keys(m.windows)[0]];
+    rows = [...(w["20"]?.up || []), ...(w["5"]?.up || [])].filter((r) => (pub[r[2]] || "") >= since && !/BREAK|LEGEND|prerelease|staff/i.test(r[1]));
+  } catch (e) { rows = []; }
+  if (rows.length < 3) {   // short history: fall back to this week's Trending cards carousel picks
+    try {
+      const t = await fetch("social/latest.json", { cache: "no-cache" }).then((r) => r.json());
+      rows = (t.cards || []).map((c) => [c.id, c.name, c.gid, c.now, c.old, c.pct]);
+    } catch (e) { return; }
+  }
+  const seen = new Set(); rows = rows.filter((r) => !seen.has(r[0]) && seen.add(r[0])).slice(0, 5);
+  if (rows.length < 3) return;
+  fan.innerHTML = `<span class="hd-stack">${rows.map((r, i) => `<span class="hd-card" title="${esc(r[1])}: ${money(r[3])}" style="--i:${i};--a:${((i - (rows.length - 1) / 2) * 10).toFixed(1)}deg;--y:${(Math.abs(i - (rows.length - 1) / 2) * 6).toFixed(0)}px;z-index:${10 - Math.round(Math.abs(i - (rows.length - 1) / 2) * 2)}">${imgTag(r[0], "", 1000)}
+    <span class="hd-tag">▲ ${Math.round(r[5])}%</span></span>`).join("")}</span>
+    <span class="hd-cap">Biggest Pokémon card gains this week</span>`;
+  fan.classList.add("ready");
 }
 
 const ERAS = {

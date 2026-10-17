@@ -53,11 +53,14 @@ MOVERS = '''<div class="movers"><div class="panel"><h3><span class="chg up">▲<
 PAGES = {
 "index": ("Market Insights · Drive Your Style",
           "Nightly market prices, biggest movers and set values for Pokémon, One Piece, Lorcana, Riftbound, Gundam, Union Arena and Palworld sealed product and cards.", f'''
-<section class="hero hero-tight"><div class="wrap">
-  <span class="eyebrow"><b>●</b> Live market data · Beta</span>
-  <h1>Know the market <span class="holo">before you rip.</span></h1>
-  <p class="lead">Nightly market prices for Pokémon, One Piece, Lorcana, Riftbound, Gundam, Union Arena and Palworld cards and sealed product.</p>
-  <div class="search" data-search>{SEARCH}<input type="search" placeholder="Search any card or product" aria-label="Search products and cards" autocomplete="off"><div class="results"></div></div>
+<section class="hero hero-deal"><div class="wrap hd-grid">
+  <div class="hd-copy">
+    <h1>What are your cards worth today?</h1>
+    <p class="lead" id="hd-lead">Market prices for Pokémon, One Piece, Lorcana, Riftbound, Gundam, Union Arena and Palworld cards and sealed product, updated every night.</p>
+    <div class="search" data-search>{SEARCH}<input type="search" placeholder="Search a card, set or booster box" aria-label="Search products and cards" autocomplete="off"><div class="results"></div></div>
+    <p class="hd-note" id="hd-note"></p>
+  </div>
+  <a class="hd-fan" id="hd-fan" href="cards.html" aria-label="See today's biggest movers"></a>
 </div></section>
 <section class="block" style="padding-top:4px"><div class="wrap"><div class="gtiles" id="gtiles"></div></div></section>
 <section class="block" id="report-block" hidden style="padding-top:0"><div class="wrap"><a class="report-banner" id="report-link" href="blog/"><div><b>📈 This week's market report</b><span id="report-title"></span></div><span>Read →</span></a></div></section>
