@@ -106,7 +106,7 @@ function shell() {
       <p id="updated-line"></p>
     </div>
     <div>
-      <p><a href="${STORE}">Shop Drive Your Style</a> · <a href="about.html">Where this data comes from</a></p>
+      <p><a href="${STORE}">Shop Drive Your Style</a> · <a href="blog/">Market reports</a> · <a href="about.html">Where this data comes from</a></p>
       <div class="socials" aria-label="Follow Drive Your Style">${SOCIALS.map(([n, u, d]) => `<a href="${u}" target="_blank" rel="noopener" aria-label="${n}" title="${n}"><svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg></a>`).join("")}</div>
       <div class="theme-switch" role="group" aria-label="Theme"><button data-t="dark">Dark</button><button data-t="light">Light</button></div>
     </div></div></footer>`;
@@ -1674,6 +1674,12 @@ function scanButton(box) {
 
 /* ---------- boot ---------- */
 shell();
+if (PAGE === "index") fetch("blog/latest.json", { cache: "no-cache" }).then((r) => r.ok ? r.json() : null).then((p) => {
+  if (!p || !p.slug || !$("#report-block")) return;
+  $("#report-link").href = `blog/${p.slug}.html`;
+  $("#report-title").textContent = p.title;
+  $("#report-block").hidden = false;
+}).catch(() => {});
 [["search", ".big-q"], ["collection", "#add-box"], ["index", ".hero [data-search]"]].forEach(([pg, sel]) => { if (PAGE === pg) scanButton(document.querySelector(sel)); });
 document.querySelectorAll("[data-search]").forEach(initSearch);
 const normNum = (t) => t.replace(/\b0+(\d)/g, "$1");

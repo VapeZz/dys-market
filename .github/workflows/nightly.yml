@@ -22,6 +22,10 @@ on:
         description: "Make next week's Sneaker drops carousel now (runs automatically on Sundays)"
         type: boolean
         default: false
+      report:
+        description: "Publish this week's Market Report blog post now (runs automatically on Sundays)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -120,8 +124,18 @@ jobs:
           if [ $rc -ne 0 ]; then echo "::error title=Card of the Day::$(tail -c 600 /tmp/daily.log | tr '\n' ' ')"; exit 1; fi
           echo "::notice title=Card of the Day::$(tail -n 1 /tmp/daily.log)"
 
+      - name: Weekly market report (blog, Sundays)
+        continue-on-error: true
+        run: |
+          set +e
+          python tools/blog.py site data/blog --date "$(date -u +%F)" ${{ inputs.report && '--force' || '' }} > /tmp/blog.log 2>&1; rc=$?
+          cat /tmp/blog.log
+          if [ $rc -ne 0 ]; then echo "::error title=Market report::$(tail -c 600 /tmp/blog.log | tr '\n' ' ')"; exit 1; fi
+          echo "::notice title=Market report::$(tr '\n' ' ' < /tmp/blog.log)"
+
       - name: Copy social images into the site
         run: |
+          if [ -d data/blog ]; then mkdir -p site/blog && cp -r data/blog/. site/blog/; fi
           if [ -d data/social ]; then mkdir -p site/social && cp -r data/social/. site/social/; fi
           if [ -d data/social-sneakers ]; then mkdir -p site/social-sneakers && cp -r data/social-sneakers/. site/social-sneakers/; fi
           if [ -d data/social-daily ]; then mkdir -p site/social-daily && cp -r data/social-daily/. site/social-daily/; fi

@@ -59,6 +59,7 @@ PAGES = {
   <div class="search" data-search>{SEARCH}<input type="search" placeholder="Search any card or product" aria-label="Search products and cards" autocomplete="off"><div class="results"></div></div>
 </div></section>
 <section class="block" style="padding-top:4px"><div class="wrap"><div class="gtiles" id="gtiles"></div></div></section>
+<section class="block" id="report-block" hidden style="padding-top:0"><div class="wrap"><a class="report-banner" id="report-link" href="blog/"><div><b>📈 This week's market report</b><span id="report-title"></span></div><span>Read →</span></a></div></section>
 <section class="block" id="stock-block"><div class="wrap">
   <div class="block-head"><div><h2>In stock at Drive Your Style</h2><p>Our price next to today's market price.</p></div><a class="more" href="https://driveyourstyle.net/collections/sealed-product">Shop all →</a></div>
   <div class="stockrow" id="stock"></div>
@@ -276,10 +277,15 @@ PAGES = {
 </article></div>'''),
 }
 
-for page, (title, desc, body) in PAGES.items():
-    canon = "" if page == "index" else f"{page}.html"
-    head = HEAD.replace("<link rel=\"canonical\"", "<meta name=\"robots\" content=\"noindex\">\n<link rel=\"canonical\"") if page in ("importer", "demand") else HEAD
-    html = head.replace("@@CANON@@", canon).replace("@@TITLE@@", title).replace("@@DESC@@", desc).replace("@@PAGE@@", page).replace("@@BODY@@", body)
-    with open(os.path.join(ROOT, "site", f"{page}.html"), "w", encoding="utf-8") as f:
-        f.write(html)
-print("pages written:", ", ".join(PAGES))
+def main():
+    for page, (title, desc, body) in PAGES.items():
+        canon = "" if page == "index" else f"{page}.html"
+        head = HEAD.replace("<link rel=\"canonical\"", "<meta name=\"robots\" content=\"noindex\">\n<link rel=\"canonical\"") if page in ("importer", "demand") else HEAD
+        html = head.replace("@@CANON@@", canon).replace("@@TITLE@@", title).replace("@@DESC@@", desc).replace("@@PAGE@@", page).replace("@@BODY@@", body)
+        with open(os.path.join(ROOT, "site", f"{page}.html"), "w", encoding="utf-8") as f:
+            f.write(html)
+    print("pages written:", ", ".join(PAGES))
+
+
+if __name__ == "__main__":
+    main()
