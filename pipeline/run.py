@@ -12,6 +12,7 @@ import logos
 import config  # noqa: F401  (loads settings / env overrides)
 import snapshots
 import slabs
+import slab_movers
 import store
 import tcgcsv
 
@@ -53,7 +54,8 @@ def main(argv):
     # Slab comps (eBay sold data for graded cards — requires EBAY_APP_ID)
     if os.environ.get("EBAY_APP_ID"):
         try:
-            slabs.fetch_today()
+            slabs.fetch_today()                                    # watchlist cards
+            slab_movers.fetch_movers_slabs(groups, products)       # today's top raw movers
             slabs.build_slab_index(config.OUT_DIR)
         except Exception as err:  # noqa: BLE001
             print(f"slabs: skipped — {err}")

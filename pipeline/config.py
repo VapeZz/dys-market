@@ -46,6 +46,13 @@ CATALOG_REFRESH_DAYS = 7
 #
 # Examples (uncomment / add your own):
 # ---------------------------------------------------------------------------
+# Auto-mover slab pulls — eBay comps are also fetched for the top N cards
+# by 1-day raw price gain each night. Tune these to control scope/API usage.
+SLAB_AUTO_MOVERS_TOP_N = 30        # how many top movers to pull comps for
+SLAB_AUTO_MOVERS_MIN_USD = 10      # ignore cards under this market price
+SLAB_AUTO_MOVERS_MIN_PCT = 5.0     # ignore moves smaller than this % gain
+SLAB_AUTO_MOVERS_CARDS_ONLY = True # True = skip sealed products (booster boxes etc.)
+
 SLAB_WATCHLIST = [
     # Pokémon — high-value chase cards
     {"name": "Charizard", "set": "Base Set", "game": "pokemon"},
