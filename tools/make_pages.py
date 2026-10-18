@@ -63,6 +63,7 @@ PAGES = {
   <a class="hd-fan" id="hd-fan" href="cards.html" aria-label="See today's biggest movers"></a>
 </div></section>
 <section class="block" style="padding-top:4px"><div class="wrap"><div class="gtiles" id="gtiles"></div></div></section>
+<section class="block" style="padding-top:0;padding-bottom:0"><div class="wrap"><a class="report-banner gw-banner" href="giveaway.html?ref=home"><div><b>🎁 Win an Elite Trainer Box every month</b><span>Free to enter: build your binder on the site. Bonus entries for every friend you bring.</span></div><span>Enter →</span></a></div></section>
 <section class="block" id="report-block" hidden style="padding-top:0"><div class="wrap"><a class="report-banner" id="report-link" href="blog/"><div><b>📈 This week's market report</b><span id="report-title"></span></div><span>Read →</span></a></div></section>
 <section class="block" id="stock-block"><div class="wrap">
   <div class="block-head"><div><h2>In stock at Drive Your Style</h2><p>Our price next to today's market price.</p></div><a class="more" href="https://driveyourstyle.net/collections/sealed-product">Shop all →</a></div>
@@ -235,6 +236,8 @@ PAGES = {
     <p id="shared-note" class="muted" hidden>A collection shared from Drive Your Style. <a href="collection.html" style="color:var(--accent)">Start your own →</a></p></div></div>
   <div id="acct" class="panel acct-bar" hidden></div>
   <div id="prof" class="panel prof-panel" hidden></div>
+  <div id="offers" class="panel prof-panel" hidden></div>
+  <div id="giveaway" class="panel prof-panel gw-panel" hidden></div>
   <div id="mine">
     <div class="search" id="add-box" style="max-width:640px">''' + SEARCH + '''<input id="add-q" type="search" placeholder="Search a card or product to add" aria-label="Search a card or product to add" autocomplete="off"><div class="results" id="add-results"></div></div>
     <p class="muted" id="added" style="min-height:20px;font-size:14px;margin:8px 0 0" role="status"></p>
@@ -294,6 +297,41 @@ PAGES = {
   </form>
   <p class="muted" style="font-size:13px;margin-top:18px">Prefer to consign high-end items instead? <a href="https://driveyourstyle.net/pages/sell-with-us">Consign with us</a> and keep up to 85% of the sale.</p>
 </section></div>'''),
+"giveaway": ("Monthly giveaway: win an Elite Trainer Box · Drive Your Style", "Win a Pokémon Elite Trainer Box every month. Free to enter: sign in, build your binder on Drive Your Style Market Insights, and get bonus entries for every friend you bring.", '''
+<section class="hero hero-tight"><div class="wrap">
+  <span class="eyebrow"><b>●</b> Free monthly giveaway</span>
+  <h1>Win an <span class="holo">Elite Trainer Box</span> every month.</h1>
+  <p class="lead">Track your cards on our free price site and you're in. One winner every month, drawn at random.</p>
+  <div class="stats gw-stats" id="gw-stats"><div class="stat"><div class="skeleton"></div></div><div class="stat"><div class="skeleton"></div></div><div class="stat"><div class="skeleton"></div></div></div>
+  <div class="btns" style="margin-top:18px"><a class="btn primary" href="collection.html#giveaway" id="gw-cta">Enter free →</a><a class="btn" href="#rules">Rules</a></div>
+</div></section>
+<div class="wrap"><section class="block" style="padding-top:8px">
+  <h2 style="font-size:24px">How to enter</h2>
+  <ol class="gw-steps">
+    <li><b>Sign in on My Collection.</b><span>Free account with your email. No password, no purchase.</span></li>
+    <li><b>Add at least 5 cards or products to your binder.</b><span>Search or scan them with your camera. You'll see what your collection is worth.</span></li>
+    <li><b>Tick "Enter me in the monthly giveaway".</b><span>That's 1 entry. You stay entered every month.</span></li>
+  </ol>
+  <h2 style="font-size:24px;margin-top:26px">Bonus entries</h2>
+  <ul class="gw-bonus">
+    <li><b>+1</b> Make your binder public on the Collectors page.</li>
+    <li><b>+1 per friend</b> who signs up with your invite link and adds 5 items (up to 10).</li>
+  </ul>
+  <div id="gw-mine" class="panel gw-mine" hidden></div>
+  <div id="gw-winners"></div>
+  <h2 style="font-size:24px;margin-top:30px" id="rules">Official rules</h2>
+  <div class="prose gw-rules">
+    <p><b>No purchase necessary to enter or win. A purchase does not improve your chances.</b></p>
+    <p><b>Sponsor:</b> Drive Style Wizards LLC (Drive Your Style), Las Vegas, Nevada.</p>
+    <p><b>Eligibility:</b> Open to legal residents of the 50 United States and D.C. who are 18 or older. Employees of the Sponsor and their households are not eligible. Void where prohibited.</p>
+    <p><b>Entry period:</b> Each calendar month (Pacific time) is a separate drawing. Entrants who meet the requirements on the last day of the month are entered in that month's drawing and stay entered in later months until they opt out.</p>
+    <p><b>How to enter:</b> Sign in at market.driveyourstyle.net, keep at least 5 items in your binder and tick "Enter me in the monthly giveaway". Bonus entries: 1 for a public binder, and 1 for each person who creates an account through your invite link and keeps at least 5 items in their binder, up to 10. One account per person. Accounts created to collect entries are disqualified.</p>
+    <p><b>Prize:</b> One winner per month receives 1 Pokémon TCG Elite Trainer Box chosen by the Sponsor (approximate retail value $60). No cash alternative. Prize ships free within the U.S. or can be picked up in Las Vegas.</p>
+    <p><b>Drawing:</b> The winner is selected at random on the 1st of the following month, with chances in proportion to entries. Odds depend on the number of entries received.</p>
+    <p><b>Notification:</b> The winner is contacted at the email on their account and must reply within 7 days, or an alternate winner is drawn. The winner's collector name may be posted on this page and on Drive Your Style social media.</p>
+    <p><b>General:</b> The Sponsor may verify eligibility and disqualify entries that break these rules or use fake accounts. This giveaway is not sponsored, endorsed or administered by The Pokémon Company, Nintendo, Instagram, TikTok, Facebook or YouTube. By entering you agree to these rules.</p>
+  </div>
+</section></div>'''),
 "buyer": ("Buyer dashboard · Drive Your Style", "Owner's buyer dashboard.", '''
 <div class="wrap"><section class="block">
   <div class="block-head"><div><span class="eyebrow"><b>●</b> Owner only · unlisted</span><h1 style="font-size:34px;margin-top:8px">Buyer dashboard</h1>
@@ -326,6 +364,7 @@ def links_page():
     rows = [
         ("Shop Drive Your Style", "Sealed Pokémon & One Piece, singles, sneakers, Pop Mart", "https://driveyourstyle.net/?utm_source=bio&utm_medium=social", True),
         ("Check what your cards are worth", "Free prices on 70,000+ cards, scan with your camera", "index.html?ref=bio", False),
+        ("🎁 Win an Elite Trainer Box", "Free monthly giveaway: build your binder to enter", "giveaway.html?ref=bio", False),
         ("Sell us your cards", "Get a cash or store-credit offer", "sell.html?ref=bio", False),
         ("Sneaker release calendar", "This week's drops, our cop or wait calls, reminders", "sneakers.html?ref=bio", False),
         ("This week's market report", "Biggest card gains and drops, new sets", "blog/?ref=bio", False),

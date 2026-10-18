@@ -132,7 +132,7 @@ def write_offers(binders, data):
         print("::warning title=Offers::cryptography not installed; offers not published")
         return
     by_pid = {pid_of(gid): (gid, b) for gid, _, b in binders}
-    shop_box, inbox, n = {}, {}, 0
+    shop_box, shop_wins, inbox, n = {}, {}, {}, 0
     for opid in OWNERS:
         if opid not in by_pid:
             continue
@@ -152,6 +152,13 @@ def write_offers(binders, data):
             n += 1
         if BOXKEY.match(str(ob.get("box") or "")):
             shop_box[ob["box"]] = rows
+            try:
+                import giveaway
+                wins = [{"month": w["month"], "alias": w["alias"], "cust": by_pid[w["pid"]][0].rsplit("/", 1)[-1] if w["pid"] in by_pid else ""}
+                        for w in giveaway.winners()[-3:]]
+            except Exception:
+                wins = []
+            shop_wins[ob["box"]] = wins
     os.makedirs(bdir, exist_ok=True)
     boxes = dict(shop_box)
     for pid, offers in inbox.items():
@@ -162,7 +169,7 @@ def write_offers(binders, data):
         name = hashlib.sha256(("dysbox:" + key).encode()).hexdigest()[:24]
         last = max((e["t"] for o in offers for e in o["h"]), default=0)
         with open(os.path.join(bdir, f"{name}.json"), "w", encoding="utf-8") as f:
-            json.dump(_seal(key, {"updated": last, "offers": offers}), f, separators=(",", ":"))
+            json.dump(_seal(key, {"updated": last, "offers": offers, **({"winners": shop_wins[key]} if key in shop_wins else {})}), f, separators=(",", ":"))
     print(f"offers: {n} threads, {len(boxes)} inboxes")
 
 
@@ -286,6 +293,11 @@ def main(argv):
 
     write_demand(binders, data, rows)
     write_offers(binders, data)
+    try:
+        import giveaway
+        giveaway.write_public(binders, data, pid_of)
+    except Exception as err:
+        print(f"::warning title=Giveaway::{str(err)[:300]}")
     with open(os.path.join(data, "showcase.json"), "w", encoding="utf-8") as f:
         json.dump({"updated": int(time.time() * 1000), "profiles": profiles}, f, separators=(",", ":"), ensure_ascii=False)
     print(f"collectors: {len(profiles)} public binders out of {len(binders)} saved, {sum(likes.values())} likes, {sum(followers.values())} follows")

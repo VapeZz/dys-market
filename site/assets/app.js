@@ -131,7 +131,7 @@ document.documentElement.dataset.theme = getTheme();
 /* ---------- shell ---------- */
 const SEARCH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>`;
 function shell() {
-  const links = [["sets", "Sets"], ["trends", "Trends"], ["cards", "Movers"], ["search", "Search"], ["compare", "Compare"], ["calendar", "Calendar"], ["sneakers", "Sneakers"], ["watchlist", "Want list"], ["collection", "My Collection"], ["collectors", "Collectors"], ["about", "About"]];
+  const links = [["sets", "Sets"], ["trends", "Trends"], ["cards", "Movers"], ["search", "Search"], ["compare", "Compare"], ["calendar", "Calendar"], ["sneakers", "Sneakers"], ["watchlist", "Want list"], ["collection", "My Collection"], ["collectors", "Collectors"], ["giveaway", "🎁 Giveaway"], ["about", "About"]];
   $("#top").outerHTML = `<header class="top"><div class="wrap">
     <a class="brand" href="index.html" aria-label="Drive Your Style Market Insights home"><img class="logo-img logo-on-dark" src="assets/logo-light.png" alt="Drive Your Style" width="61" height="40"><img class="logo-img logo-on-light" src="assets/logo-dark.png" alt="" width="61" height="40"><span class="brand-sub">Market<br>Insights</span></a>
     <nav class="nav" id="nav">${links.map(([p, l]) => `<a href="${p}.html"${p === PAGE ? ' aria-current="page"' : ""}>${l}</a>`).join("")}
@@ -154,7 +154,7 @@ function shell() {
       <p id="updated-line"></p>${AFF_ON ? `<p>Some outbound links (TCGplayer, eBay, StockX, GOAT) are affiliate links. If you buy through them we may earn a small commission at no extra cost to you.</p>` : ""}
     </div>
     <div>
-      <p><a href="${STORE}">Shop Drive Your Style</a> · <a href="sell.html">Sell to us</a> · <a href="blog/">Market reports</a> · <a href="about.html">Where this data comes from</a></p>
+      <p><a href="${STORE}">Shop Drive Your Style</a> · <a href="sell.html">Sell to us</a> · <a href="giveaway.html">Monthly giveaway</a> · <a href="blog/">Market reports</a> · <a href="about.html">Where this data comes from</a></p>
       <div class="socials" aria-label="Follow Drive Your Style">${SOCIALS.map(([n, u, d]) => `<a href="${u}" target="_blank" rel="noopener" aria-label="${n}" title="${n}"><svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg></a>`).join("")}</div>
       <div class="theme-switch" role="group" aria-label="Theme"><button data-t="dark">Dark</button><button data-t="light">Light</button></div>
     </div></div></footer>`;
@@ -1376,7 +1376,7 @@ const acct = (() => {
           const r = await gql(`mutation($m: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $m) { userErrors { message } } }`,
             { m: [{ ownerId: a.id, namespace: "dys", key: "binder", type: "json", value: JSON.stringify({ name: c.name || "", updated: c.updated || Date.now(), items: c.items,
               alias: c.alias || "", pub: !!c.pub, likes: c.likes || [], follows: c.follows || [], want: (c.want || []).map(({ k, id, g, n, at, max, ts }) => ({ k, id, g, n, at, max, ts })),
-              box: c.box || "", offers: c.offers || [], oresp: c.oresp || {} }) }] });
+              box: c.box || "", offers: c.offers || [], oresp: c.oresp || {}, gw: !!c.gw, ref: c.ref || "" }) }] });
           const e = r.metafieldsSet.userErrors; document.dispatchEvent(new CustomEvent("dys-sync", { detail: e.length ? "error" : "ok" }));
         } catch { document.dispatchEvent(new CustomEvent("dys-sync", { detail: "error" })); }
       }, 800);
@@ -1530,10 +1530,12 @@ function offerForm({ title, card, mkt, start, kindStart = "cash", send, button =
 async function offersPanel(el, onChange) {
   if (!el || !acct.signedIn()) return;
   const owner = await isOwner(), me = owner ? "s" : "c", list = await offers.mine();
-  if (!list.length) { el.hidden = !owner; if (owner) el.innerHTML = `<div class="prof-head"><b>Offers you've made</b></div><p class="muted" style="margin:6px 0 0;font-size:14px">None yet. Open any binder on the <a href="collectors.html" style="color:var(--accent)">Collectors page</a>, tap a card and choose <b>Make an offer</b>.</p>`; return; }
+  const wins = owner ? ((await offers.inbox()).winners || []) : [];
+  const winHtml = wins.length ? `<div class="ofr-done" style="margin:0 0 10px">${wins.slice().reverse().map((w) => `🎁 <b>${esc(w.month)} giveaway winner:</b> ${esc(w.alias)}${w.cust ? ` · <a href="https://admin.shopify.com/store/s11bjx-1e/customers/${esc(w.cust)}" target="_blank" rel="noopener">contact them →</a>` : ""}`).join("<br>")}</div>` : "";
+  if (!list.length) { el.hidden = !owner; if (owner) el.innerHTML = `${winHtml}<div class="prof-head"><b>Offers you've made</b></div><p class="muted" style="margin:6px 0 0;font-size:14px">None yet. Open any binder on the <a href="collectors.html" style="color:var(--accent)">Collectors page</a>, tap a card and choose <b>Make an offer</b>.</p>`; return; }
   el.hidden = false;
   const line = (e) => `${e.by === me ? "You" : owner ? "They" : "Drive Your Style"} ${e.act === "offer" ? "offered" : e.act === "counter" ? "countered" : e.act === "accept" ? "accepted" : e.act === "decline" ? "declined" : "withdrew"}${e.a && !["decline", "withdraw"].includes(e.act) ? ` <b>${money(e.a)}</b> ${KIND[e.kind] || "cash"}` : ""}${e.m ? ` · “${esc(e.m)}”` : ""}`;
-  el.innerHTML = `<div class="prof-head"><b>${owner ? "Offers you've made" : "Offers on your cards"}</b><span class="muted" style="font-size:13px">Updates every 10 minutes</span></div>
+  el.innerHTML = `${winHtml}<div class="prof-head"><b>${owner ? "Offers you've made" : "Offers on your cards"}</b><span class="muted" style="font-size:13px">Updates every 10 minutes</span></div>
     <div class="ofr-list">${list.map((o) => { const st = offers.status(o.h, me), l = st.l;
       const who = owner ? `<span class="muted" style="font-size:13px;display:block">to ${o.alias ? esc(o.alias) : "collector"}${o.sent ? "" : " · sending…"}</span>` : "";
       const acts = st.k === "yours" ? `<div class="ofr-acts"><button class="btn primary" data-oa="accept" data-id="${o.id}" type="button">Accept ${money(l.a)}</button><button class="btn" data-oa="counter" data-id="${o.id}" type="button">Counter</button><button class="btn" data-oa="decline" data-id="${o.id}" type="button">Decline</button></div>`
@@ -1564,6 +1566,59 @@ async function offerNudge() {
     const a = document.createElement("a"); a.className = "ofr-nudge"; a.href = "collection.html#offers";
     a.textContent = `💵 ${n} offer${n > 1 ? "s" : ""} waiting for you →`; document.body.appendChild(a);
   } catch {}
+}
+
+/* ---------- monthly giveaway: entries come from your binder; the job tallies them every 10 minutes ---------- */
+try { const r = (params.get("r") || "").toLowerCase(); if (/^[a-f0-9]{12}$/.test(r) && !localStorage.getItem("dys-ref")) localStorage.setItem("dys-ref", r); } catch {}
+const inviteUrl = (pid) => `https://market.driveyourstyle.net/giveaway.html?r=${pid}`;
+async function shareInvite(pid) {
+  const url = inviteUrl(pid), text = "Track your card collection free and enter the monthly Elite Trainer Box giveaway:";
+  try { if (navigator.share) { await navigator.share({ title: "Drive Your Style giveaway", text, url }); return; } } catch { return; }
+  try { await navigator.clipboard.writeText(url); toast("Invite link copied"); } catch { prompt("Copy your invite link:", url); }
+}
+async function giveawayPanel(el) {
+  if (!el || !acct.signedIn()) return;
+  const pid = await myPid(); if (!pid) return;
+  let c = colGet();
+  const ref = (() => { try { return localStorage.getItem("dys-ref"); } catch { return null; } })();
+  if (!c.ref && ref && ref !== pid) { c.ref = ref; colSet(c); c = colGet(); }
+  const gw = await getJSON("giveaway.json").catch(() => null);
+  const n = (c.items || []).reduce((a, i) => a + (i.qty || 1), 0), min = gw?.min || 5;
+  const mine = gw?.mine?.[pid], pub = !!c.pub && ALIAS_OK.test(c.alias || "");
+  const est = c.gw && n >= min ? 1 + (pub ? 1 : 0) + (mine ? mine[1] : 0) : 0;
+  el.hidden = false;
+  el.innerHTML = `<div class="prof-head"><b>🎁 Monthly giveaway · ${esc(gw?.prize || "1 Pokémon Elite Trainer Box")}</b><a class="more" href="giveaway.html">Rules →</a></div>
+    <label class="toggle"><input type="checkbox" id="gw-in"${c.gw ? " checked" : ""}> Enter me in the monthly giveaway (18+, US)</label>
+    <ul class="gw-check">
+      <li class="${n >= min ? "ok" : ""}">${n >= min ? "✓" : "○"} ${Math.min(n, min)}/${min} items in your binder${n >= min ? "" : ` · add ${min - n} more`}</li>
+      <li class="${pub ? "ok" : ""}">${pub ? "✓" : "○"} Public binder <span class="muted">+1 entry</span></li>
+      <li class="${mine?.[1] ? "ok" : ""}">${mine?.[1] ? "✓" : "○"} Friends who joined with your link: <b>${mine ? mine[1] : 0}</b> <span class="muted">+1 entry each, up to ${gw?.cap || 10}</span></li>
+    </ul>
+    <p class="gw-total">${c.gw ? (n >= min ? `You have <b>${est}</b> entr${est === 1 ? "y" : "ies"} for the ${gw?.draw ? new Date(gw.draw + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric" }) : "next"} drawing.` : `Add ${min - n} more item${min - n === 1 ? "" : "s"} to your binder to be entered.`) : "Tick the box to enter. It's free."}</p>
+    <div class="btns"><button class="btn primary" type="button" id="gw-share">Invite friends for bonus entries</button></div>
+    <p class="muted" style="font-size:12px;margin:8px 0 0">Entries update within 10 minutes. No purchase necessary.</p>`;
+  $("#gw-in", el).addEventListener("change", (e) => { const cc = colGet(); cc.gw = e.target.checked; colSet(cc);
+    toast(cc.gw ? "You're in! Good luck 🍀" : "You've left the giveaway"); setTimeout(() => giveawayPanel(el), 300); });
+  $("#gw-share", el).addEventListener("click", () => shareInvite(pid));
+}
+async function pageGiveaway() {
+  const gw = await getJSON("giveaway.json").catch(() => null);
+  const draw = gw?.draw ? new Date(gw.draw + "T00:00:00") : null;
+  const days = draw ? Math.max(0, Math.ceil((draw - Date.now()) / 864e5)) : null;
+  $("#gw-stats").innerHTML = [
+    [days == null ? "—" : days === 0 ? "Today" : `${days} day${days === 1 ? "" : "s"}`, "Until the next drawing"],
+    gw && gw.entrants >= 10 ? [gw.entrants.toLocaleString(), "Collectors entered"] : ["Free", "To enter"],
+    ["$60", "Prize value"],
+  ].map(([v, l]) => `<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+  if (gw?.winners?.length) $("#gw-winners").innerHTML = `<h2 style="font-size:24px;margin-top:26px">Past winners</h2><ul class="gw-bonus">${gw.winners.slice().reverse().map((w) => `<li><b>${esc(new Date(w.month + "-15").toLocaleDateString("en-US", { month: "long", year: "numeric" }))}</b> ${esc(w.alias)} 🎉</li>`).join("")}</ul>`;
+  if (acct.signedIn()) {
+    const pid = await myPid(), c = colGet(), mine = pid && gw?.mine?.[pid];
+    $("#gw-cta").textContent = c.gw ? "See your entries →" : "Enter now →";
+    const box = $("#gw-mine"); box.hidden = false;
+    box.innerHTML = `<div><b>${c.gw ? (mine ? `You have ${mine[0]} entr${mine[0] === 1 ? "y" : "ies"}` : "You're signed up") : "You're signed in but not entered yet"}</b><span class="muted">${c.gw ? "Bring friends for more entries." : "Tick the giveaway box on My Collection."}</span></div>
+      ${pid ? `<button class="btn primary" type="button" id="gw-share2">Invite friends</button>` : ""}`;
+    $("#gw-share2")?.addEventListener("click", () => shareInvite(pid));
+  }
 }
 
 /* graded slabs: each grade is its own line in the collection, valued at the owner's number (eBay sold is one tap away) */
@@ -1664,7 +1719,7 @@ async function pageCollection() {
     lineChart($("#cchart"), dates, vals, range);
   };
   const save = () => { if (shared) return; const cur = colGet();   // offers are changed elsewhere; keep the latest
-    for (const k of ["box", "offers", "oresp", "likes", "follows", "want", "socialAt"]) if (cur[k] !== undefined) col[k] = cur[k];
+    for (const k of ["box", "offers", "oresp", "gw", "ref", "likes", "follows", "want", "socialAt"]) if (cur[k] !== undefined) col[k] = cur[k];
     colSet(col); };
 
   const draw = () => {
@@ -1845,7 +1900,7 @@ async function pageCollection() {
       const a = acct.info();
       const al = colGet().alias;
       bar.innerHTML = a ? `<span><b>${al ? `Signed in as ${esc(al)}` : "Saved to your account"}</b>${msg ? ` · <span class="muted">${esc(msg)}</span>` : ""}${al ? "" : `<span class="muted" style="display:block;font-size:13px">Pick a collector name below so people see that instead of your email.</span>`}</span><button class="btn" id="acct-out" type="button">Sign out</button>`
-        : `<span><b>Save your binder to your Drive Your Style account</b><span class="muted" style="display:block;font-size:13px">Sign in with the email you shop with. Your binder syncs to every phone and computer.</span></span><button class="btn primary" id="acct-in" type="button">Sign in</button>`;
+        : `<span><b>Save your binder to your Drive Your Style account</b><span class="muted" style="display:block;font-size:13px">Sign in with your email. Your binder syncs to every phone and computer, and you can enter the free monthly <a href="giveaway.html" style="color:var(--accent)">Elite Trainer Box giveaway</a>.</span></span><button class="btn primary" id="acct-in" type="button">Sign in</button>`;
       $("#acct-in")?.addEventListener("click", () => acct.signIn());
       $("#acct-out")?.addEventListener("click", () => acct.signOut());
     };
@@ -1859,7 +1914,7 @@ async function pageCollection() {
         if (remote && (!local.items.length || (!justSignedIn && (remote.updated || 0) > (local.updated || 0)))) {
           col = { name: remote.name || local.name || "", items: remote.items || [], updated: remote.updated,
             alias: remote.alias || local.alias || "", pub: remote.pub ?? local.pub ?? false, likes: remote.likes || [], follows: remote.follows || [], want: remote.want || local.want || [], socialAt: local.socialAt,
-            box: remote.box || local.box || "", offers: remote.offers || local.offers || [], oresp: remote.oresp || local.oresp || {} };
+            box: remote.box || local.box || "", offers: remote.offers || local.offers || [], oresp: remote.oresp || local.oresp || {}, gw: remote.gw ?? local.gw ?? false, ref: remote.ref || local.ref || "" };
           colSet(col, false);
         } else if (remote && justSignedIn) {          // first sign-in on this device: combine both
           const key = (x) => `${x.id}|${printCode(subOf(x.n || ""))}${x.gr ? "|" + x.gr : ""}`, m = new Map(remote.items.map((x) => [key(x), x]));
@@ -1867,7 +1922,7 @@ async function pageCollection() {
           const uni = (k) => [...new Set([...(remote[k] || []), ...(local[k] || [])])];
           col = { name: local.name || remote.name || "", items: [...m.values()], alias: local.alias || remote.alias || "", pub: local.pub ?? remote.pub ?? false,
             likes: uni("likes"), follows: uni("follows"), socialAt: local.socialAt,
-            box: remote.box || local.box || "", offers: [...new Map([...(remote.offers || []), ...(local.offers || [])].map((o) => [o.id, o])).values()], oresp: { ...(local.oresp || {}), ...(remote.oresp || {}) },
+            box: remote.box || local.box || "", offers: [...new Map([...(remote.offers || []), ...(local.offers || [])].map((o) => [o.id, o])).values()], oresp: { ...(local.oresp || {}), ...(remote.oresp || {}) }, gw: remote.gw || local.gw || false, ref: remote.ref || local.ref || "",
             want: [...new Map([...(remote.want || []), ...(local.want || [])].map((w) => [w.k, w])).values()] };
           colSet(col);
         } else { col = local; acct.push(local); }
@@ -1875,10 +1930,11 @@ async function pageCollection() {
         paint(remote ? "Synced" : "Saved");
         profilePanel();
         offers.ensureKey(); col = colGet();
-        offersPanel($("#offers"));
+        offersPanel($("#offers")); giveawayPanel($("#giveaway"));
+        if (location.hash === "#giveaway") setTimeout(() => $("#giveaway")?.scrollIntoView({ behavior: "smooth" }), 300);
         if (location.hash === "#offers") setTimeout(() => $("#offers")?.scrollIntoView({ behavior: "smooth" }), 300);
       } else paint();
-    } catch (err) { paint(); if (acct.signedIn()) { profilePanel(); offersPanel($("#offers")); } $("#added").textContent = String(err.message || err).startsWith("Sign-in") ? err.message : "Couldn't reach your account. Your binder is still saved on this device."; }
+    } catch (err) { paint(); if (acct.signedIn()) { profilePanel(); offersPanel($("#offers")); giveawayPanel($("#giveaway")); } $("#added").textContent = String(err.message || err).startsWith("Sign-in") ? err.message : "Couldn't reach your account. Your binder is still saved on this device."; }
   }
   draw(); await loadChanges(); draw();
 }
@@ -2068,7 +2124,7 @@ async function pageBuyer() {
   draw();
 }
 
-const pages = { search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, demand: pageDemand, importer: pageImporter, collection: pageCollection, collectors: pageCollectors, sell: pageSell, buyer: pageBuyer };
+const pages = { search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, demand: pageDemand, importer: pageImporter, collection: pageCollection, collectors: pageCollectors, sell: pageSell, buyer: pageBuyer, giveaway: pageGiveaway };
 (pages[PAGE] || (async () => {}))().then(() => offerNudge()).catch((err) => {
   console.error(err);
   const main = $("main");

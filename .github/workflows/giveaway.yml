@@ -1,0 +1,36 @@
+name: Giveaway draw
+
+# 1st of each month, 1:05am Pacific: draws last month's winner (weighted by entries)
+# into site/giveaway-winners.json. The owner sees the winner on My Collection.
+on:
+  schedule:
+    - cron: "5 9 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  draw:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Draw
+        env:
+          SHOPIFY_SHOP: ${{ secrets.SHOPIFY_SHOP }}
+          SHOPIFY_CLIENT_ID: ${{ secrets.SHOPIFY_CLIENT_ID }}
+          SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
+        run: |
+          python pipeline/giveaway.py draw
+          git config user.name "dys-market-bot"
+          git config user.email "dys-market-bot@users.noreply.github.com"
+          git add site/giveaway-winners.json
+          git diff --cached --quiet || { git commit -q -m "Giveaway draw $(date -u +%F)"; git push -q origin HEAD:main; }

@@ -39,7 +39,7 @@ jobs:
           git config user.name "dys-market-bot"
           git config user.email "dys-market-bot@users.noreply.github.com"
           git add -A
-          if git diff --cached --quiet -- data/showcase.json data/showcase showcase-hidden.json data/wanted.json data/demand.json data/box; then echo "No changes"; exit 0; fi
+          if git diff --cached --quiet -- data/showcase.json data/showcase showcase-hidden.json data/wanted.json data/demand.json data/box data/giveaway.json; then echo "No changes"; exit 0; fi
           git commit -q -m "Collectors $(date -u +%FT%H:%MZ)"
           git push -q origin gh-pages
           echo "::notice title=Collectors::$(tail -n 1 /tmp/col.log)"
