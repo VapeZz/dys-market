@@ -84,6 +84,8 @@ jobs:
         run: python pipeline/merge_archive.py "${{ inputs.merge_archive }}"
 
       - name: Download today's prices and build site data
+        env:
+          EBAY_APP_ID: ${{ secrets.EBAY_APP_ID }}
         run: python pipeline/run.py
 
       - name: Collectors page (public binders, likes, follows)

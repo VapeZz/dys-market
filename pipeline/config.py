@@ -34,6 +34,30 @@ KEEP_WEEKLY_DAYS = 400
 # Re-download a set's product list at least this often (days).
 CATALOG_REFRESH_DAYS = 7
 
+# ---------------------------------------------------------------------------
+# Slab watchlist — cards to pull eBay sold comps for every night.
+# Requires EBAY_APP_ID secret in GitHub Actions.
+#
+# Fields:
+#   name    Card name as you'd search it on eBay (be specific)
+#   set     Set name to narrow results (e.g. "Base Set", "Obsidian Flames")
+#   game    Matches a slug from GAMES above (for grouping on the site)
+#   key     Optional short slug used as the dict key; auto-generated if omitted
+#
+# Examples (uncomment / add your own):
+# ---------------------------------------------------------------------------
+SLAB_WATCHLIST = [
+    # Pokémon — high-value chase cards
+    {"name": "Charizard", "set": "Base Set", "game": "pokemon"},
+    {"name": "Charizard ex", "set": "Obsidian Flames", "game": "pokemon"},
+    {"name": "Pikachu", "set": "Base Set", "game": "pokemon"},
+    {"name": "Umbreon VMAX", "set": "Evolving Skies", "game": "pokemon"},
+    {"name": "Lugia V", "set": "Silver Tempest", "game": "pokemon"},
+    # One Piece
+    {"name": "Nika Luffy", "set": "OP-01", "game": "one-piece"},
+    # Add more cards here — one dict per card
+]
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(ROOT, "data"))
 SITE_DIR = os.environ.get("SITE_DIR", os.path.join(ROOT, "site"))
