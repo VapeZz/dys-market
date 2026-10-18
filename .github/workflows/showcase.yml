@@ -1,11 +1,11 @@
 name: Collectors refresh
 
-# Re-tallies public binders, likes and follows every 30 minutes and updates
+# Re-tallies public binders, likes and follows and delivers offers every 10 minutes and updates
 # just those files on the live site. The nightly job does the same as part of
 # its full rebuild.
 on:
   schedule:
-    - cron: "7,37 * * * *"
+    - cron: "*/10 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -33,12 +33,13 @@ jobs:
           set -o pipefail
           git clone -q --depth 1 --branch gh-pages "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" /tmp/pages
           cp site/showcase-hidden.json /tmp/pages/showcase-hidden.json
+          pip install -q cryptography > /dev/null 2>&1 || true
           python pipeline/showcase.py /tmp/pages | tee /tmp/col.log
           cd /tmp/pages
           git config user.name "dys-market-bot"
           git config user.email "dys-market-bot@users.noreply.github.com"
           git add -A
-          if git diff --cached --quiet -- data/showcase.json data/showcase showcase-hidden.json data/wanted.json data/demand.json; then echo "No changes"; exit 0; fi
+          if git diff --cached --quiet -- data/showcase.json data/showcase showcase-hidden.json data/wanted.json data/demand.json data/box; then echo "No changes"; exit 0; fi
           git commit -q -m "Collectors $(date -u +%FT%H:%MZ)"
           git push -q origin gh-pages
           echo "::notice title=Collectors::$(tail -n 1 /tmp/col.log)"

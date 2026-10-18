@@ -93,6 +93,7 @@ jobs:
           SHOPIFY_CLIENT_ID: ${{ secrets.SHOPIFY_CLIENT_ID }}
           SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
         run: |
+          pip install -q cryptography > /dev/null 2>&1 || true
           python pipeline/showcase.py site 2>&1 | tee /tmp/col.log
           echo "::notice title=Collectors::$(tail -n 1 /tmp/col.log)"
 

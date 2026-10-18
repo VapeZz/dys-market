@@ -17,6 +17,7 @@ id, so Shopify ids are never published.
 Needs SHOPIFY_SHOP + SHOPIFY_CLIENT_ID/SHOPIFY_CLIENT_SECRET (or SHOPIFY_ADMIN_TOKEN).
 Hidden profiles: list pids in site/showcase-hidden.json.
 """
+import base64
 import hashlib
 import json
 import os
@@ -61,6 +62,108 @@ def fetch_binders(api):
         if not d["pageInfo"]["hasNextPage"]:
             return out
         after = d["pageInfo"]["endCursor"]
+
+
+# Offers: the shop (these profile ids) can make offers on cards in public binders.
+OWNERS = set(filter(None, os.environ.get("OFFER_OWNERS", "2008058b30b5").split(",")))
+ACTS = {"offer", "counter", "accept", "decline", "withdraw"}
+BOXKEY = re.compile(r"^[A-Za-z0-9_-]{20,64}$")
+OID = re.compile(r"^[A-Za-z0-9_-]{6,40}$")
+
+
+def _ev(e, by):
+    """One sanitized step of an offer thread, or None."""
+    if not isinstance(e, dict) or e.get("act") not in ACTS:
+        return None
+    try:
+        t = int(e.get("t") or 0)
+        a = int(e["a"]) if e.get("a") is not None else None
+    except (TypeError, ValueError):
+        return None
+    if e["act"] in ("offer", "counter") and not (a and 0 < a <= 10_000_000):
+        return None
+    return {"by": by, "act": e["act"], "a": a, "kind": "credit" if e.get("kind") == "credit" else "cash",
+            "m": re.sub(r"\s+", " ", str(e.get("m") or ""))[:200], "t": t}
+
+
+def thread(shop_steps, collector_steps):
+    """Merge both sides' steps by time and keep only moves that are legal at that point."""
+    evs = [x for x in (_ev(e, "s") for e in shop_steps or []) if x] + [x for x in (_ev(e, "c") for e in collector_steps or []) if x]
+    evs.sort(key=lambda e: (e["t"], e["by"] == "c"))
+    out = []
+    for e in evs:
+        if not out:
+            if e["by"] == "s" and e["act"] == "offer":
+                out.append(e)
+            continue
+        last = out[-1]
+        if last["act"] in ("accept", "decline", "withdraw"):
+            break
+        waiting = "c" if last["by"] == "s" else "s"      # whose turn it is
+        if e["by"] == waiting and e["act"] in ("accept", "decline", "counter"):
+            if e["act"] == "accept":
+                e = {**e, "a": last["a"], "kind": last["kind"]}
+            out.append(e)
+        elif e["by"] == last["by"] and e["act"] == "withdraw":
+            out.append(e)
+    return out
+
+
+def _seal(key, obj):
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    raw = json.dumps(obj, separators=(",", ":"), ensure_ascii=False).encode()
+    iv = hashlib.sha256(key.encode() + b"|" + raw).digest()[:12]   # same content -> same file, so quiet runs don't commit
+    ct = AESGCM(hashlib.sha256(key.encode()).digest()).encrypt(iv, raw, None)
+    b = lambda x: base64.urlsafe_b64encode(x).decode().rstrip("=")
+    return {"v": 1, "iv": b(iv), "ct": b(ct)}
+
+
+def write_offers(binders, data):
+    """Each signed-in collector keeps a private inbox key ("box") in their binder. The shop's offers and the
+    collector's replies are merged here and published encrypted with that key at data/box/<hash of key>.json,
+    so only the two people involved can read them (the repo and the site are public)."""
+    bdir = os.path.join(data, "box")
+    if os.path.isdir(bdir):
+        for f in os.listdir(bdir):
+            os.remove(os.path.join(bdir, f))
+    try:
+        import cryptography  # noqa: F401
+    except ImportError:
+        print("::warning title=Offers::cryptography not installed; offers not published")
+        return
+    by_pid = {pid_of(gid): (gid, b) for gid, _, b in binders}
+    shop_box, inbox, n = {}, {}, 0
+    for opid in OWNERS:
+        if opid not in by_pid:
+            continue
+        ogid, ob = by_pid[opid]
+        rows = []
+        for o in (ob.get("offers") or [])[-300:]:
+            if not isinstance(o, dict) or not OID.match(str(o.get("id") or "")) or o.get("to") not in by_pid or o["to"] in OWNERS:
+                continue
+            cgid, cb = by_pid[o["to"]]
+            resp = (cb.get("oresp") or {}).get(o["id"]) if isinstance(cb.get("oresp"), dict) else None
+            h = thread(o.get("h"), resp if isinstance(resp, list) else [])
+            if not h:
+                continue
+            card = {"id": o.get("cid"), "g": o.get("g"), "n": str(o.get("n") or "")[:120], "gr": str(o.get("gr") or "")[:30] or None}
+            inbox.setdefault(o["to"], []).append({"id": o["id"], "card": card, "h": h})
+            rows.append({"id": o["id"], "to": o["to"], "alias": (cb.get("alias") or "")[:20], "cust": cgid.rsplit("/", 1)[-1], "card": card, "h": h})
+            n += 1
+        if BOXKEY.match(str(ob.get("box") or "")):
+            shop_box[ob["box"]] = rows
+    os.makedirs(bdir, exist_ok=True)
+    boxes = dict(shop_box)
+    for pid, offers in inbox.items():
+        key = by_pid[pid][1].get("box")
+        if BOXKEY.match(str(key or "")) and key not in boxes:
+            boxes[key] = offers
+    for key, offers in boxes.items():
+        name = hashlib.sha256(("dysbox:" + key).encode()).hexdigest()[:24]
+        last = max((e["t"] for o in offers for e in o["h"]), default=0)
+        with open(os.path.join(bdir, f"{name}.json"), "w", encoding="utf-8") as f:
+            json.dump(_seal(key, {"updated": last, "offers": offers}), f, separators=(",", ":"))
+    print(f"offers: {n} threads, {len(boxes)} inboxes")
 
 
 def write_demand(binders, data, rows):
@@ -182,6 +285,7 @@ def main(argv):
             json.dump({**prof, "items": [r for _, r in items]}, f, separators=(",", ":"), ensure_ascii=False)
 
     write_demand(binders, data, rows)
+    write_offers(binders, data)
     with open(os.path.join(data, "showcase.json"), "w", encoding="utf-8") as f:
         json.dump({"updated": int(time.time() * 1000), "profiles": profiles}, f, separators=(",", ":"), ensure_ascii=False)
     print(f"collectors: {len(profiles)} public binders out of {len(binders)} saved, {sum(likes.values())} likes, {sum(followers.values())} follows")

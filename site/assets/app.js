@@ -1375,7 +1375,8 @@ const acct = (() => {
           const a = get();
           const r = await gql(`mutation($m: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $m) { userErrors { message } } }`,
             { m: [{ ownerId: a.id, namespace: "dys", key: "binder", type: "json", value: JSON.stringify({ name: c.name || "", updated: c.updated || Date.now(), items: c.items,
-              alias: c.alias || "", pub: !!c.pub, likes: c.likes || [], follows: c.follows || [], want: (c.want || []).map(({ k, id, g, n, at, max, ts }) => ({ k, id, g, n, at, max, ts })) }) }] });
+              alias: c.alias || "", pub: !!c.pub, likes: c.likes || [], follows: c.follows || [], want: (c.want || []).map(({ k, id, g, n, at, max, ts }) => ({ k, id, g, n, at, max, ts })),
+              box: c.box || "", offers: c.offers || [], oresp: c.oresp || {} }) }] });
           const e = r.metafieldsSet.userErrors; document.dispatchEvent(new CustomEvent("dys-sync", { detail: e.length ? "error" : "ok" }));
         } catch { document.dispatchEvent(new CustomEvent("dys-sync", { detail: "error" })); }
       }, 800);
@@ -1418,6 +1419,153 @@ function socialButtons(el, prof, tallied) {
   paint();
 }
 
+/* ---------- offers: the shop offers on cards in public binders; the collector accepts, declines or counters ----------
+   Each side's moves live in their own binder (synced to their account). A job every 10 minutes merges them and
+   publishes each person's inbox encrypted with a key only they hold (data/box/<hash>.json). */
+const OWNER_PID = "2008058b30b5";
+const isOwner = async () => acct.signedIn() && (await myPid()) === OWNER_PID;
+const offers = (() => {
+  const b64u = (u8) => btoa(String.fromCharCode(...u8)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const unb = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (ch) => ch.charCodeAt(0));
+  const sha = async (s) => crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  const hex = async (s) => [...new Uint8Array(await sha(s))].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const rid = () => { const a = new Uint8Array(9); crypto.getRandomValues(a); return b64u(a); };
+  const END = new Set(["accept", "decline", "withdraw"]);
+  /* same rules as the job: whoever's turn it is may accept, decline or counter; the last mover may withdraw */
+  const thread = (shop, coll) => {
+    const evs = [...(shop || []).map((e) => ({ ...e, by: "s" })), ...(coll || []).map((e) => ({ ...e, by: "c" }))]
+      .sort((x, y) => x.t - y.t || (x.by === "c") - (y.by === "c"));
+    const out = [];
+    for (const e of evs) {
+      if (!out.length) { if (e.by === "s" && e.act === "offer") out.push(e); continue; }
+      const last = out[out.length - 1]; if (END.has(last.act)) break;
+      const turn = last.by === "s" ? "c" : "s";
+      if (e.by === turn && ["accept", "decline", "counter"].includes(e.act)) out.push(e.act === "accept" ? { ...e, a: last.a, kind: last.kind } : e);
+      else if (e.by === last.by && e.act === "withdraw") out.push(e);
+    }
+    return out;
+  };
+  let inboxP = null;
+  return {
+    thread,
+    ensureKey() { const c = colGet(); if (!c.box) { const a = new Uint8Array(24); crypto.getRandomValues(a); c.box = b64u(a); colSet(c); } return c.box; },
+    inbox(fresh) {
+      if (inboxP && !fresh) return inboxP;
+      return inboxP = (async () => {
+        const key = colGet().box; if (!key) return { offers: [] };
+        try {
+          const r = await fetch(`data/box/${(await hex("dysbox:" + key)).slice(0, 24)}.json`, { cache: "no-cache" });
+          if (!r.ok) return { offers: [] };
+          const d = await r.json();
+          const k = await crypto.subtle.importKey("raw", await sha(key), "AES-GCM", false, ["decrypt"]);
+          return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb(d.iv) }, k, unb(d.ct))));
+        } catch { return { offers: [] }; }
+      })();
+    },
+    /* every thread I'm part of, with my own not-yet-delivered moves folded in */
+    async mine() {
+      const c = colGet(), box = await this.inbox(), owner = await isOwner();
+      const delivered = new Map((box.offers || []).map((o) => [o.id, o]));
+      if (owner) return (c.offers || []).map((o) => { const d = delivered.get(o.id);
+        return { ...o, alias: d?.alias || "", cust: d?.cust || "", card: { id: o.cid, g: o.g, n: o.n, gr: o.gr || null }, sent: !!d,
+          h: thread(o.h, (d?.h || []).filter((e) => e.by === "c")) }; }).reverse();
+      return (box.offers || []).map((o) => { const mineC = new Map([...o.h.filter((e) => e.by === "c"), ...((c.oresp || {})[o.id] || [])].map((e) => [e.t, e]));
+        return { ...o, h: thread(o.h.filter((e) => e.by === "s"), [...mineC.values()]) }; }).reverse();
+    },
+    status(h, me) {
+      const l = h[h.length - 1]; if (!l) return { k: "none" };
+      if (l.act === "accept") return { k: "accepted", l };
+      if (l.act === "decline") return { k: "declined", l };
+      if (l.act === "withdraw") return { k: "withdrawn", l };
+      return { k: l.by === me ? "waiting" : "yours", l };
+    },
+    make(to, card, a, kind, m) {
+      this.ensureKey(); const c = colGet(); c.offers = (c.offers || []).slice(-299);
+      c.offers.push({ id: rid(), to, cid: card.id, g: card.g, n: card.n, gr: card.gr || null, h: [{ act: "offer", a, kind, m, t: Date.now() }] });
+      colSet(c);
+    },
+    act(id, act, a, kind, m) {
+      const c = colGet(), step = { act, a: a ?? null, kind: kind || "cash", m: m || "", t: Date.now() };
+      const o = (c.offers || []).find((x) => x.id === id);
+      if (o) o.h.push(step);
+      else { c.oresp = c.oresp || {}; c.oresp[id] = [...(c.oresp[id] || []), step].slice(-20); }
+      colSet(c);
+    },
+    openFor(to, cardId) { return (colGet().offers || []).find((o) => o.to === to && o.cid === cardId && !END.has(o.h[o.h.length - 1]?.act)); },
+  };
+})();
+const KIND = { cash: "cash", credit: "store credit" };
+const dollars = (v) => { const n = Math.round(Number(String(v).replace(/[$,\s]/g, "")) * 100); return n > 0 && n <= 10000000 ? n : null; };
+
+/* "Make an offer" / "Counter" form */
+function offerForm({ title, card, mkt, start, kindStart = "cash", send, button = "Send offer" }) {
+  const box = document.createElement("div");
+  box.className = "cview ofr-modal"; box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true"); box.setAttribute("aria-label", title);
+  const sug = mkt ? [["cash", Math.round(mkt * 0.7)], ["credit", Math.round(mkt * 0.8)]] : [];
+  box.innerHTML = `<form class="ofr-in panel"><button type="button" class="cview-x" aria-label="Close">✕</button>
+    <div class="ofr-card">${imgTag(card.id, "", 200)}<span><b>${esc(card.n || "")}</b>${card.gr ? ` <span class="slab-badge">${esc(card.gr)}</span>` : ""}<span class="muted" style="display:block;font-size:13px">${mkt ? `Market ${money(mkt)}` : ""}</span></span></div>
+    <h2 style="font-size:20px;margin:14px 0 8px">${esc(title)}</h2>
+    ${sug.length ? `<div class="ofr-sug">${sug.map(([k, v]) => `<button type="button" class="chip" data-sug="${v}" data-k="${k}">${money(v)} ${KIND[k]}</button>`).join("")}</div>` : ""}
+    <label class="ofr-row">Amount<span class="ofr-amt">$<input class="field" name="a" inputmode="decimal" required placeholder="0.00" value="${start ? (start / 100).toFixed(2) : ""}"></span></label>
+    <fieldset class="ofr-kind"><legend class="muted">Paid as</legend>
+      <label><input type="radio" name="k" value="cash"${kindStart === "cash" ? " checked" : ""}> Cash</label>
+      <label><input type="radio" name="k" value="credit"${kindStart === "credit" ? " checked" : ""}> Store credit</label></fieldset>
+    <label class="ofr-row">Note (optional)<textarea class="field" name="m" maxlength="200" rows="2" placeholder="e.g. Happy to pick up locally in Las Vegas"></textarea></label>
+    <p class="muted ofr-err" role="alert"></p>
+    <button class="btn primary" type="submit" style="width:100%">${esc(button)}</button>
+    <p class="muted" style="font-size:12px;margin:8px 0 0">Delivered within about 10 minutes. Nothing is charged; you arrange payment and shipping after an offer is accepted.</p></form>`;
+  const f = $("form", box);
+  const close = () => { box.remove(); document.body.style.overflow = ""; document.removeEventListener("keydown", key); };
+  const key = (e) => { if (e.key === "Escape") close(); };
+  box.addEventListener("click", (e) => { if (e.target === box || e.target.closest(".cview-x")) close();
+    const s = e.target.closest("[data-sug]"); if (s) { f.a.value = (s.dataset.sug / 100).toFixed(2); f.querySelector(`[value="${s.dataset.k}"]`).checked = true; } });
+  f.addEventListener("submit", (e) => { e.preventDefault(); const a = dollars(f.a.value);
+    if (!a) { $(".ofr-err", box).textContent = "Enter an amount in dollars."; f.a.focus(); return; }
+    send(a, f.k.value, f.m.value.trim().slice(0, 200)); close(); });
+  document.addEventListener("keydown", key); document.body.style.overflow = "hidden";
+  document.body.appendChild(box); f.a.focus();
+}
+
+/* offers list on My Collection (shop: offers sent; collector: offers received) */
+async function offersPanel(el, onChange) {
+  if (!el || !acct.signedIn()) return;
+  const owner = await isOwner(), me = owner ? "s" : "c", list = await offers.mine();
+  if (!list.length) { el.hidden = !owner; if (owner) el.innerHTML = `<div class="prof-head"><b>Offers you've made</b></div><p class="muted" style="margin:6px 0 0;font-size:14px">None yet. Open any binder on the <a href="collectors.html" style="color:var(--accent)">Collectors page</a>, tap a card and choose <b>Make an offer</b>.</p>`; return; }
+  el.hidden = false;
+  const line = (e) => `${e.by === me ? "You" : owner ? "They" : "Drive Your Style"} ${e.act === "offer" ? "offered" : e.act === "counter" ? "countered" : e.act === "accept" ? "accepted" : e.act === "decline" ? "declined" : "withdrew"}${e.a && !["decline", "withdraw"].includes(e.act) ? ` <b>${money(e.a)}</b> ${KIND[e.kind] || "cash"}` : ""}${e.m ? ` · “${esc(e.m)}”` : ""}`;
+  el.innerHTML = `<div class="prof-head"><b>${owner ? "Offers you've made" : "Offers on your cards"}</b><span class="muted" style="font-size:13px">Updates every 10 minutes</span></div>
+    <div class="ofr-list">${list.map((o) => { const st = offers.status(o.h, me), l = st.l;
+      const who = owner ? `<span class="muted" style="font-size:13px;display:block">to ${o.alias ? esc(o.alias) : "collector"}${o.sent ? "" : " · sending…"}</span>` : "";
+      const acts = st.k === "yours" ? `<div class="ofr-acts"><button class="btn primary" data-oa="accept" data-id="${o.id}" type="button">Accept ${money(l.a)}</button><button class="btn" data-oa="counter" data-id="${o.id}" type="button">Counter</button><button class="btn" data-oa="decline" data-id="${o.id}" type="button">Decline</button></div>`
+        : st.k === "waiting" ? `<div class="ofr-acts"><span class="muted" style="font-size:13px">Waiting for ${owner ? "their" : "the shop's"} reply</span><button class="btn" data-oa="withdraw" data-id="${o.id}" type="button">Withdraw</button></div>` : "";
+      const done = st.k === "accepted" ? `<p class="ofr-done">✅ Deal at <b>${money(l.a)}</b> ${KIND[l.kind] || "cash"}. ${owner ? (o.cust ? `<a href="https://admin.shopify.com/store/s11bjx-1e/customers/${esc(o.cust)}" target="_blank" rel="noopener">Contact them (Shopify customer) →</a>` : "") : "Drive Your Style will email you within 24 hours to arrange payment and shipping."}</p>`
+        : st.k === "declined" ? `<p class="muted ofr-done">Declined</p>` : st.k === "withdrawn" ? `<p class="muted ofr-done">Withdrawn</p>` : "";
+      return `<div class="ofr-item"><a href="${prodUrl(o.card.id, o.card.g)}" class="ofr-card">${imgTag(o.card.id, "", 200)}<span><b>${esc(o.card.n || "")}</b>${o.card.gr ? ` <span class="slab-badge">${esc(o.card.gr)}</span>` : ""}${who}</span></a>
+        <ul class="ofr-hist">${o.h.map((e) => `<li>${line(e)} <span class="muted">· ${new Date(e.t).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span></li>`).join("")}</ul>${acts}${done}</div>`; }).join("")}</div>`;
+  el.querySelectorAll("[data-oa]").forEach((b) => b.addEventListener("click", () => {
+    const o = list.find((x) => x.id === b.dataset.id), l = o.h[o.h.length - 1], act = b.dataset.oa;
+    const done = (msg) => { toast(msg); offersPanel(el, onChange); onChange && onChange(); };
+    if (act === "counter") return offerForm({ title: "Your counteroffer", card: o.card, start: l.a, kindStart: l.kind, button: "Send counteroffer",
+      send: (a, k, m) => { offers.act(o.id, "counter", a, k, m); done("Counteroffer sent"); } });
+    if (act === "accept" && !confirm(`Accept ${money(l.a)} ${KIND[l.kind] || "cash"} for ${o.card.n}?`)) return;
+    if (act === "decline" && !confirm("Decline this offer?")) return;
+    if (act === "withdraw" && !confirm("Withdraw your offer?")) return;
+    offers.act(o.id, act, act === "accept" ? l.a : null, l.kind, "");
+    done(act === "accept" ? "Accepted. Delivered within about 10 minutes." : act === "decline" ? "Declined" : "Withdrawn");
+  }));
+}
+
+/* a small reminder on every page when an offer is waiting for you */
+async function offerNudge() {
+  if (!acct.signedIn() || !colGet().box || PAGE === "collection") return;
+  try {
+    const list = await offers.mine(), me = (await isOwner()) ? "s" : "c";
+    const n = list.filter((o) => offers.status(o.h, me).k === "yours").length; if (!n) return;
+    const a = document.createElement("a"); a.className = "ofr-nudge"; a.href = "collection.html#offers";
+    a.textContent = `💵 ${n} offer${n > 1 ? "s" : ""} waiting for you →`; document.body.appendChild(a);
+  } catch {}
+}
+
 /* graded slabs: each grade is its own line in the collection, valued at the owner's number (eBay sold is one tap away) */
 const GRADES = [["PSA", ["10", "9", "8", "7", "6", "5"]], ["CGC", ["10 Pristine", "10", "9.5", "9", "8.5", "8"]], ["BGS", ["10 Black Label", "10", "9.5", "9", "8.5"]],
   ["SGC", ["10", "9.5", "9", "8"]], ["TAG", ["10", "9", "8"]], ["ACE", ["10", "9", "8"]]];
@@ -1437,7 +1585,7 @@ function cardView(list, start, opts = {}) {
       <div class="cview-img${c.t === "s" ? " sealed" : ""}">${imgTag(c.id, "", 1000)}${c.gr ? `<span class="slab-badge">${esc(c.gr)}</span>` : ""}</div>
       <div class="cview-meta"><b>${esc(c.name)}</b><span class="muted">${esc(set)}${c.qty > 1 ? ` · ×${c.qty}` : ""}</span>
         <span class="cview-val">${money(c.mkt)}<small class="muted">${c.gr ? (c.est ? " raw price" : " owner's value") : " market"}</small></span>
-        <span class="cview-links"><a href="${prodUrl(c.id, c.g)}">Price history →</a>${c.gr ? `<a href="${esc(soldUrl(c.name, c.gr))}" target="_blank" rel="noopener">eBay sold ${esc(c.gr)} →</a>` : ""}</span></div>
+        <span class="cview-links"><a href="${prodUrl(c.id, c.g)}">Price history →</a>${c.gr ? `<a href="${esc(soldUrl(c.name, c.gr))}" target="_blank" rel="noopener">eBay sold ${esc(c.gr)} →</a>` : ""}</span>${opts.action ? opts.action.html(c) : ""}</div>
       ${list.length > 1 ? `<button type="button" class="cview-nav prev" aria-label="Previous">‹</button><button type="button" class="cview-nav next" aria-label="Next">›</button><span class="cview-count">${i + 1} / ${list.length}</span>` : ""}</div>`;
     const ph = opts.photo && opts.photo(c); if (ph) ph.then((u) => { if (u) $(".cview-img img", box).src = u; });
   };
@@ -1447,6 +1595,7 @@ function cardView(list, start, opts = {}) {
   box.addEventListener("click", (e) => {
     if (e.target === box || e.target.closest(".cview-x")) close();
     else if (e.target.closest(".prev")) go(-1); else if (e.target.closest(".next")) go(1);
+    else if (e.target.closest("[data-cv-act]") && opts.action) { const c = list[i]; close(); opts.action.run(c); }
   });
   let x0 = null;
   box.addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; }, { passive: true });
@@ -1462,7 +1611,7 @@ async function pageCollection() {
   const setName = (g) => meta.groups[g]?.[0] || "";
   const viewPid = (params.get("p") || "").replace(/[^a-f0-9]/g, "").slice(0, 12);
   const shared = location.hash.startsWith("#c=") || !!viewPid;
-  let col = colGet(), prof = null, tallied = 0;
+  let col = colGet(), prof = null, tallied = 0, ownerView = false;
   if (viewPid) {
     [prof, tallied] = await Promise.all([getJSON(`showcase/${viewPid}.json`).catch(() => null), getJSON("showcase.json").then((d) => d.updated).catch(() => 0)]);
     col = prof ? { name: prof.bn || "", items: prof.items } : { name: "", items: [] };
@@ -1473,12 +1622,16 @@ async function pageCollection() {
       : viewPid === await myPid() ? `Your public page is being set up. It goes live within 30 minutes of turning on <b>Show my binder</b>. <a href="collection.html" style="color:var(--accent)">Back to my collection →</a>`
       : `This binder isn't public. <a href="collectors.html" style="color:var(--accent)">Browse collectors →</a>`;
     if (prof) socialButtons($("#prof-soc"), prof, tallied);
+    ownerView = !!prof && await isOwner();
   } else if (shared) {
     try { const d = b64d(location.hash.slice(3)); col = { name: d.n || "", items: (d.i || []).map(([id, g, qty, code, gr, gv]) => ({ id, g, qty, code, ...(gr ? { gr, gv: gv ?? null } : {}) })) }; }
     catch { col = { name: "", items: [] }; }
     $("#mine").hidden = true; $("#shared-note").hidden = false;
   }
   const keyOf = (it) => `${it.id}|${it.code ?? printCode(subOf(it.n || ""))}${it.gr ? "|" + it.gr : ""}`;
+  const offerBtn = (i, li) => offers.openFor(viewPid, i.id) ? `<span class="ofr-sent">Offer sent</span>` : `<button type="button" class="btn ofr-btn" data-ofr="${li}">💵 Make an offer</button>`;
+  const makeOffer = (i) => offerForm({ title: `Your offer to ${prof.a}`, card: { id: i.id, g: i.g, n: i.name, gr: i.gr || null }, mkt: i.mkt,
+    send: (a, k, m) => { offers.make(viewPid, { id: i.id, g: i.g, n: i.name, gr: i.gr || null }, a, k, m); toast(`Offer sent. ${prof.a} sees it within about 10 minutes.`); draw(); } });
   if (!shared) window.dysCollectionAdd = async (r) => {
     const it = { id: r[0], g: r[2], n: r[1], qty: 1, paid: null }, ex = col.items.find((x) => !x.gr && keyOf(x) === keyOf(it));
     ex ? ex.qty++ : col.items.push(it); save(); toast(`Added ${r[1]}`); await loadChanges(); draw(); };
@@ -1510,7 +1663,9 @@ async function pageCollection() {
     $("#cchart-wrap").hidden = false;
     lineChart($("#cchart"), dates, vals, range);
   };
-  const save = () => { if (!shared) colSet(col); };
+  const save = () => { if (shared) return; const cur = colGet();   // offers are changed elsewhere; keep the latest
+    for (const k of ["box", "offers", "oresp", "likes", "follows", "want", "socialAt"]) if (cur[k] !== undefined) col[k] = cur[k];
+    colSet(col); };
 
   const draw = () => {
     const all = col.items.map((it, ix) => { const r = byKey.get(rawKey(it)); const raw = r?.[4] ?? null;
@@ -1544,7 +1699,7 @@ async function pageCollection() {
       return `<tr class="grp"><td colspan="6"><b>${esc(setName(i.g))}</b>${st ? ` <span class="muted">· ${st.have}/${st.total || "?"} cards</span>` : ""}</td></tr>`; };
     const list = grouped ? shown.slice().sort((a, b) => setName(a.g).localeCompare(setName(b.g)) || (b.mkt || 0) - (a.mkt || 0)) : shown;
     $("#list").innerHTML = list.length ? `<div class="table-wrap"><table><thead><tr><th>Item</th><th class="num">Qty${shared ? "" : " · paid"}</th><th class="num">Market</th><th class="num">Value</th><th class="num hide-sm">Change</th>${shared ? "" : "<th></th>"}</tr></thead><tbody>
-      ${list.map((i) => `${grpRow(i)}<tr><td class="title">${shared ? "" : `<div class="tline"><label class="ph-wrap" data-ph="${esc(keyOf(i))}" title="Add your own photo">${imgTag(i.id, "")}<span class="cam-dot" aria-hidden="true">${CAM}</span><input type="file" accept="image/*" data-cam="${esc(keyOf(i))}" aria-label="Take or choose a photo of ${esc(i.name)}"></label>`}<a href="${prodUrl(i.id, i.g)}">${shared ? imgTag(i.id, "") : ""}<span>${i.gr ? `<span class="slab-badge">${esc(i.gr)}</span> ` : ""}${esc(i.name)}<span class="muted" style="display:block;font-size:12px;font-weight:400">${esc(setName(i.g))}</span></span></a>${shared ? "" : "</div>"}
+      ${list.map((i, li) => `${grpRow(i)}<tr><td class="title">${shared ? "" : `<div class="tline"><label class="ph-wrap" data-ph="${esc(keyOf(i))}" title="Add your own photo">${imgTag(i.id, "")}<span class="cam-dot" aria-hidden="true">${CAM}</span><input type="file" accept="image/*" data-cam="${esc(keyOf(i))}" aria-label="Take or choose a photo of ${esc(i.name)}"></label>`}<a href="${prodUrl(i.id, i.g)}">${shared ? imgTag(i.id, "") : ""}<span>${i.gr ? `<span class="slab-badge">${esc(i.gr)}</span> ` : ""}${esc(i.name)}<span class="muted" style="display:block;font-size:12px;font-weight:400">${esc(setName(i.g))}</span></span></a>${shared ? "" : "</div>"}${ownerView ? offerBtn(i, li) : ""}
           ${shared || i.t === "s" ? "" : `<div class="grade-row"><select class="select grade-sel" data-grade="${esc(keyOf(i))}" aria-label="Raw or graded">${gradeOpts(i.gr || "")}</select>
             ${i.gr ? `<label class="gv">Value each $<input class="field" type="number" min="0" step="0.01" inputmode="decimal" placeholder="${i.raw != null ? (i.raw / 100).toFixed(2) : "0.00"}" value="${i.gv != null ? (i.gv / 100).toFixed(2) : ""}" data-gv="${esc(keyOf(i))}" aria-label="Value of your ${esc(i.gr)}"></label>
             <a class="sold-link" href="${esc(soldUrl(i.name, i.gr))}" target="_blank" rel="noopener">eBay sold ${esc(i.gr === "Other slab" ? "graded" : i.gr)} →</a>` : ""}</div>`}</td>
@@ -1563,8 +1718,10 @@ async function pageCollection() {
           <span class="bimg"${shared ? "" : ` data-ph="${esc(keyOf(i))}"`}>${imgTag(i.id, "", 1000)}</span>
           ${i.gr ? `<span class="slab-badge">${esc(i.gr)}</span>` : ""}${i.qty > 1 ? `<span class="bqty">×${i.qty}</span>` : ""}
           <span class="bval">${money(i.mkt == null ? null : i.mkt * i.qty)}</span></button>`; }).join("")}</div>`;
-      $("#list").querySelectorAll("[data-bi]").forEach((b) => b.addEventListener("click", () => cardView(shownNow, +b.dataset.bi, { setName, photo: shared ? null : (c) => photos.get(keyOf(c)).then((bl) => bl ? URL.createObjectURL(bl) : null) })));
+      $("#list").querySelectorAll("[data-bi]").forEach((b) => b.addEventListener("click", () => cardView(shownNow, +b.dataset.bi, { setName, photo: shared ? null : (c) => photos.get(keyOf(c)).then((bl) => bl ? URL.createObjectURL(bl) : null),
+        action: ownerView ? { html: (c) => offers.openFor(viewPid, c.id) ? `<span class="ofr-sent">Offer sent · see My Collection</span>` : `<button type="button" class="btn primary" data-cv-act>💵 Make an offer</button>`, run: makeOffer } : null })));
     }
+    if (ownerView) $("#list").querySelectorAll("[data-ofr]").forEach((b) => b.addEventListener("click", () => makeOffer(shownNow[+b.dataset.ofr])));
     plot();
     if (shared) return;
     if ($("#sell-cta")) {
@@ -1701,7 +1858,8 @@ async function pageCollection() {
         const local = colGet();
         if (remote && (!local.items.length || (!justSignedIn && (remote.updated || 0) > (local.updated || 0)))) {
           col = { name: remote.name || local.name || "", items: remote.items || [], updated: remote.updated,
-            alias: remote.alias || local.alias || "", pub: remote.pub ?? local.pub ?? false, likes: remote.likes || [], follows: remote.follows || [], want: remote.want || local.want || [], socialAt: local.socialAt };
+            alias: remote.alias || local.alias || "", pub: remote.pub ?? local.pub ?? false, likes: remote.likes || [], follows: remote.follows || [], want: remote.want || local.want || [], socialAt: local.socialAt,
+            box: remote.box || local.box || "", offers: remote.offers || local.offers || [], oresp: remote.oresp || local.oresp || {} };
           colSet(col, false);
         } else if (remote && justSignedIn) {          // first sign-in on this device: combine both
           const key = (x) => `${x.id}|${printCode(subOf(x.n || ""))}${x.gr ? "|" + x.gr : ""}`, m = new Map(remote.items.map((x) => [key(x), x]));
@@ -1709,14 +1867,18 @@ async function pageCollection() {
           const uni = (k) => [...new Set([...(remote[k] || []), ...(local[k] || [])])];
           col = { name: local.name || remote.name || "", items: [...m.values()], alias: local.alias || remote.alias || "", pub: local.pub ?? remote.pub ?? false,
             likes: uni("likes"), follows: uni("follows"), socialAt: local.socialAt,
+            box: remote.box || local.box || "", offers: [...new Map([...(remote.offers || []), ...(local.offers || [])].map((o) => [o.id, o])).values()], oresp: { ...(local.oresp || {}), ...(remote.oresp || {}) },
             want: [...new Map([...(remote.want || []), ...(local.want || [])].map((w) => [w.k, w])).values()] };
           colSet(col);
         } else { col = local; acct.push(local); }
         $("#name").value = col.name || ""; await loadChanges();
         paint(remote ? "Synced" : "Saved");
         profilePanel();
+        offers.ensureKey(); col = colGet();
+        offersPanel($("#offers"));
+        if (location.hash === "#offers") setTimeout(() => $("#offers")?.scrollIntoView({ behavior: "smooth" }), 300);
       } else paint();
-    } catch (err) { paint(); if (acct.signedIn()) profilePanel(); $("#added").textContent = String(err.message || err).startsWith("Sign-in") ? err.message : "Couldn't reach your account. Your binder is still saved on this device."; }
+    } catch (err) { paint(); if (acct.signedIn()) { profilePanel(); offersPanel($("#offers")); } $("#added").textContent = String(err.message || err).startsWith("Sign-in") ? err.message : "Couldn't reach your account. Your binder is still saved on this device."; }
   }
   draw(); await loadChanges(); draw();
 }
@@ -1907,7 +2069,7 @@ async function pageBuyer() {
 }
 
 const pages = { search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, demand: pageDemand, importer: pageImporter, collection: pageCollection, collectors: pageCollectors, sell: pageSell, buyer: pageBuyer };
-(pages[PAGE] || (async () => {}))().catch((err) => {
+(pages[PAGE] || (async () => {}))().then(() => offerNudge()).catch((err) => {
   console.error(err);
   const main = $("main");
   if (main) main.insertAdjacentHTML("afterbegin", `<div class="wrap"><p class="panel empty-note" style="margin-top:24px">Couldn't load market data right now. Please refresh in a minute.</p></div>`);

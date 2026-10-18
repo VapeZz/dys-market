@@ -806,3 +806,31 @@ tr.grp td{background:var(--surface-2);font-size:13px;padding-top:8px;padding-bot
   .hd-tag{font-size:11px;padding:2px 6px;top:-10px}
   .hero-deal h1{max-width:none}
 }
+/* offers */
+.ofr-modal{align-items:center;justify-content:center}
+.ofr-in{position:relative;width:min(440px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;padding:20px;display:flex;flex-direction:column;gap:10px;color:var(--ink)}
+.ofr-in .cview-x{position:absolute;top:10px;right:10px}
+.ofr-card{display:flex;gap:12px;align-items:center;min-width:0}
+.ofr-card img{width:52px;height:72px;object-fit:contain;border-radius:6px;flex:0 0 auto;background:var(--chip)}
+.ofr-card b{font-size:15px}
+.ofr-sug{display:flex;flex-wrap:wrap;gap:8px}
+.ofr-sug .chip{cursor:pointer;font-family:inherit}
+.ofr-row{display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:600}
+.ofr-row textarea{resize:vertical;font:inherit;font-size:14px;width:100%;background:var(--chip);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.ofr-amt{display:flex;align-items:center;gap:6px;font-size:18px}
+.ofr-amt input{font-size:18px;width:100%}
+.ofr-kind{border:0;padding:0;margin:0;display:flex;gap:18px;align-items:center;font-size:14px}
+.ofr-kind legend{float:left;margin-right:6px;font-size:14px}
+.ofr-kind label{display:inline-flex;gap:6px;align-items:center;min-height:44px}
+.ofr-err{min-height:18px;font-size:13px;margin:0;color:var(--down)}
+.ofr-btn{margin-top:8px;padding:8px 14px;font-size:13px}
+.ofr-sent{display:inline-block;margin-top:8px;font-size:13px;font-weight:600;color:var(--accent-2)}
+.ofr-list{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.ofr-item{border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.ofr-hist{margin:0;padding-left:18px;font-size:14px;line-height:1.5;white-space:normal}
+.ofr-acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ofr-acts .btn{padding:10px 16px}
+.ofr-done{margin:0;font-size:14px}
+.ofr-done a{color:var(--accent)}
+.ofr-nudge{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:60;background:var(--accent);color:#fff;font-weight:700;padding:12px 18px;border-radius:999px;box-shadow:var(--shadow);white-space:nowrap}
+.ofr-in .cview-x{color:var(--ink);border-color:var(--line-strong);background:var(--chip)}
