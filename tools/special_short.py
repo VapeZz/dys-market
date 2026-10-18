@@ -26,11 +26,11 @@ def bodies(cards):
     n = len(cards)
     fan = "".join(f'<div class="card" style="position:absolute;left:{110 + k * 130}px;top:{40 + abs(k - 2) * 26}px;width:330px;height:462px;'
                   f'transform:rotate({(k - 2) * 7}deg);z-index:{5 - abs(k - 2)}"><img src="{img(c["id"])}"></div>'
-                  for k, c in enumerate(cards[-5:]))
+                  for k, c in enumerate(cards[:5]))
     out = [f"""<div class="slide" style="height:1920px;{PAD}">
 <img src="file://{LOGO}" style="height:100px">
 <div class="tag" style="margin-top:50px">TCG price check · {n} games</div>
-<div style="margin-top:44px;font-family:'Barlow Condensed';font-weight:800;font-size:122px;line-height:.93;text-transform:uppercase">The most<br><span class="holo">expensive card</span><br>in every TCG</div>
+<div style="margin-top:44px;font-family:'Barlow Condensed';font-weight:800;font-size:122px;line-height:.93;text-transform:uppercase">The most<br><span class="holo">expensive pull</span><br>in every TCG</div>
 <div style="position:relative;width:1000px;height:600px;margin-top:40px">{fan}</div>
 <div style="margin-top:auto;font-size:40px;color:#bdb9b2">Guess #1 before the end 👀</div></div>"""]
     for k, c in enumerate(cards):
@@ -48,7 +48,7 @@ def bodies(cards):
 <div style="margin-top:80px;font-family:'Barlow Condensed';font-weight:800;font-size:124px;line-height:.92;text-transform:uppercase">Which one<br><span class="holo">would you pull?</span></div>
 <div style="margin-top:44px;font-size:42px;color:#d8d5cf;max-width:880px">Live prices on 70,000+ cards across 8 games. Check yours free:</div>
 <div style="margin-top:60px;font-family:'Barlow Condensed';font-weight:700;font-size:62px;border:4px solid #f2f0eb;padding:18px 40px 14px">market.driveyourstyle.net</div>
-<div style="margin-top:70px;font-size:30px;color:#9a968f">TCGplayer market prices, Oct 17 2026</div></div>""")
+<div style="margin-top:70px;font-size:30px;color:#9a968f">TCGplayer market prices, Oct 17 2026 · cards from booster sets</div></div>""")
     return out
 
 
