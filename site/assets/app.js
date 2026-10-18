@@ -2,6 +2,7 @@
 (() => {
 const STORE = "https://driveyourstyle.net";
 const PAGE = document.body.dataset.page;
+const GIVEAWAY_ON = false;
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const params = new URLSearchParams(location.search);
@@ -131,7 +132,7 @@ document.documentElement.dataset.theme = getTheme();
 /* ---------- shell ---------- */
 const SEARCH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>`;
 function shell() {
-  const links = [["sets", "Sets"], ["trends", "Trends"], ["cards", "Movers"], ["search", "Search"], ["compare", "Compare"], ["calendar", "Calendar"], ["sneakers", "Sneakers"], ["watchlist", "Want list"], ["collection", "My Collection"], ["collectors", "Collectors"], ["giveaway", "🎁 Giveaway"], ["about", "About"]];
+  const links = [["sets", "Sets"], ["trends", "Trends"], ["cards", "Movers"], ["search", "Search"], ["compare", "Compare"], ["calendar", "Calendar"], ["sneakers", "Sneakers"], ["watchlist", "Want list"], ["collection", "My Collection"], ["collectors", "Collectors"], ...(GIVEAWAY_ON ? [["giveaway", "🎁 Giveaway"]] : []), ["about", "About"]];
   $("#top").outerHTML = `<header class="top"><div class="wrap">
     <a class="brand" href="index.html" aria-label="Drive Your Style Market Insights home"><img class="logo-img logo-on-dark" src="assets/logo-light.png" alt="Drive Your Style" width="61" height="40"><img class="logo-img logo-on-light" src="assets/logo-dark.png" alt="" width="61" height="40"><span class="brand-sub">Market<br>Insights</span></a>
     <nav class="nav" id="nav">${links.map(([p, l]) => `<a href="${p}.html"${p === PAGE ? ' aria-current="page"' : ""}>${l}</a>`).join("")}
@@ -154,7 +155,7 @@ function shell() {
       <p id="updated-line"></p>${AFF_ON ? `<p>Some outbound links (TCGplayer, eBay, StockX, GOAT) are affiliate links. If you buy through them we may earn a small commission at no extra cost to you.</p>` : ""}
     </div>
     <div>
-      <p><a href="${STORE}">Shop Drive Your Style</a> · <a href="sell.html">Sell to us</a> · <a href="giveaway.html">Monthly giveaway</a> · <a href="blog/">Market reports</a> · <a href="about.html">Where this data comes from</a></p>
+      <p><a href="${STORE}">Shop Drive Your Style</a> · <a href="sell.html">Sell to us</a> ·${GIVEAWAY_ON ? ` <a href="giveaway.html">Monthly giveaway</a> ·` : ""} <a href="blog/">Market reports</a> · <a href="about.html">Where this data comes from</a></p>
       <div class="socials" aria-label="Follow Drive Your Style">${SOCIALS.map(([n, u, d]) => `<a href="${u}" target="_blank" rel="noopener" aria-label="${n}" title="${n}"><svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg></a>`).join("")}</div>
       <div class="theme-switch" role="group" aria-label="Theme"><button data-t="dark">Dark</button><button data-t="light">Light</button></div>
     </div></div></footer>`;
@@ -1568,7 +1569,8 @@ async function offerNudge() {
   } catch {}
 }
 
-/* ---------- monthly giveaway: entries come from your binder; the job tallies them every 10 minutes ---------- */
+/* ---------- monthly giveaway: entries come from your binder; the job tallies them every 10 minutes ----------
+   GIVEAWAY_ON = false pauses it: no links, no entry panel, the page says it's paused (code and entries are kept). */
 try { const r = (params.get("r") || "").toLowerCase(); if (/^[a-f0-9]{12}$/.test(r) && !localStorage.getItem("dys-ref")) localStorage.setItem("dys-ref", r); } catch {}
 const inviteUrl = (pid) => `https://market.driveyourstyle.net/giveaway.html?r=${pid}`;
 async function shareInvite(pid) {
@@ -1577,7 +1579,7 @@ async function shareInvite(pid) {
   try { await navigator.clipboard.writeText(url); toast("Invite link copied"); } catch { prompt("Copy your invite link:", url); }
 }
 async function giveawayPanel(el) {
-  if (!el || !acct.signedIn()) return;
+  if (!GIVEAWAY_ON || !el || !acct.signedIn()) return;
   const pid = await myPid(); if (!pid) return;
   let c = colGet();
   const ref = (() => { try { return localStorage.getItem("dys-ref"); } catch { return null; } })();
@@ -1602,6 +1604,7 @@ async function giveawayPanel(el) {
   $("#gw-share", el).addEventListener("click", () => shareInvite(pid));
 }
 async function pageGiveaway() {
+  if (!GIVEAWAY_ON) { $("main").innerHTML = `<div class="wrap"><section class="block"><h1 style="font-size:32px">The giveaway is paused</h1><p class="muted" style="margin-top:8px">Check back soon. Meanwhile, <a href="collection.html" style="color:var(--accent)">track your collection</a> or <a href="index.html" style="color:var(--accent)">check card prices</a>.</p></section></div>`; return; }
   const gw = await getJSON("giveaway.json").catch(() => null);
   const draw = gw?.draw ? new Date(gw.draw + "T00:00:00") : null;
   const days = draw ? Math.max(0, Math.ceil((draw - Date.now()) / 864e5)) : null;
@@ -1900,7 +1903,7 @@ async function pageCollection() {
       const a = acct.info();
       const al = colGet().alias;
       bar.innerHTML = a ? `<span><b>${al ? `Signed in as ${esc(al)}` : "Saved to your account"}</b>${msg ? ` · <span class="muted">${esc(msg)}</span>` : ""}${al ? "" : `<span class="muted" style="display:block;font-size:13px">Pick a collector name below so people see that instead of your email.</span>`}</span><button class="btn" id="acct-out" type="button">Sign out</button>`
-        : `<span><b>Save your binder to your Drive Your Style account</b><span class="muted" style="display:block;font-size:13px">Sign in with your email. Your binder syncs to every phone and computer, and you can enter the free monthly <a href="giveaway.html" style="color:var(--accent)">Elite Trainer Box giveaway</a>.</span></span><button class="btn primary" id="acct-in" type="button">Sign in</button>`;
+        : `<span><b>Save your binder to your Drive Your Style account</b><span class="muted" style="display:block;font-size:13px">Sign in with your email. Your binder syncs to every phone and computer${GIVEAWAY_ON ? `, and you can enter the free monthly <a href="giveaway.html" style="color:var(--accent)">Elite Trainer Box giveaway</a>` : ""}.</span></span><button class="btn primary" id="acct-in" type="button">Sign in</button>`;
       $("#acct-in")?.addEventListener("click", () => acct.signIn());
       $("#acct-out")?.addEventListener("click", () => acct.signOut());
     };

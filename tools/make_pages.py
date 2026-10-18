@@ -2,6 +2,9 @@
 import os
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+GW_BANNER = '''<section class="block" style="padding-top:0;padding-bottom:0"><div class="wrap"><a class="report-banner gw-banner" href="giveaway.html?ref=home"><div><b>🎁 Win an Elite Trainer Box every month</b><span>Free to enter: build your binder on the site. Bonus entries for every friend you bring.</span></div><span>Enter →</span></a></div></section>
+'''
+GIVEAWAY_ON = False   # paused: hides the homepage banner and the bio link; giveaway.html says it's paused
 
 HEAD = '''<!doctype html>
 <html lang="en">
@@ -63,8 +66,7 @@ PAGES = {
   <a class="hd-fan" id="hd-fan" href="cards.html" aria-label="See today's biggest movers"></a>
 </div></section>
 <section class="block" style="padding-top:4px"><div class="wrap"><div class="gtiles" id="gtiles"></div></div></section>
-<section class="block" style="padding-top:0;padding-bottom:0"><div class="wrap"><a class="report-banner gw-banner" href="giveaway.html?ref=home"><div><b>🎁 Win an Elite Trainer Box every month</b><span>Free to enter: build your binder on the site. Bonus entries for every friend you bring.</span></div><span>Enter →</span></a></div></section>
-<section class="block" id="report-block" hidden style="padding-top:0"><div class="wrap"><a class="report-banner" id="report-link" href="blog/"><div><b>📈 This week's market report</b><span id="report-title"></span></div><span>Read →</span></a></div></section>
+@@GWBANNER@@<section class="block" id="report-block" hidden style="padding-top:0"><div class="wrap"><a class="report-banner" id="report-link" href="blog/"><div><b>📈 This week's market report</b><span id="report-title"></span></div><span>Read →</span></a></div></section>
 <section class="block" id="stock-block"><div class="wrap">
   <div class="block-head"><div><h2>In stock at Drive Your Style</h2><p>Our price next to today's market price.</p></div><a class="more" href="https://driveyourstyle.net/collections/sealed-product">Shop all →</a></div>
   <div class="stockrow" id="stock"></div>
@@ -364,7 +366,7 @@ def links_page():
     rows = [
         ("Shop Drive Your Style", "Sealed Pokémon & One Piece, singles, sneakers, Pop Mart", "https://driveyourstyle.net/?utm_source=bio&utm_medium=social", True),
         ("Check what your cards are worth", "Free prices on 70,000+ cards, scan with your camera", "index.html?ref=bio", False),
-        ("🎁 Win an Elite Trainer Box", "Free monthly giveaway: build your binder to enter", "giveaway.html?ref=bio", False),
+        *([("🎁 Win an Elite Trainer Box", "Free monthly giveaway: build your binder to enter", "giveaway.html?ref=bio", False)] if GIVEAWAY_ON else []),
         ("Sell us your cards", "Get a cash or store-credit offer", "sell.html?ref=bio", False),
         ("Sneaker release calendar", "This week's drops, our cop or wait calls, reminders", "sneakers.html?ref=bio", False),
         ("This week's market report", "Biggest card gains and drops, new sets", "blog/?ref=bio", False),
@@ -415,7 +417,9 @@ a:focus-visible{{outline:2px solid var(--ink);outline-offset:3px}}
 def main():
     for page, (title, desc, body) in PAGES.items():
         canon = "" if page == "index" else f"{page}.html"
-        head = HEAD.replace("<link rel=\"canonical\"", "<meta name=\"robots\" content=\"noindex\">\n<link rel=\"canonical\"") if page in ("importer", "demand", "buyer") else HEAD
+        hidden = ("importer", "demand", "buyer") + (() if GIVEAWAY_ON else ("giveaway",))
+        head = HEAD.replace("<link rel=\"canonical\"", "<meta name=\"robots\" content=\"noindex\">\n<link rel=\"canonical\"") if page in hidden else HEAD
+        body = body.replace("@@GWBANNER@@", GW_BANNER if GIVEAWAY_ON else "")
         html = head.replace("@@CANON@@", canon).replace("@@TITLE@@", title).replace("@@DESC@@", desc).replace("@@PAGE@@", page).replace("@@BODY@@", body)
         with open(os.path.join(ROOT, "site", f"{page}.html"), "w", encoding="utf-8") as f:
             f.write(html)
