@@ -20,6 +20,9 @@
   let metaP = null;
   const getMeta = () => (metaP ||= fetch("data/meta.json").then((r) => r.json()).catch(() => ({ groups: {} })));
   const getRows = () => (rowsP ||= fetch("data/search-all.json", { cache: "no-cache" }).then((r) => r.json()));
+  let yearsP = null;   // set id -> release year, to tell a 1999 card from a 2023 one with the same name
+  const getYears = () => (yearsP ||= fetch("data/sets.json").then((r) => r.json())
+    .then((s) => Object.fromEntries(s.filter((x) => x.pub).map((x) => [x.id, parseInt(x.pub.slice(0, 4), 10)]))).catch(() => ({})));
 
   /* image -> canvas crops: whole card for the name, bottom strip (enlarged) for the number */
   async function crops(file) {
@@ -85,13 +88,21 @@
   const tris = (s) => { const o = new Set(); for (let i = 0; i < s.length - 2; i++) o.add(s.slice(i, i + 3)); return o; };
   const leadNum = (no) => { const m = String(no || "").match(/(\d{1,3})/); return m ? parseInt(m[1], 10) : null; };
 
-  function match(data, meta, text, nameText, numText) {
+  function match(data, meta, text, nameText, numText, years = {}) {
     const by = index(data, meta), nums = numbersIn(text, by), toks = new Set(words(nameText + "\n" + text)), hay = norm(text);
+    // Old black-star promos print a bare "1" and a PROMO star; the copyright line dates the card.
+    const promoSeen = /\bpr[o0]m[o0]\b/i.test(text);
+    const yrs = [...text.matchAll(/(?<!\d)(199\d|20[0-3]\d)(?!\d)/g)].map((m) => +m[1]), printYear = yrs.length ? Math.max(...yrs) : null;
+    const isPromo = (r) => /promo/i.test(meta.groups[r[2]]?.[0] || "");
+    const eraOk = (r) => printYear != null && years[r[2]] != null && Math.abs(years[r[2]] - printYear) <= 1;
     const nameScore = (r) => { const ws = words(r[1]); if (!ws.length) return 0; return ws.filter((w) => toks.has(w) || (w.length >= 5 && hay.includes(w))).length / ws.length; };
     const scored = new Map(), sureSet = new Set();
     const add = (r, bonus) => { const sc = nameScore(r) + bonus; if (!scored.has(r) || scored.get(r) < sc) scored.set(r, sc); };
-    const nt = numText.replace(/(?<!\d)(\d{2})\s(\d)(?!\d)/g, "$1$2");   // "08 5" -> "085"
-    const bare = [...new Set(nt.match(/(?<!\d)\d{2,3}(?!\d)/g) || [])].slice(0, 10), ints = new Set(bare.map((x) => parseInt(x, 10)));
+    const nt = numText.split("\n")   // attack damage (20, 120+) at the end of a line of rules text isn't the card number
+      .map((l) => ((l.match(/[a-z]{3,}/gi) || []).length >= 3 ? l.replace(/(?<![\d\/])\d{1,2}0\s?[+×x]?\s*$/, " ") : l)).join("\n")
+      .replace(/©\s?\d{4}(?:\s*,\s*\d{2,4})*|#\s?\d+|\bLV\.?\s?\d+|\b(?:19|20)\d\d\b/gi, " ")   // Pokédex no., level and years aren't either
+      .replace(/(?<!\d)(\d{2})\s(\d)(?!\d)/g, "$1$2");   // "08 5" -> "085"
+    const bare = [...new Set(nt.match(promoSeen || (printYear && printYear <= 2003) ? /(?<!\d)\d{1,3}(?!\d)/g : /(?<!\d)\d{2,3}(?!\d)/g) || [])].slice(0, 14), ints = new Set(bare.map((x) => parseInt(x, 10)));
     nums.strong.forEach((k) => (by.get(k) || []).forEach((r) => { add(r, 1); if (nameScore(r) >= 0.5) sureSet.add(r); }));
     nums.weak.forEach((k) => (by.get(k) || []).forEach((r) => { const ns = nameScore(r); add(r, ns >= 0.5 ? 1.2 : 0.4); if (ns >= 0.99) sureSet.add(r); }));
     // a clearly read card name always counts; a matching number (even printed bare, like "18" for 18/53) seals it
@@ -102,9 +113,14 @@
       if (!ws.length || nm.length < 5 || !ws.every((w) => toks.has(w) || hay.includes(w))) continue;
       if (!lines.some((l) => l.includes(nm))) continue;          // the full name has to sit together on one line
       const numOk = ints.has(leadNum(r[5])) || (r[5] && bare.includes(r[5]));
-      if (ws.length < 2 && !numOk) continue;                      // one-word names (Switch, Pikachu) need the number too
-      add(r, -0.5 + 0.05 * ws.length + (numOk ? 1 : 0));   // add() already counts the name once
-      if (numOk) sureSet.add(r);
+      const promoOk = promoSeen && isPromo(r), era = eraOk(r);
+      // One-word names (Switch, Pikachu) need the number too. Without one, the copyright year still narrows it:
+      // a card from the right year with no readable set number is most likely a black-star promo.
+      const noNum = !nums.strong.length && !nums.weak.length && !numOk, promoGuess = promoOk || (noNum && era && isPromo(r));
+      if (ws.length < 2 && !numOk && !era) continue;
+      const eraOff = printYear != null && years[r[2]] != null && !era;   // the © year on the card says it's from another set
+      add(r, -0.5 + 0.05 * ws.length + (numOk ? 1 : 0) + (era ? 0.3 : 0) + (promoGuess ? 0.3 : 0) - (eraOff ? 0.4 : 0) - (/misprint|error/i.test(r[1]) ? 0.05 : 0));   // add() already counts the name once
+      if (numOk && !eraOff && (ws.length > 1 || era || printYear == null)) sureSet.add(r);
     }
     if (!scored.size || Math.max(...scored.values()) < 1.5) {   // only a bare number like "085" (promos) or a misread one: fuzzy-match the name among cards with that number
       const T = tris(letters(nameText));
@@ -121,12 +137,12 @@
   }
 
   async function scanFile(file, ui) {
-    const [w, data, c, meta] = await Promise.all([getWorker(ui.status), getRows(), crops(file), getMeta()]);
+    const [w, data, c, meta, years] = await Promise.all([getWorker(ui.status), getRows(), crops(file), getMeta(), getYears()]);
     ui.status("Reading the card…");
     const txt = {};
     for (const [k, cv] of Object.entries(c)) { const r = await w.recognize(cv); txt[k] = r.data.text; ui.status(k === "top" ? "Matching…" : "Reading the card…"); }
     const text = [txt.bottom, txt.corner, txt.full, txt.top].join("\n");
-    return { text, ...match(data, meta, text, txt.top, txt.corner + "\n" + txt.bottom) };
+    return { text, ...match(data, meta, text, txt.top, txt.corner + "\n" + txt.bottom, years) };
   }
 
   /* ---------- UI: full-screen sheet ---------- */
@@ -156,6 +172,7 @@
     return { start, stop };
   }
 
+  window.dysScanMatch = match;   // for tests
   window.dysScan = function open() {
     const box = document.createElement("div");
     box.className = "scan-sheet";
