@@ -97,14 +97,42 @@ def card_grid(cards):
         f'<span class="rp-o">was {money(c["old"])}</span></a>' for c in cards) + "</div>"
 
 
+def thumb(src, alt="", ph=""):
+    if not src:
+        return f'<span class="rp-th rp-th-none" aria-hidden="true">{ph}</span>'
+    return (f'<img class="rp-th" src="{esc(src)}" alt="{esc(alt)}" loading="lazy" width="56" height="72"'
+            ' onerror="window.dysImg&&dysImg(this)">')
+
+
+def row(href, src, name, sub="", right="", alt="", ph=""):
+    """One tappable line: picture, name and detail, value on the right, chevron."""
+    return (f'<a class="rp-row" href="{href}">{thumb(src, alt or name, ph)}'
+            f'<span class="rp-rb"><span class="rp-n">{name}</span>' + (f'<span class="rp-s">{sub}</span>' if sub else "") + '</span>'
+            + (f'<span class="rp-rr">{right}</span>' if right else "") + '<span class="rp-go" aria-hidden="true">›</span></a>')
+
+
+def chg_html(pct):
+    return f'<b class="chg {"up" if pct > 0 else "down"}">{"▲" if pct > 0 else "▼"} {abs(pct):.0f}%</b>'
+
+
 def mover_table(rows, sets, label):
     if not rows:
         return ""
-    body = "".join(
-        f'<tr><td><a href="{prod(r[0], r[2])}">{esc(clean_name(r[1]))}</a><span class="rp-s">{esc(short_set((sets.get(r[2]) or {}).get("n", "")))}</span></td>'
-        f'<td class="num">{money(r[3])}</td><td class="num"><span class="chg {"up" if r[5] > 0 else "down"}">{"▲" if r[5] > 0 else "▼"} {abs(r[5]):.0f}%</span></td></tr>'
+    items = "".join(
+        row(prod(r[0], r[2]), img(r[0], 200), esc(clean_name(r[1])), esc(short_set((sets.get(r[2]) or {}).get("n", ""))),
+            f'{money(r[3])}{chg_html(r[5])}', clean_name(r[1]))
         for r in rows)
-    return f'<table class="rp-table"><thead><tr><th>{esc(label)}</th><th class="num">Market</th><th class="num">Change</th></tr></thead><tbody>{body}</tbody></table>'
+    return f'<h3>{esc(label)}</h3><div class="rp-rows">{items}</div>'
+
+
+def set_pic(s):
+    if s.get("lg"):
+        return s["lg"]
+    if s.get("bbId"):
+        return img(s["bbId"], 200)
+    if s.get("tc"):
+        return img(s["tc"][0][0], 200)
+    return None
 
 
 def build_post(site, today):
@@ -152,11 +180,11 @@ def build_post(site, today):
     soon = sorted([s for s in sets_list if today.isoformat() < (s.get("pub") or "") <= (today + timedelta(days=60)).isoformat()],
                   key=lambda s: s["pub"])[:8]
     if out_now or soon:
-        li = lambda s: (f'<li><a href="/set.html?id={s["id"]}">{esc(s["n"])}</a> <span class="rp-s">{esc(GAME.get(s["k"], s["k"]))} · '
-                        f'{date.fromisoformat(s["pub"]).strftime("%b %-d, %Y")}</span></li>')
+        li = lambda s: row(f"/set.html?id={s['id']}", set_pic(s), esc(s["n"]),
+                           f'{esc(GAME.get(s["k"], s["k"]))} · {date.fromisoformat(s["pub"]).strftime("%b %-d, %Y")}', alt=s["n"])
         sec("releases", "New and upcoming sets",
-            (f"<h3>Recently released</h3><ul class=\"rp-list\">{''.join(li(s) for s in out_now)}</ul>" if out_now else "")
-            + (f"<h3>Coming in the next 60 days</h3><ul class=\"rp-list\">{''.join(li(s) for s in soon)}</ul>" if soon else "")
+            (f"<h3>Recently released</h3><div class=\"rp-rows\">{''.join(li(s) for s in out_now)}</div>" if out_now else "")
+            + (f"<h3>Coming in the next 60 days</h3><div class=\"rp-rows\">{''.join(li(s) for s in soon)}</div>" if soon else "")
             + '<p><a href="/calendar.html">Full release calendar →</a></p>')
 
     snk = load(os.path.join(site, "sneakers.json"), {}) or {}
@@ -164,19 +192,22 @@ def build_post(site, today):
     week = [r for r in snk.get("releases", []) if today.isoformat() < r["d"] <= (today + timedelta(days=7)).isoformat()]
     week.sort(key=lambda r: (r["d"], -r.get("h", 1)))
     if week:
-        rows = "".join(
-            f'<tr><td>{date.fromisoformat(r["d"]).strftime("%a %b %-d")}</td><td>{"🔥 " if r.get("h") == 3 else ""}{esc(r["n"])}'
-            + (f'<span class="rp-s">Our call: {VERDICT[picks[r["c"]]["v"]]} — {esc(picks[r["c"]]["why"])}</span>' if r.get("c") in picks else "")
-            + f'</td><td class="num">{"$" + str(r["r"]) if r.get("r") else "—"}</td></tr>' for r in week[:12])
+        snk_img = load(os.path.join(site, "data", "sneaker-images.json"), {}) or {}
+        items = "".join(
+            row("/sneakers.html", r.get("im") or snk_img.get(r.get("c")), ("🔥 " if r.get("h") == 3 else "") + esc(r["n"]),
+                date.fromisoformat(r["d"]).strftime("%a %b %-d")
+                + (f' · Our call: {VERDICT[picks[r["c"]]["v"]]} — {esc(picks[r["c"]]["why"])}' if r.get("c") in picks else ""),
+                f'{"$" + str(r["r"]) if r.get("r") else "TBA"}<span class="rp-s">retail</span>', r["n"], "👟")
+            for r in week[:12])
         sec("sneakers", "Sneaker drops this week",
-            f'<table class="rp-table"><thead><tr><th class="d">Date</th><th>Release</th><th class="num">Retail</th></tr></thead><tbody>{rows}</tbody></table>'
+            f'<div class="rp-rows rp-snk">{items}</div>'
             '<p><a href="/sneakers.html">Release calendar with reminders and resale prices →</a></p>')
 
     wanted = (load(os.path.join(sd, "wanted.json"), {}) or {}).get("top", [])[:6]
     if wanted:
-        items = "".join(f'<li><a href="{prod(w["id"], w["g"])}">{esc(clean_name(w["n"]))}</a> <span class="rp-s">♥ {w["c"]} collector{"s" if w["c"] > 1 else ""}</span></li>'
-                        for w in wanted)
-        sec("wanted", "Most wanted by collectors", f'<p>The cards most often saved to Want lists on this site.</p><ul class="rp-list">{items}</ul>')
+        items = "".join(row(prod(w["id"], w["g"]), img(w["id"], 200), esc(clean_name(w["n"])),
+                            f'♥ {w["c"]} collector{"s" if w["c"] > 1 else ""}', alt=clean_name(w["n"])) for w in wanted)
+        sec("wanted", "Most wanted by collectors", f'<p>The cards most often saved to Want lists on this site.</p><div class="rp-rows">{items}</div>')
 
     if not secs:
         return None

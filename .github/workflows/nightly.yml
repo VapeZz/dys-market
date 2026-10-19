@@ -204,7 +204,7 @@ jobs:
         run: |
           rm -rf /tmp/site-out && cp -r site /tmp/site-out && touch /tmp/site-out/.nojekyll
           # bust browser caches so visitors always get the latest script and styles
-          sed -i "s#assets/app.js\"#assets/app.js?v=${{ github.run_id }}\"#; s#assets/app.css\"#assets/app.css?v=${{ github.run_id }}\"#" /tmp/site-out/*.html
+          sed -i "s#assets/app.js\"#assets/app.js?v=${{ github.run_id }}\"#; s#assets/app.css\"#assets/app.css?v=${{ github.run_id }}\"#" /tmp/site-out/*.html $(ls /tmp/site-out/blog/*.html 2>/dev/null)
           cd /tmp/site-out
           git init -q -b gh-pages
           git config user.name "dys-market-bot"
