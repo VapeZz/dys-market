@@ -342,6 +342,33 @@ PAGES = {
   <p class="muted" id="bnote" style="font-size:13.5px;margin:10px 0 14px"></p>
   <div id="bpanel"><div class="skeleton" style="height:240px"></div></div>
 </section></div>'''),
+"centering": ("Card centering check for PSA, CGC and BGS · Drive Your Style",
+              "Free card centering checker. Take a photo of your Pokémon, One Piece or sports card to measure left/right and top/bottom centering and see the best PSA, CGC and BGS grade it allows before you submit.", '''
+<div class="wrap"><section class="block">
+  <div class="block-head"><div><h1 style="font-size:36px">Centering check</h1>
+    <p>Measure a card's centering before you pay to grade it. Your photo stays on your device. Nothing is uploaded.</p></div></div>
+  <div id="cz-root"><p class="panel empty-note">Loading the centering tool…</p></div>
+  <div class="cz-info">
+    <article class="prose"><h2>How to get an accurate read</h2>
+      <ul><li>Lay the card flat on a dark, plain surface. Light cards on a white table are hard to find.</li>
+      <li>Hold your phone straight above the card, not at an angle. Angled shots squeeze one side.</li>
+      <li>Use Straighten if the card is tilted in the photo, then drag each line onto its edge. The zoom shows you exactly where it sits.</li>
+      <li>Do the back too. PSA allows more on the back, but it still counts.</li>
+      <li>A phone photo is usually within 1 to 2 points of a flatbed scan. If you're right on a limit, scan it to be sure.</li></ul></article>
+    <div class="panel cz-table"><h2>Centering limits</h2>
+      <table><thead><tr><th>Grade</th><th class="num">Front</th><th class="num">Back</th></tr></thead><tbody>
+        <tr><td>PSA 10</td><td class="num">55/45</td><td class="num">75/25</td></tr>
+        <tr><td>PSA 9</td><td class="num">60/40</td><td class="num">90/10</td></tr>
+        <tr><td>PSA 8</td><td class="num">65/35</td><td class="num">90/10</td></tr>
+        <tr><td>PSA 7</td><td class="num">70/30</td><td class="num">90/10</td></tr>
+        <tr><td>PSA 6</td><td class="num">80/20</td><td class="num">90/10</td></tr>
+        <tr><td>CGC Gem Mint 10</td><td class="num">55/45</td><td class="num">75/25</td></tr>
+        <tr><td>CGC 9</td><td class="num">60/40</td><td class="num">90/10</td></tr>
+        <tr><td>BGS Pristine 10</td><td class="num">50/50</td><td class="num">55/45</td></tr>
+      </tbody></table>
+      <p class="muted cz-note">From each company's published grading standards. Graders can allow a little leeway for eye appeal, and centering is only one part of the grade: corners, edges and surface count too.</p></div>
+  </div>
+</section></div>'''),
 "about": ("About the data · Drive Your Style Market Insights", "Where Drive Your Style market prices come from.", '''
 <div class="wrap"><article class="prose">
   <h1>Where this data comes from</h1>
@@ -368,6 +395,7 @@ def links_page():
         ("Check what your cards are worth", "Free prices on 70,000+ cards, scan with your camera", "index.html?ref=bio", False),
         *([("🎁 Win an Elite Trainer Box", "Free monthly giveaway: build your binder to enter", "giveaway.html?ref=bio", False)] if GIVEAWAY_ON else []),
         ("Sell us your cards", "Get a cash or store-credit offer", "sell.html?ref=bio", False),
+        ("Check centering before you grade", "Free PSA, CGC and BGS centering check from a photo", "centering.html?ref=bio", False),
         ("Sneaker release calendar", "This week's drops, our cop or wait calls, reminders", "sneakers.html?ref=bio", False),
         ("This week's market report", "Biggest card gains and drops, new sets", "blog/?ref=bio", False),
         ("Track your collection", "See what your binder is worth", "collection.html?ref=bio", False),

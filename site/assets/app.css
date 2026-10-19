@@ -865,3 +865,47 @@ tr.grp td{background:var(--surface-2);font-size:13px;padding-top:8px;padding-bot
 .gw-total{margin:6px 0 10px;font-size:14.5px}
 .gw-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
 @media(max-width:600px){.gw-stats{gap:8px}.gw-stats .stat{padding:12px}.gw-stats .v{font-size:20px}.gw-stats .l{font-size:12px}}
+
+/* ---------- centering check ---------- */
+#cz-root .tabs{margin:6px 0 14px}
+.cz-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+@media(max-width:860px){.cz-grid{grid-template-columns:minmax(0,1fr)}}
+.cz-stage{padding:14px;min-width:0}
+.cz-stage canvas{display:block;margin:0 auto;max-width:100%;touch-action:none;border-radius:8px;outline:none}
+.cz-stage canvas:focus-visible{box-shadow:0 0 0 2px var(--accent)}
+.cz-empty{display:grid;grid-template-columns:150px minmax(0,1fr);gap:20px;align-items:center;padding:18px 8px}
+@media(max-width:520px){.cz-empty{grid-template-columns:minmax(0,1fr);justify-items:center;text-align:center}.cz-empty .cz-btns{justify-content:center}}
+.cz-empty[hidden],#cz-edit[hidden]{display:none}
+.cz-demo{width:150px;height:auto;color:var(--ink-3)}
+.cz-empty h2{font-size:22px;margin:0 0 6px}
+.cz-btns{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.cz-btns label,.cz-tools label.btn{cursor:pointer}
+.cz-tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}
+.cz-rot{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;flex:1 1 220px}
+.cz-rot input{flex:1;accent-color:var(--accent)}
+.cz-rot span{font-variant-numeric:tabular-nums;color:var(--ink-3);min-width:44px;text-align:right}
+.cz-note{font-size:13px;margin:10px 0 0}
+.cz-k{display:inline-block;width:18px;height:0;border-top:2px solid #5ee7ff;vertical-align:middle;margin:0 4px 0 2px}
+.cz-k.i{border-top:2px dashed #ff7ad9;margin-left:10px}
+.cz-out{padding:16px;display:grid;gap:14px}
+.cz-out h2{font-size:20px;margin:0}
+.cz-caps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.cz-cap{border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.cz-cap .l{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.cz-cap .g{font-family:"Space Grotesk",sans-serif;font-size:28px;font-weight:700;line-height:1.1}
+.cz-cap .s{font-size:12px;color:var(--ink-3);line-height:1.3}
+.cz-res-sides{display:grid;gap:10px}
+.cz-res-side{border-top:1px solid var(--line);padding-top:10px;display:grid;gap:6px}
+.cz-nums{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cz-nums .l{display:block;font-size:12px;color:var(--ink-3)}
+.cz-nums .v{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+.cz-worst{font-size:13px;font-weight:600}
+.cz-worst.ok{color:var(--up)}.cz-worst.off{color:var(--down)}
+.cz-info{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;margin-top:22px;align-items:start}
+@media(max-width:860px){.cz-info{grid-template-columns:minmax(0,1fr)}}
+.cz-table{padding:16px}
+.cz-table h2{font-size:20px;margin:0 0 8px}
+.cz-table table{width:100%;border-collapse:collapse;font-size:14px}
+.cz-table th,.cz-table td{padding:7px 4px;border-bottom:1px solid var(--line);text-align:left}
+.cz-table th{font-size:12px;color:var(--ink-3);font-weight:600}
+.cz-table .num{text-align:right;font-variant-numeric:tabular-nums}

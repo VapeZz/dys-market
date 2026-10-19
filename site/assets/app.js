@@ -155,7 +155,7 @@ function shell() {
       <p id="updated-line"></p>${AFF_ON ? `<p>Some outbound links (TCGplayer, eBay, StockX, GOAT) are affiliate links. If you buy through them we may earn a small commission at no extra cost to you.</p>` : ""}
     </div>
     <div>
-      <p><a href="${STORE}">Shop Drive Your Style</a> · <a href="sell.html">Sell to us</a> ·${GIVEAWAY_ON ? ` <a href="giveaway.html">Monthly giveaway</a> ·` : ""} <a href="blog/">Market reports</a> · <a href="about.html">Where this data comes from</a></p>
+      <p><a href="${STORE}">Shop Drive Your Style</a> · <a href="sell.html">Sell to us</a> ·${GIVEAWAY_ON ? ` <a href="giveaway.html">Monthly giveaway</a> ·` : ""} <a href="blog/">Market reports</a> · <a href="centering.html">Centering check</a> · <a href="about.html">Where this data comes from</a></p>
       <div class="socials" aria-label="Follow Drive Your Style">${SOCIALS.map(([n, u, d]) => `<a href="${u}" target="_blank" rel="noopener" aria-label="${n}" title="${n}"><svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg></a>`).join("")}</div>
       <div class="theme-switch" role="group" aria-label="Theme"><button data-t="dark">Dark</button><button data-t="light">Light</button></div>
     </div></div></footer>`;
@@ -525,7 +525,7 @@ function gradedHtml(base, set, v) {
   const link = (h, t, s) => `<a class="glink" href="${h}" target="_blank" rel="noopener"><b>${t}</b><span>${s}</span></a>`;
   return `<section class="graded"><h2 style="font-size:24px">Graded prices &amp; gem rate</h2>
     <p class="muted">Live graded data isn't built in yet. These links search recent graded sales for this card, and GemRate for its population and gem rate.</p>
-    <div class="glinks">${link(ebay("PSA 10"), "PSA 10 sold ↗", "eBay sold listings")}${link(ebay("PSA 9"), "PSA 9 sold ↗", "eBay sold listings")}${link(ebay("CGC 10"), "CGC 10 sold ↗", "eBay sold listings")}${link(`https://www.pricecharting.com/search-products?q=${encodeURIComponent(q)}&type=prices`, "All grades ↗", "PriceCharting")}${link("https://www.gemrate.com/", "Gem rate &amp; pop ↗", "Search it on GemRate")}</div>
+    <div class="glinks">${link(ebay("PSA 10"), "PSA 10 sold ↗", "eBay sold listings")}${link(ebay("PSA 9"), "PSA 9 sold ↗", "eBay sold listings")}${link(ebay("CGC 10"), "CGC 10 sold ↗", "eBay sold listings")}${link(`https://www.pricecharting.com/search-products?q=${encodeURIComponent(q)}&type=prices`, "All grades ↗", "PriceCharting")}${link("https://www.gemrate.com/", "Gem rate &amp; pop ↗", "Search it on GemRate")}<a class="glink" href="centering.html"><b>Check centering →</b><span>Measure yours before you submit</span></a></div>
     <div class="gcalc" id="gcalc"></div>
   </section>`;
 }
@@ -2127,7 +2127,12 @@ async function pageBuyer() {
   draw();
 }
 
-const pages = { search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, demand: pageDemand, importer: pageImporter, collection: pageCollection, collectors: pageCollectors, sell: pageSell, buyer: pageBuyer, giveaway: pageGiveaway };
+async function pageCentering() {
+  if (!window.dysCentering) await new Promise((ok, bad) => { const s = document.createElement("script"); s.src = "assets/centering.js?v=" + (document.querySelector('script[src*="app.js"]')?.src.split("v=")[1] || "1"); s.onload = ok; s.onerror = bad; document.head.appendChild(s); });
+  window.dysCentering($("#cz-root"));
+}
+
+const pages = { centering: pageCentering, search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, demand: pageDemand, importer: pageImporter, collection: pageCollection, collectors: pageCollectors, sell: pageSell, buyer: pageBuyer, giveaway: pageGiveaway };
 (pages[PAGE] || (async () => {}))().then(() => offerNudge()).catch((err) => {
   console.error(err);
   const main = $("main");
