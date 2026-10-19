@@ -163,6 +163,7 @@ function shell() {
   const tb = [["index", "Home", I('<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>')],
     ["sets", "Sets", I('<rect x="7" y="3" width="13" height="17" rx="2"/><path d="M4 7v12a2 2 0 0 0 2 2h10"/>')],
     ["collection", "Collection", I('<path d="M4 6h16v12H4z"/><path d="M4 10h16"/>')],
+    ["centering", "Centering", I('<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M12 8v8M8 12h8"/>')],
     ["trends", "Trends", I('<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>')],
     ["shop", "Shop", I('<path d="M6 7h12l-1 13H7z"/><path d="M9 7a3 3 0 0 1 6 0"/>')]];
   const bar = document.createElement("nav"); bar.className = "tabbar"; bar.setAttribute("aria-label", "Main");
