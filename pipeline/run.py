@@ -41,7 +41,7 @@ def main(argv):
             if lows:
                 os.makedirs(os.path.join(config.DATA_DIR, "lows"), exist_ok=True)
                 with open(os.path.join(config.DATA_DIR, "lows", "latest.json"), "w", encoding="utf-8") as f:
-                    json.dump({"day": day, "lows": lows}, f, separators=(",", ":"))
+                    json.dump({"day": day, "lows": lows, "mids": getattr(tcgcsv.fetch_prices, "mids", None) or {}}, f, separators=(",", ":"))
         removed = snapshots.prune(day)
         if removed:
             print(f"snapshots: pruned {removed} old files")

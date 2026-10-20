@@ -7,6 +7,7 @@ A market price tracker in the style of market.tcgguy.com, built to run at **mark
 - Sets list, set pages (sealed and card prices with 7/30/90-day change), product pages with a price-history chart
 - Trends page ($5+ / $20+ / $100+ sealed movers) and a Card movers page (filter by game, set, last 12 months)
 - "In stock at Drive Your Style" badges that link to your Shopify products, with your price next to the market price
+- **Daily Scout** (owner only, `scout.html`): a ranked buy list every night. Flips (cheapest listing far enough under market to resell for profit after fees), momentum and dip picks, each with a score, max buy price, reasons and risk flags
 - Dark and light themes, works on phones
 
 It costs nothing to run. Prices come from the free daily TCGplayer data at [tcgcsv.com](https://tcgcsv.com). GitHub runs the nightly job and hosts the site.

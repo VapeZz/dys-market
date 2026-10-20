@@ -2166,12 +2166,122 @@ async function pageBuyer() {
   draw();
 }
 
+/* ---------- Daily Scout: ranked buy list (data/scout.json, built nightly by pipeline/scout.py) ---------- */
+async function pageScout() {
+  const d = await getJSON("scout.json").catch(() => null);
+  if (!d) { $("#sc-list").innerHTML = `<p class="panel empty-note">The scout list builds with tonight's market update.</p>`; return; }
+  const CFG_KEY = "dys-scout-cfg", DAY_KEY = `dys-scout-${d.date}`;
+  const load = (k, dflt) => { try { return JSON.parse(localStorage.getItem(k)) || dflt; } catch { return dflt; } };
+  const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+  const c0 = d.costs;
+  const DEF = { fee: c0.fee_pct, flat: c0.fee_flat / 100, sc: c0.ship_sell.c / 100, sc50: c0.ship_sell.c50 / 100, ss: c0.ship_sell.s / 100, ss100: c0.ship_sell.s100 / 100, bc: c0.ship_buy.c / 100, bs: c0.ship_buy.s / 100, roi: c0.roi };
+  let cfg = { ...DEF, ...load(CFG_KEY, {}) };
+  let seen = load(DAY_KEY, {});
+  const st = { plan: params.get("plan") || "all", game: "", type: "", budget: 0, buys: false, hide: false };
+
+  // selling math in cents, using the owner's own fee and shipping settings
+  const net = (p, t) => p * (1 - cfg.fee / 100) - cfg.flat * 100 - 100 * (t === "s" ? (p >= 10000 ? cfg.ss100 : cfg.ss) : (p >= 5000 ? cfg.sc50 : cfg.sc));
+  const shipIn = (t) => 100 * (t === "s" ? cfg.bs : cfg.bc);
+  const maxBuy = (p, t) => Math.max(0, Math.floor(net(p, t) / (1 + cfg.roi / 100) - shipIn(t)));
+  const flipMath = (r) => { const cost = r.lo + shipIn(r.t), pr = net(r.p, r.t) - cost; return { pr, roi: pr / cost * 100 }; };
+
+  const PLAN = { flip: ["Flip", "Buy the cheapest listing, resell at market"], ride: ["Momentum", "Steady climb all week"], dip: ["Dip", "Off its usual price and stopped falling"] };
+  const tcg = (id) => `https://www.tcgplayer.com/product/${id}?Language=all`;
+  const sold = (n) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(cleanN(n))}&LH_Sold=1&LH_Complete=1&_sop=13`;
+  const games = [...new Set(d.picks.map((r) => r.k))];
+
+  $("#sc-sub").textContent = `${fmtDate(d.date)} prices · ${d.counts.buy} buys, ${d.counts.watch} to watch`;
+  if (d.history_days < 30) {
+    $("#sc-note").hidden = false;
+    $("#sc-note").textContent = `Built on ${d.history_days} days of recorded prices. Momentum and dip calls firm up as history builds; flips rely on today's listings and are solid now.${d.has_mids ? "" : " Listing-spread checks start after tonight's update."}`;
+  }
+
+  const chipRow = (el, items, cur, key) => {
+    el.innerHTML = items.map(([v, t, n]) => `<button type="button" class="chip${v === cur ? " on" : ""}" data-v="${esc(v)}">${esc(t)}${n != null ? ` <span class="n">${n}</span>` : ""}</button>`).join("");
+    el.querySelectorAll("[data-v]").forEach((b) => b.addEventListener("click", () => { st[key] = b.dataset.v; draw(); }));
+  };
+
+  const cardHtml = (r) => {
+    const mark = seen[r.id];
+    const [pl, plDesc] = PLAN[r.plan];
+    let price, money2 = "";
+    if (r.plan === "flip") {
+      const f = flipMath(r), mb = maxBuy(r.p, r.t), ok = r.lo <= mb;
+      price = `<div><span>Lowest</span><b>${money(r.lo)}</b><small class="chg up">−${r.off}%</small></div><div><span>Max buy</span><b class="${ok ? "sc-ok" : "sc-warn"}">${money(mb)}</b></div>`;
+      money2 = `<p class="sc-profit ${f.pr > 0 ? "up" : "down"}">Clears <b>${money(Math.round(f.pr))}</b> (${f.roi.toFixed(0)}%) reselling at market after fees${f.roi < cfg.roi ? ` · under your ${cfg.roi}% target` : ""}</p>`;
+    } else {
+      const lo = r.lo && r.lo <= r.p * 1.12 ? r.lo : null;
+      price = `<div><span>Lowest</span><b>${lo ? money(lo) : "—"}</b></div><div><span>${r.plan === "ride" ? "Exit below" : "Usual"}</span><b>${money(r.plan === "ride" ? r.stop : r.hi)}</b></div>`;
+      money2 = `<p class="sc-profit">Pay no more than <b>${money(r.max)}</b> (today's market)</p>`;
+    }
+    return `<article class="sc-card${mark ? ` is-${mark}` : ""}" data-id="${r.id}">
+      <a class="sc-img" href="${prodUrl(r.id, r.g)}">${imgTag(r.id, "", 200)}</a>
+      <div class="sc-body">
+        <div class="sc-top"><span class="badge sc-v ${r.v}">${r.v === "buy" ? "Buy" : "Watch"}</span><span class="sc-plan" title="${esc(plDesc)}">${pl}</span>
+          ${r.dys ? `<span class="badge">In stock</span>` : ""}<span class="sc-score" style="--s:${r.score}" title="Scout score out of 100"><b>${r.score}</b></span></div>
+        <a class="sc-name" href="${prodUrl(r.id, r.g)}">${esc(cleanN(r.n))}</a>
+        <span class="sc-set">${esc([GAME_LABEL[r.k] || r.k, r.sn, r.t === "s" ? "Sealed" : r.r].filter(Boolean).join(" · "))}</span>
+        <div class="sc-prices"><div><span>Market</span><b>${money(r.p)}</b>${r.w7 != null ? `<small>${chg(r.w7)} 7d</small>` : ""}</div>${price}</div>
+        ${money2}
+        <div class="sc-spark">${sparkSvg(r.s, (r.w7 ?? 0) >= 0, 300, 44)}</div>
+        <ul class="sc-why">${r.why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>
+        ${r.risk.length ? `<ul class="sc-risk">${r.risk.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}
+        <div class="sc-acts">
+          <a href="${tcg(r.id)}" target="_blank" rel="noopener">TCGplayer</a><a href="${sold(r.n)}" target="_blank" rel="noopener">eBay sold</a><a href="${prodUrl(r.id, r.g)}">Chart</a>
+          <span class="sc-mark"><button type="button" data-m="bought" aria-pressed="${mark === "bought"}">✓ Bought</button><button type="button" data-m="skip" aria-pressed="${mark === "skip"}">Skip</button></span>
+        </div>
+      </div></article>`;
+  };
+
+  const avoidHtml = () => d.avoid.length ? `<p class="muted sc-avoid-note">Falling all week and still at their low. Don't catch these yet; they show up as dips once they stop falling.</p>` +
+    d.avoid.filter((r) => (!st.game || r.k === st.game) && (!st.type || r.t === st.type)).map((r) => `<a class="sc-avoid" href="${prodUrl(r.id, r.g)}">${imgTag(r.id, "", 200)}
+      <span><b>${esc(cleanN(r.n))}</b><span class="sc-set">${esc((GAME_LABEL[r.k] || r.k) + " · " + r.sn)}</span><span class="muted">${esc(r.why)}</span></span>
+      <span class="sc-avoid-p">${money(r.p)}${chg(r.w7)}</span></a>`).join("") : `<p class="panel empty-note">Nothing falling hard today.</p>`;
+
+  const cfgForm = () => {
+    const f = (k, l, step = "0.01") => `<label>${l}<input type="number" min="0" step="${step}" data-k="${k}" value="${cfg[k]}"></label>`;
+    $("#sc-cfg-body").innerHTML = `<div class="sc-cfg-grid">${f("fee", "Selling fee %")}${f("flat", "Per-order fee $")}${f("roi", "Target profit %", "1")}
+      ${f("sc", "Ship a card $")}${f("sc50", "Ship a $50+ card $")}${f("ss", "Ship sealed $")}${f("ss100", "Ship $100+ sealed $")}${f("bc", "Shipping to you, card $")}${f("bs", "Shipping to you, sealed $")}</div>
+      <p class="muted">Defaults: TCGplayer 10.75% commission + 2.5% + $0.30 processing. Saved on this device. <button type="button" class="sc-link" id="sc-reset">Reset</button></p>`;
+    $("#sc-cfg-body").querySelectorAll("input").forEach((i) => i.addEventListener("change", () => { const v = parseFloat(i.value); if (!isNaN(v) && v >= 0) { cfg[i.dataset.k] = v; save(CFG_KEY, cfg); draw(); } }));
+    $("#sc-reset").addEventListener("click", () => { cfg = { ...DEF }; save(CFG_KEY, {}); cfgForm(); draw(); });
+  };
+
+  const draw = () => {
+    const base = d.picks.filter((r) => (!st.game || r.k === st.game) && (!st.type || r.t === st.type) && (!st.budget || (r.plan === "flip" ? r.lo : r.p) <= st.budget));
+    const cnt = (pl) => base.filter((r) => (pl === "all" || r.plan === pl) && (!st.buys || r.v === "buy")).length;
+    chipRow($("#sc-plan"), [["all", "All picks", cnt("all")], ["flip", "Flips", cnt("flip")], ["ride", "Momentum", cnt("ride")], ["dip", "Dips", cnt("dip")], ["avoid", "Avoid", d.avoid.length]], st.plan, "plan");
+    chipRow($("#sc-game"), [["", "All games"], ...games.map((g) => [g, GAME_LABEL[g] || g])], st.game, "game");
+    history.replaceState(null, "", st.plan === "all" ? location.pathname : `?plan=${st.plan}`);
+    const done = Object.keys(seen).length, bought = Object.values(seen).filter((v) => v === "bought").length;
+    $("#sc-progress").textContent = done ? `Reviewed ${done} today · ${bought} bought` : "";
+    if (st.plan === "avoid") { $("#sc-list").innerHTML = avoidHtml(); return; }
+    const rows = base.filter((r) => (st.plan === "all" || r.plan === st.plan) && (!st.buys || r.v === "buy") && (!st.hide || !seen[r.id]));
+    $("#sc-list").innerHTML = rows.length ? `<div class="sc-grid">${rows.map(cardHtml).join("")}</div>` : `<p class="panel empty-note">Nothing matches these filters today.</p>`;
+    $("#sc-list").querySelectorAll(".sc-card").forEach((c) => c.querySelectorAll("[data-m]").forEach((b) => b.addEventListener("click", () => {
+      const id = c.dataset.id, m = b.dataset.m;
+      if (seen[id] === m) delete seen[id]; else seen[id] = m;
+      save(DAY_KEY, seen);
+      if (m === "bought" && seen[id]) toast("Marked bought");
+      draw();
+    })));
+  };
+  $("#sc-type").addEventListener("change", (e) => { st.type = e.target.value; draw(); });
+  $("#sc-budget").addEventListener("change", (e) => { st.budget = +e.target.value || 0; draw(); });
+  $("#sc-buys").addEventListener("change", (e) => { st.buys = e.target.checked; draw(); });
+  $("#sc-hide").addEventListener("change", (e) => { st.hide = e.target.checked; draw(); });
+  // old days' review marks aren't needed
+  try { Object.keys(localStorage).filter((k) => k.startsWith("dys-scout-2") && k !== DAY_KEY).forEach((k) => localStorage.removeItem(k)); } catch {}
+  cfgForm();
+  draw();
+}
+
 async function pageCentering() {
   if (!window.dysCentering) await new Promise((ok, bad) => { const s = document.createElement("script"); s.src = "assets/centering.js?v=" + (document.querySelector('script[src*="app.js"]')?.src.split("v=")[1] || "1"); s.onload = ok; s.onerror = bad; document.head.appendChild(s); });
   window.dysCentering($("#cz-root"));
 }
 
-const pages = { centering: pageCentering, search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, demand: pageDemand, importer: pageImporter, collection: pageCollection, collectors: pageCollectors, sell: pageSell, buyer: pageBuyer, giveaway: pageGiveaway, intel: pageIntel };
+const pages = { centering: pageCentering, search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, demand: pageDemand, importer: pageImporter, collection: pageCollection, collectors: pageCollectors, sell: pageSell, buyer: pageBuyer, scout: pageScout, giveaway: pageGiveaway, intel: pageIntel };
 (pages[PAGE] || (async () => {}))().then(() => offerNudge()).catch((err) => {
   console.error(err);
   const main = $("main");

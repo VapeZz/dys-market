@@ -105,6 +105,12 @@ jobs:
           python pipeline/buyer.py 2>&1 | tee /tmp/buyer.log
           echo "::notice title=Buyer::$(tail -n 1 /tmp/buyer.log)"
 
+      - name: Daily Scout (owner's ranked buy list)
+        continue-on-error: true
+        run: |
+          python pipeline/scout.py 2>&1 | tee /tmp/scout.log
+          echo "::notice title=Scout::$(tail -n 1 /tmp/scout.log)"
+
       - name: Market Intel (brief, indices, signals)
         continue-on-error: true
         run: |

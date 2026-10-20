@@ -148,23 +148,27 @@ def load_catalog():
 
 def fetch_prices(groups, log=print):
     """Return {"productId:subType": cents} for every set's market price."""
-    snap, lows = {}, {}
+    snap, lows, mids = {}, {}, {}
     for i, (gid, g) in enumerate(groups.items()):
         for row in _results(get_json(f"tcgplayer/{g['cat']}/{gid}/prices")):
-            add_price(snap, row, lows)
+            add_price(snap, row, lows, mids)
         if (i + 1) % 100 == 0:
             log(f"prices: {i + 1}/{len(groups)} sets")
     log(f"prices: {len(snap)} price points")
     fetch_prices.lows = lows   # lowest current listing per product (for the buyer dashboard)
+    fetch_prices.mids = mids   # median current listing per product (liquidity check for the scout)
     return snap
 
 
-def add_price(snap, row, lows=None):
-    if lows is not None:
+def add_price(snap, row, lows=None, mids=None):
+    key = f"{row['productId']}:{row.get('subTypeName') or 'Normal'}"
+    for field, bucket in (("lowPrice", lows), ("midPrice", mids)):
+        if bucket is None:
+            continue
         try:
-            lo = int(round(float(row.get("lowPrice")) * 100))
-            if lo > 0:
-                lows[f"{row['productId']}:{row.get('subTypeName') or 'Normal'}"] = lo
+            v = int(round(float(row.get(field)) * 100))
+            if v > 0:
+                bucket[key] = v
         except (TypeError, ValueError):
             pass
     price = row.get("marketPrice")
