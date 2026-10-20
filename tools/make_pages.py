@@ -66,7 +66,8 @@ PAGES = {
   <a class="hd-fan" id="hd-fan" href="cards.html" aria-label="See today's biggest movers"></a>
 </div></section>
 <section class="block" style="padding-top:4px"><div class="wrap"><div class="gtiles" id="gtiles"></div></div></section>
-@@GWBANNER@@<section class="block" id="report-block" hidden style="padding-top:0"><div class="wrap"><a class="report-banner" id="report-link" href="blog/"><div><b>📈 This week's market report</b><span id="report-title"></span></div><span>Read →</span></a></div></section>
+@@GWBANNER@@<section class="block" id="intel-block" hidden style="padding-top:0;padding-bottom:12px"><div class="wrap"><a class="report-banner in-banner" href="intel.html"><div><b>⚡ Today's market brief</b><span id="intel-head"></span></div><span>Intel →</span></a></div></section>
+<section class="block" id="report-block" hidden style="padding-top:0"><div class="wrap"><a class="report-banner" id="report-link" href="blog/"><div><b>📈 This week's market report</b><span id="report-title"></span></div><span>Read →</span></a></div></section>
 <section class="block" id="stock-block"><div class="wrap">
   <div class="block-head"><div><h2>In stock at Drive Your Style</h2><p>Our price next to today's market price.</p></div><a class="more" href="https://driveyourstyle.net/collections/sealed-product">Shop all →</a></div>
   <div class="stockrow" id="stock"></div>
@@ -333,6 +334,20 @@ PAGES = {
     <p><b>Notification:</b> The winner is contacted at the email on their account and must reply within 7 days, or an alternate winner is drawn. The winner's collector name may be posted on this page and on Drive Your Style social media.</p>
     <p><b>General:</b> The Sponsor may verify eligibility and disqualify entries that break these rules or use fake accounts. This giveaway is not sponsored, endorsed or administered by The Pokémon Company, Nintendo, Instagram, TikTok, Facebook or YouTube. By entering you agree to these rules.</p>
   </div>
+</section></div>'''),
+"intel": ("Market Intel: daily brief, indices and signals · Drive Your Style", "Daily trading card market brief: Chase 100 and Modern Sealed 100 indices, cards with steady rising or cooling prices, and today's biggest movers for Pokémon, One Piece and more.", '''
+<div class="wrap in-wrap"><section class="block">
+  <span class="in-kicker">TODAY</span><h1 class="in-h">Daily Market Brief</h1>
+  <div class="in-card in-brief" id="in-brief"><div class="skeleton" style="height:90px"></div></div>
+  <h2 class="in-h2">Market Indices</h2>
+  <div class="in-grid" id="in-idx"><div class="skeleton" style="height:160px"></div><div class="skeleton" style="height:160px"></div></div>
+  <span class="in-kicker" style="margin-top:28px">DRIVE YOUR STYLE</span><h2 class="in-h2" style="margin-top:2px">Signals</h2>
+  <p class="muted in-note" id="in-sig-note"></p>
+  <div class="in-cols"><div><h3 class="in-h3 up">Rising</h3><div class="in-list" id="in-up"></div></div><div><h3 class="in-h3 down">Cooling</h3><div class="in-list" id="in-down"></div></div></div>
+  <h2 class="in-h2">Top movers · 24h</h2>
+  <div class="in-row" id="in-movers"></div>
+  <div id="in-deals-wrap" hidden><h2 class="in-h2">Listed under market</h2><div class="in-row" id="in-deals"></div></div>
+  <p class="muted in-foot">How this works: every index is a fixed basket of today's most valuable items, valued each day at its TCGplayer market price. A signal means a card's price moved the same way on most days this week and is at its weekly high (rising) or low (cooling); strength grows with the size and consistency of the move. Built from <span id="in-days">—</span> days of recorded prices and updated nightly. For research only, not financial advice.</p>
 </section></div>'''),
 "buyer": ("Buyer dashboard · Drive Your Style", "Owner's buyer dashboard.", '''
 <div class="wrap"><section class="block">

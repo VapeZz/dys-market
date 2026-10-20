@@ -132,7 +132,7 @@ document.documentElement.dataset.theme = getTheme();
 /* ---------- shell ---------- */
 const SEARCH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>`;
 function shell() {
-  const links = [["sets", "Sets"], ["trends", "Trends"], ["cards", "Movers"], ["search", "Search"], ["compare", "Compare"], ["centering", "Centering"], ["calendar", "Calendar"], ["sneakers", "Sneakers"], ["watchlist", "Want list"], ["collection", "My Collection"], ["collectors", "Collectors"], ...(GIVEAWAY_ON ? [["giveaway", "🎁 Giveaway"]] : []), ["about", "About"]];
+  const links = [["intel", "Intel"], ["sets", "Sets"], ["trends", "Trends"], ["cards", "Movers"], ["search", "Search"], ["compare", "Compare"], ["centering", "Centering"], ["calendar", "Calendar"], ["sneakers", "Sneakers"], ["watchlist", "Want list"], ["collection", "My Collection"], ["collectors", "Collectors"], ...(GIVEAWAY_ON ? [["giveaway", "🎁 Giveaway"]] : []), ["about", "About"]];
   $("#top").outerHTML = `<header class="top"><div class="wrap">
     <a class="brand" href="index.html" aria-label="Drive Your Style Market Insights home"><img class="logo-img logo-on-dark" src="assets/logo-light.png" alt="Drive Your Style" width="61" height="40"><img class="logo-img logo-on-light" src="assets/logo-dark.png" alt="" width="61" height="40"><span class="brand-sub">Market<br>Insights</span></a>
     <nav class="nav" id="nav">${links.map(([p, l]) => `<a href="${p}.html"${p === PAGE ? ' aria-current="page"' : ""}>${l}</a>`).join("")}
@@ -164,7 +164,7 @@ function shell() {
     ["sets", "Sets", I('<rect x="7" y="3" width="13" height="17" rx="2"/><path d="M4 7v12a2 2 0 0 0 2 2h10"/>')],
     ["collection", "Collection", I('<path d="M4 6h16v12H4z"/><path d="M4 10h16"/>')],
     ["centering", "Centering", I('<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M12 8v8M8 12h8"/>')],
-    ["trends", "Trends", I('<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>')],
+    ["intel", "Intel", I('<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>')],
     ["shop", "Shop", I('<path d="M6 7h12l-1 13H7z"/><path d="M9 7a3 3 0 0 1 6 0"/>')]];
   const bar = document.createElement("nav"); bar.className = "tabbar"; bar.setAttribute("aria-label", "Main");
   bar.innerHTML = tb.map(([p, l, i]) => `<a href="${p === "shop" ? STORE : p + ".html"}"${p === PAGE || (p === "sets" && PAGE === "set") ? ' aria-current="page"' : ""}>${i}<span>${l}</span></a>`).join("");
@@ -1625,6 +1625,43 @@ async function pageGiveaway() {
   }
 }
 
+/* ---------- Intel: daily brief, market indices, signals, movers (data/intel.json, built nightly by tools/intel.py) ---------- */
+const sparkSvg = (vals, up, w = 300, h = 70) => {
+  const v = (vals || []).filter((x) => x != null); if (v.length < 2) return "";
+  const lo = Math.min(...v), hi = Math.max(...v), r = hi - lo || 1;
+  const pts = v.map((x, i) => `${(i * w / (v.length - 1)).toFixed(1)},${(h - 6 - (x - lo) / r * (h - 12)).toFixed(1)}`).join(" ");
+  const col = up ? "var(--up)" : "var(--down)";
+  return `<svg class="in-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,${h} ${pts} ${w},${h}" fill="${col}" opacity=".12"/><polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`;
+};
+const inChip = (l, v) => `<span class="in-chip ${v == null ? "" : v >= 0 ? "up" : "down"}">${l} ${v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`}</span>`;
+const GAME_LABEL = { pokemon: "Pokémon", "one-piece": "One Piece", lorcana: "Lorcana", riftbound: "Riftbound", gundam: "Gundam", "union-arena": "Union Arena", "pokemon-jp": "Pokémon JP" };
+const cleanN = (n) => n.replace(/ \((Holofoil|Normal|Foil)\)$/, "").replace(/ \(Foil\)/, "");
+async function pageIntel() {
+  const d = await getJSON("intel.json");
+  const day = new Date(d.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();
+  $("#in-brief").innerHTML = `<div class="in-tag"><span class="in-dot"></span>DRIVE YOUR STYLE DAILY BRIEF · ${day}</div>
+    <h2>${esc(d.brief.head)}</h2><p>${esc(d.brief.body)}</p>`;
+  $("#in-idx").innerHTML = d.indices.map((i) => { const ref = i.w1 ?? i.d1 ?? 0;
+    return `<details class="in-card in-index"><summary><span class="in-lab">${esc(i.name.toUpperCase())}</span><b class="in-val">${money(i.v)}</b>${sparkSvg(i.s, ref >= 0)}
+      <span class="in-chips">${inChip("1D", i.d1)}${inChip("1W", i.w1)}${inChip("1M", i.m1)}</span></summary>
+      <p class="muted in-desc">${esc(i.desc)}. Biggest pieces:</p><ol class="in-top">${i.top.map((t) => `<li><a href="${prodUrl(t.id, t.g)}">${esc(cleanN(t.n))}</a> <b>${money(t.p)}</b></li>`).join("")}</ol></details>`; }).join("");
+  const sig = (c, kind) => `<a class="in-card in-pick ${kind}" href="${prodUrl(c.id, c.g)}"><span class="in-img">${imgTag(c.id, "", 200)}</span><span class="in-body">
+      <span class="in-lab ${kind}">${kind === "up" ? "RISING" : "COOLING"} · ${c.strength}% STRENGTH</span>
+      <b class="in-name">${esc(cleanN(c.n))}</b><span class="in-set">${esc((GAME_LABEL[c.k] || "") + " · " + c.sn)}</span>
+      <span class="in-price ${kind}">${money(c.p)} <small>${c.w >= 0 ? "+" : ""}${c.w.toFixed(1)}% this week</small></span>
+      <span class="in-why">${esc(c.why)}</span></span></a>`;
+  $("#in-up").innerHTML = d.signals.up.map((c) => sig(c, "up")).join("") || `<p class="muted">No steady risers today.</p>`;
+  $("#in-down").innerHTML = d.signals.down.map((c) => sig(c, "down")).join("") || `<p class="muted">Nothing cooling off today.</p>`;
+  $("#in-sig-note").textContent = `${d.signals.n_up} rising and ${d.signals.n_down} cooling cards worth $10+ today. Showing the strongest.`;
+  const mv = (m) => `<a class="in-mover" href="${prodUrl(m.id, m.g)}">${imgTag(m.id, "", 200)}<span class="in-name">${esc(cleanN(m.n))}</span><span class="in-set">${esc(m.sn)}</span>
+      <span class="in-price ${m.d1 >= 0 ? "up" : "down"}">${m.d1 >= 0 ? "↑" : "↓"} ${Math.abs(m.d1).toFixed(1)}%</span><span class="in-set">${money(m.was)} → ${money(m.p)}</span></a>`;
+  $("#in-movers").innerHTML = [...d.movers.up, ...d.movers.down].map(mv).join("");
+  if (d.deals?.length) { $("#in-deals-wrap").hidden = false;
+    $("#in-deals").innerHTML = d.deals.map((x) => `<a class="in-mover" href="${prodUrl(x.id, x.g)}">${imgTag(x.id, "", 200)}<span class="in-name">${esc(cleanN(x.n))}</span><span class="in-set">${esc(x.sn)}</span>
+      <span class="in-price up">${money(x.lo)}</span><span class="in-set">${x.off.toFixed(0)}% under ${money(x.p)} market</span></a>`).join(""); }
+  $("#in-days").textContent = d.history_days;
+}
+
 /* graded slabs: each grade is its own line in the collection, valued at the owner's number (eBay sold is one tap away) */
 const GRADES = [["PSA", ["10", "9", "8", "7", "6", "5"]], ["CGC", ["10 Pristine", "10", "9.5", "9", "8.5", "8"]], ["BGS", ["10 Black Label", "10", "9.5", "9", "8.5"]],
   ["SGC", ["10", "9.5", "9", "8"]], ["TAG", ["10", "9", "8"]], ["ACE", ["10", "9", "8"]]];
@@ -1995,6 +2032,7 @@ if (PAGE === "index") fetch("blog/latest.json", { cache: "no-cache" }).then((r) 
   $("#report-title").textContent = p.title;
   $("#report-block").hidden = false;
 }).catch(() => {});
+if ($("#intel-block")) getJSON("intel.json").then((d) => { $("#intel-head").textContent = d.brief.head; $("#intel-block").hidden = false; }).catch(() => {});
 [["search", ".big-q"], ["collection", "#add-box"], ["index", ".hero [data-search]"]].forEach(([pg, sel]) => { if (PAGE === pg) scanButton(document.querySelector(sel)); });
 document.querySelectorAll("[data-search]").forEach(initSearch);
 const normNum = (t) => t.replace(/\b0+(\d)/g, "$1");
@@ -2133,7 +2171,7 @@ async function pageCentering() {
   window.dysCentering($("#cz-root"));
 }
 
-const pages = { centering: pageCentering, search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, demand: pageDemand, importer: pageImporter, collection: pageCollection, collectors: pageCollectors, sell: pageSell, buyer: pageBuyer, giveaway: pageGiveaway };
+const pages = { centering: pageCentering, search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, demand: pageDemand, importer: pageImporter, collection: pageCollection, collectors: pageCollectors, sell: pageSell, buyer: pageBuyer, giveaway: pageGiveaway, intel: pageIntel };
 (pages[PAGE] || (async () => {}))().then(() => offerNudge()).catch((err) => {
   console.error(err);
   const main = $("main");
