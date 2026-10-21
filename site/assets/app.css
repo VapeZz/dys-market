@@ -1074,3 +1074,9 @@ tr.grp td{background:var(--surface-2);font-size:13px;padding-top:8px;padding-bot
 .cb-v{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums}
 .cb-thumb img{width:34px;height:47px;object-fit:contain;border-radius:4px}
 .cb-sub{display:block;font-size:12px}
+/* bigger pictures on the Trends and Movers pages */
+body[data-page="trends"] .movers .row,body[data-page="cards"] .movers .row{grid-template-columns:24px 96px 1fr auto;gap:14px;padding:12px 16px}
+body[data-page="trends"] .movers .thumb{width:96px;height:96px;border-radius:10px;padding:4px}
+body[data-page="cards"] .movers .thumb{width:96px;height:134px;border-radius:8px;padding:2px}
+@media(max-width:600px){body[data-page="trends"] .movers .row,body[data-page="cards"] .movers .row{grid-template-columns:20px 76px 1fr auto;gap:10px}
+  body[data-page="trends"] .movers .thumb{width:76px;height:76px}body[data-page="cards"] .movers .thumb{width:76px;height:106px}}
