@@ -117,6 +117,14 @@ jobs:
           python tools/grading.py site 2>&1 | tee /tmp/grading.log
           echo "::notice title=Grading::$(tail -n 1 /tmp/grading.log)"
 
+      - name: Graded sold prices (PokemonPriceTracker)
+        continue-on-error: true
+        env:
+          PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
+        run: |
+          python tools/graded.py site data/graded 2>&1 | tee /tmp/graded.log
+          echo "::notice title=Graded::$(tail -n 1 /tmp/graded.log)"
+
       - name: Market Intel (brief, indices, signals)
         continue-on-error: true
         run: |

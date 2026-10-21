@@ -1696,14 +1696,13 @@ async function pageIntel() {
    (data/slabs.json) it adds real graded prices and ranks by expected profit. */
 const GCOS = { PSA: "PSA", CGC: "CGC", BGS: "BGS", TAG: "TAG" };
 async function pageGrading() {
-  const [meta, gd, slabs] = await Promise.all([getJSON("meta.json"), getJSON("grading.json"), getJSON("slabs.json").catch(() => null)]);
-  const KEY = "dys-grading2";
-  let st = { co: "PSA", fee: 25, ship: 8, o10: 30, o9: 50, x9: 1.0, game: "all", era: "modern", min: 30, max: 500, sort: "value", q: "" };
+  const [meta, gd, graded] = await Promise.all([getJSON("meta.json"), getJSON("grading.json"), getJSON("graded.json").catch(() => ({ cards: {} }))]);
+  const GK = { PSA: ["psa10", "psa9", "10", "9"], CGC: ["cgc10", "cgc9", "10", "9"], BGS: ["bgs9_5", "bgs9", "9.5", "9"], TAG: ["tag10", "tag9", "10", "9"] };
+  const KEY = "dys-grading3";
+  let st = { co: "PSA", fee: 25, ship: 8, o10: 30, o9: 50, x9: 1.0, game: "all", era: "modern", min: 30, max: 500, sort: "profit", q: "", only: true };
   try { st = { ...st, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch {}
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch {} };
   const setOf = (g) => meta.groups[g]?.[0] || "";
-  const comps = new Map();
-  if (slabs?.cards) for (const [k, rec] of Object.entries(slabs.cards)) { const pid = Number(k.split(":").pop()); if (pid) comps.set(pid, rec); }
   const games = meta.games.map((g) => [g.slug, g.label]).filter(([s]) => gd.rows.some((r) => r[7] === s));
   $("#gr-controls").innerHTML = `
     <label class="gr-f">Grading company<select class="select" data-k="co">${Object.keys(GCOS).map((c) => `<option${c === st.co ? " selected" : ""}>${c}</option>`).join("")}</select></label>
@@ -1716,26 +1715,30 @@ async function pageGrading() {
     <label class="gr-f">Era<select class="select" data-k="era"><option value="modern"${st.era === "modern" ? " selected" : ""}>Modern (last 5 years)</option><option value="vintage"${st.era === "vintage" ? " selected" : ""}>Older sets</option><option value="all"${st.era === "all" ? " selected" : ""}>All</option></select></label>
     <label class="gr-f">Raw price from $<input class="field" type="number" min="0" step="1" data-k="min" value="${st.min}"></label>
     <label class="gr-f">to $<input class="field" type="number" min="0" step="1" data-k="max" value="${st.max}"></label>
-    <label class="gr-f">Search<input class="field" type="search" data-k="q" value="${esc(st.q)}" placeholder="Card or set"></label>`;
+    <label class="gr-f">Search<input class="field" type="search" data-k="q" value="${esc(st.q)}" placeholder="Card or set"></label>
+    <label class="toggle gr-only"><input type="checkbox" data-k="only"${st.only ? " checked" : ""}> Only cards with graded sold prices</label>`;
   const draw = () => {
     const o10 = st.o10 / 100, o9 = Math.min(1 - o10, st.o9 / 100), o8 = Math.max(0, 1 - o10 - o9);
     $("#gr-o10").textContent = `${st.o10}%`; $("#gr-o9").textContent = `${Math.round(o9 * 100)}%`;
-    const fees = (st.fee + st.ship) * 100, q = st.q.trim().toLowerCase();
+    const fees = (st.fee + st.ship) * 100, q = st.q.trim().toLowerCase(), [k10, k9, l10, l9] = GK[st.co];
     const list = [];
     for (const [id, g, n, p, lo, r, no, game, era] of gd.rows) {
       if (p < st.min * 100 || p > st.max * 100 || (st.game !== "all" && game !== st.game) || (st.era !== "all" && era !== st.era)) continue;
       if (q && !(n + " " + setOf(g)).toLowerCase().includes(q)) continue;
       const buy = Math.min(p, lo || p), total = buy + fees;      // you'd buy at the lowest listing today
-      const nine = p * (st.x9 || 1), low = p * 0.7;
+      const gc = graded.cards?.[id]?.g || {}, G10 = gc[k10], G9 = gc[k9];
+      if (st.only && !G10) continue;
+      const nine = G9 ? G9[0] : p * (st.x9 || 1), low = p * 0.7;
       const be10 = o10 > 0 ? Math.max(0, (total - o9 * nine - o8 * low) / o10) : Infinity;
-      const c = comps.get(id)?.[st.co], g10 = c?.median ? Math.round(c.median * 100) : null;
+      const g10 = G10 ? G10[0] : null;
       const ev = g10 ? o10 * g10 + o9 * nine + o8 * low : null;
-      list.push({ id, g, n, p, lo, r, no, buy, total, be10, mult: be10 / p, g10, sales: c?.count || 0, profit: ev != null ? ev - total : null });
+      list.push({ id, g, n, p, lo, r, no, buy, total, be10, mult: be10 / p, g10, g9: G9 ? G9[0] : null, sales: G10 ? G10[1] : 0, vol: G10 ? G10[2] : 0, trend: G10 ? G10[3] : "", profit: ev != null ? ev - total : null, roi: ev != null ? (ev - total) / total : null });
     }
     const live = list.some((x) => x.g10);
-    const by = { value: (a, b) => b.p - a.p, deal: (a, b) => (a.buy / a.p) - (b.buy / b.p) || b.p - a.p, profit: (a, b) => (b.profit ?? -1e12) - (a.profit ?? -1e12) };
-    list.sort(by[live && st.sort === "value" ? "profit" : st.sort] || by.value);
-    $("#gr-status").innerHTML = (live ? `Ranked by expected profit using recent ${esc(st.co)} sold prices. ` : "")
+    const by = { value: (a, b) => b.p - a.p, deal: (a, b) => (a.buy / a.p) - (b.buy / b.p) || b.p - a.p, profit: (a, b) => (b.profit ?? -1e12) - (a.profit ?? -1e12), roi: (a, b) => (b.roi ?? -1e9) - (a.roi ?? -1e9) };
+    list.sort(by[st.sort] || by.profit);
+    const nG = Object.keys(graded.cards || {}).length;
+    $("#gr-status").innerHTML = `Graded prices: ${nG ? `<b>${nG.toLocaleString()} Pokémon cards</b> with real eBay sold prices (updated ${esc(graded.updated || "")}, about 45 more added daily).` : "connecting"}${st.only ? "" : " Cards without graded sales show only a break-even price."} `
       + `<b>${list.length.toLocaleString()} cards</b> match. Only cards with a steady price and live listings are shown. <b>Break-even ${esc(st.co)} 10</b> is what a 10 must sell for before grading pays off at your odds: check it against <b>${esc(st.co)} 10 sold</b>.`;
     const sold = (n, no, gr) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(`${cleanCard(n)}${no && !cleanCard(n).includes(no.split("/")[0]) ? " " + no : ""} ${gr}`)}&LH_Sold=1&LH_Complete=1&_sop=13`;
     $("#gr-list").innerHTML = list.length ? list.slice(0, 120).map((x) => `<div class="gr-row in-card">
@@ -1745,13 +1748,14 @@ async function pageGrading() {
           <div><span class="pb-lab">BUY RAW NOW</span><b>${money(x.buy)}</b><small class="muted">lowest listing</small></div>
           <div><span class="pb-lab">ALL-IN COST</span><b>${money(x.total)}</b></div>
           <div><span class="pb-lab">BREAK-EVEN ${esc(st.co)} 10</span><b>${isFinite(x.be10) ? money(Math.round(x.be10)) : "—"}</b><small class="muted">${isFinite(x.mult) ? `${x.mult.toFixed(1)}× market` : ""}</small></div>
-          ${x.g10 ? `<div><span class="pb-lab">${esc(st.co)} 10 SOLD</span><b>${money(x.g10)}</b><small class="muted">${x.sales} sales</small></div>
-          <div><span class="pb-lab">EXP. PROFIT</span><b class="${x.profit >= 0 ? "up" : "down"}">${x.profit >= 0 ? "+" : "−"}${money(Math.abs(Math.round(x.profit)))}</b></div>` : ""}</div>
+          ${x.g9 ? `<div><span class="pb-lab">${esc(st.co)} ${l9} SOLD</span><b>${money(x.g9)}</b></div>` : ""}
+          ${x.g10 ? `<div><span class="pb-lab">${esc(st.co)} ${l10} SOLD</span><b>${money(x.g10)}</b><small class="muted">${(x.g10 / x.p).toFixed(1)}× raw · ${x.vol >= 1 ? `${x.vol.toFixed(1)}/day` : `${x.sales} sales`}${x.trend === "up" ? " · ▲" : x.trend === "down" ? " · ▼" : ""}</small></div>
+          <div><span class="pb-lab">EXP. PROFIT</span><b class="${x.profit >= 0 ? "up" : "down"}">${x.profit >= 0 ? "+" : "−"}${money(Math.abs(Math.round(x.profit)))}</b><small class="muted">${x.roi >= 0 ? "+" : ""}${Math.round(x.roi * 100)}% return</small></div>` : ""}</div>
         <div class="gr-links"><a href="${sold(x.n, x.no, st.co + " 10")}" target="_blank" rel="noopener">${esc(st.co)} 10 sold ↗</a><a href="${sold(x.n, x.no, st.co + " 9")}" target="_blank" rel="noopener">${esc(st.co)} 9 sold ↗</a><a href="centering.html">Check centering →</a><a href="${prodUrl(x.id, x.g)}#gcalc">Full calculator →</a></div></div></div>`).join("")
       : `<p class="panel empty-note">No cards match. Widen the price range, switch era, or pick another game.</p>`;
   };
-  $("#gr-controls").addEventListener("input", (e) => { const k = e.target.dataset.k; if (!k) return; st[k] = ["game", "co", "q", "era"].includes(k) ? e.target.value : Number(e.target.value) || 0; save(); draw(); });
-  tabs($("#gr-sort"), [["value", "Most valuable"], ["deal", "Cheapest vs market"]], st.sort, (v) => { st.sort = v; save(); draw(); });
+  $("#gr-controls").addEventListener("input", (e) => { const k = e.target.dataset.k; if (!k) return; st[k] = k === "only" ? e.target.checked : ["game", "co", "q", "era"].includes(k) ? e.target.value : Number(e.target.value) || 0; save(); draw(); });
+  tabs($("#gr-sort"), [["profit", "Best profit"], ["roi", "Best return %"], ["value", "Most valuable"], ["deal", "Cheapest vs market"]], st.sort, (v) => { st.sort = v; save(); draw(); });
   draw();
 }
 

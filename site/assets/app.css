@@ -1101,3 +1101,4 @@ body[data-page="cards"] .movers .thumb{width:96px;height:134px;border-radius:8px
 .gr-how{margin-top:18px;font-size:13.5px;line-height:1.6}
 .gr-how summary{cursor:pointer}
 @media(max-width:600px){.gr-controls{grid-template-columns:1fr 1fr;gap:10px}.gr-f{font-size:12px}.gr-f:has(input[type=range]){grid-column:1/-1}}
+.gr-only{grid-column:1/-1}
