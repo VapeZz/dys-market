@@ -149,7 +149,7 @@ jobs:
         run: |
           if [ "${{ inputs.social }}" != "true" ] && [ "$(date -u +%u)" != "7" ]; then echo "Not Sunday; skipping"; exit 0; fi
           set +e
-          pip install -q playwright==1.56.0 imageio-ffmpeg > /tmp/social.log 2>&1 || { echo "::error title=Carousel::pip install failed: $(tail -c 400 /tmp/social.log | tr '\n' ' ')"; exit 1; }
+          pip install -q playwright==1.56.0 imageio-ffmpeg numpy > /tmp/social.log 2>&1 || { echo "::error title=Carousel::pip install failed: $(tail -c 400 /tmp/social.log | tr '\n' ' ')"; exit 1; }
           python -m playwright install --with-deps chromium > /tmp/social.log 2>&1 || { echo "::error title=Carousel::browser install failed: $(tail -c 400 /tmp/social.log | tr '\n' ' ')"; exit 1; }
           python tools/social.py site/data data/social --date "$(date -u +%F)" > /tmp/social.log 2>&1; rc=$?
           cat /tmp/social.log
@@ -162,7 +162,7 @@ jobs:
         run: |
           if [ "${{ inputs.sneaker_social }}" != "true" ] && [ "$(date -u +%u)" != "7" ]; then echo "Not Sunday; skipping"; exit 0; fi
           set +e
-          python -c "import playwright" 2>/dev/null || { pip install -q playwright==1.56.0 && python -m playwright install --with-deps chromium; }; pip install -q imageio-ffmpeg > /tmp/snks.log 2>&1
+          python -c "import playwright" 2>/dev/null || { pip install -q playwright==1.56.0 && python -m playwright install --with-deps chromium; }; pip install -q imageio-ffmpeg numpy > /tmp/snks.log 2>&1
           python tools/sneaker_social.py site data/social-sneakers --date "$(date -u +%F)" > /tmp/snks.log 2>&1; rc=$?
           cat /tmp/snks.log
           if [ $rc -ne 0 ]; then echo "::error title=Sneaker carousel::$(tail -c 600 /tmp/snks.log | tr '\n' ' ')"; exit 1; fi
@@ -172,7 +172,7 @@ jobs:
         continue-on-error: true
         run: |
           set +e
-          python -c "import playwright" 2>/dev/null || { pip install -q playwright==1.56.0 && python -m playwright install --with-deps chromium; }; pip install -q imageio-ffmpeg > /tmp/daily.log 2>&1
+          python -c "import playwright" 2>/dev/null || { pip install -q playwright==1.56.0 && python -m playwright install --with-deps chromium; }; pip install -q imageio-ffmpeg numpy > /tmp/daily.log 2>&1
           python tools/daily_card.py site/data data/social-daily --date "$(date -u +%F)" > /tmp/daily.log 2>&1; rc=$?
           cat /tmp/daily.log
           if [ $rc -ne 0 ]; then echo "::error title=Card of the Day::$(tail -c 600 /tmp/daily.log | tr '\n' ' ')"; exit 1; fi

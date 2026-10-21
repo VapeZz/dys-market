@@ -31,9 +31,10 @@ def full_screen(page, slide_paths, out_dir, foot="Free card prices · market.dri
     return outs
 
 
-def make_short(slide_paths, out_path, per=3.2, fade=0.4, fps=30):
+def make_short(slide_paths, out_path, per=3.2, fade=0.4, fps=30, music=True):
     """Stitch 1080x1920 slides into a vertical MP4 (slow zoom + crossfades) for YouTube Shorts.
-    Silent track included so every platform accepts it. Returns out_path, or None if ffmpeg fails."""
+    Original background music (tools/music.py), different for every post; silent if that fails.
+    Returns out_path, or None if ffmpeg fails."""
     import shutil
     import subprocess
     exe = shutil.which("ffmpeg")
@@ -51,7 +52,17 @@ def make_short(slide_paths, out_path, per=3.2, fade=0.4, fps=30):
     args = [exe, "-y", "-loglevel", "error"]
     for p in slide_paths:
         args += ["-i", p]
-    args += ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo"]
+    audio = ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo"]
+    if music:
+        try:
+            import music as _m
+            wav = os.path.splitext(out_path)[0] + "-music.wav"
+            style, bpm = _m.write(wav, n * per + fade + 1, music if isinstance(music, str) else _m.seed_for(out_path))
+            audio = ["-i", wav]
+            print(f"make_short: music {style} {bpm} bpm")
+        except Exception as e:
+            print("make_short: music failed, silent track:", e)
+    args += audio
     f = [f"[{i}:v]scale=2160:3840,zoompan=z='min(zoom+0.0007,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
          f":d={frames}:s=1080x1920:fps={fps},setsar=1,format=yuv420p[v{i}]" for i in range(n)]
     last, t = "v0", per
@@ -60,10 +71,13 @@ def make_short(slide_paths, out_path, per=3.2, fade=0.4, fps=30):
         last, t = f"x{i}", t + per
     args += ["-filter_complex", ";".join(f), "-map", f"[{last}]", "-map", f"{n}:a", "-shortest",
              "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-r", str(fps),
-             "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", out_path]
+             "-c:a", "aac", "-b:a", "128k", "-ac", "2", "-movflags", "+faststart", out_path]
     try:
         subprocess.run(args, check=True, timeout=600)
         return out_path
     except (subprocess.SubprocessError, OSError) as e:
         print("make_short failed:", e)
         return None
+    finally:
+        if audio[0] == "-i" and os.path.exists(audio[1]):
+            os.remove(audio[1])
