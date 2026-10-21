@@ -21,9 +21,9 @@ from make_pages import HEAD  # noqa: E402
 SITE = "https://market.driveyourstyle.net"
 STORE = "https://driveyourstyle.net"
 GAME = {"pokemon": "Pokémon TCG", "pokemon-jp": "Pokémon Japan", "one-piece": "One Piece Card Game", "lorcana": "Disney Lorcana",
-        "riftbound": "Riftbound", "palworld": "Palworld Card Game", "gundam": "Gundam Card Game", "union-arena": "Union Arena"}
+        "riftbound": "Riftbound", "palworld": "Palworld Card Game", "gundam": "Gundam Card Game", "union-arena": "Union Arena", "yugioh": "Yu-Gi-Oh!", "dragon-ball-fusion-world": "Dragon Ball Super Fusion World"}
 # how many of each set's most valuable cards get a page (popular games get more)
-PER_SET = {"pokemon": 25, "one-piece": 15, "pokemon-jp": 6, "lorcana": 10, "riftbound": 10, "gundam": 10, "union-arena": 6, "palworld": 6}
+PER_SET = {"pokemon": 25, "one-piece": 15, "pokemon-jp": 6, "lorcana": 10, "riftbound": 10, "gundam": 10, "union-arena": 6, "palworld": 6, "yugioh": 8, "dragon-ball-fusion-world": 8}
 MIN_CARD, MIN_SEALED, CAP = 300, 1000, 9000
 SKIP = re.compile(r"code card|\bjumbo\b|oversize", re.I)
 

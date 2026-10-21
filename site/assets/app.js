@@ -151,7 +151,7 @@ function shell() {
   $("#foot").outerHTML = `<footer><div class="wrap cols">
     <div style="max-width:560px">
       <p><b style="color:var(--ink)">Drive Your Style Market Insights</b> · Beta</p>
-      <p>Market prices are recorded nightly from public TCGplayer market data and may lag by a day. For research only, not financial advice. These are not Drive Your Style's prices. Not affiliated with or endorsed by The Pokémon Company, Bandai, Sunrise, Disney, Ravensburger, Riot Games, Pocketpair or TCGplayer.</p>
+      <p>Market prices are recorded nightly from public TCGplayer market data and may lag by a day. For research only, not financial advice. These are not Drive Your Style's prices. Not affiliated with or endorsed by The Pokémon Company, Bandai, Sunrise, Disney, Ravensburger, Riot Games, Konami, Pocketpair or TCGplayer.</p>
       <p id="updated-line"></p>${AFF_ON ? `<p>Some outbound links (TCGplayer, eBay, StockX, GOAT) are affiliate links. If you buy through them we may earn a small commission at no extra cost to you.</p>` : ""}
     </div>
     <div>
@@ -302,7 +302,7 @@ async function pageIndex() {
   $("#stats").textContent = `Tracking ${meta.cards.toLocaleString()} cards and ${meta.sealed.toLocaleString()} sealed products across ${meta.sets.toLocaleString()} sets · prices updated ${fmtDate(meta.updated)}`;
   const allSets = await getJSON("sets.json");
   heroFan(meta, allSets);
-  const GT = { "pokemon": "Pokémon TCG", "pokemon-jp": "Pokémon Japan", "one-piece": "One Piece Card Game", "lorcana": "Disney Lorcana", "riftbound": "Riftbound", "palworld": "Palworld Card Game", "gundam": "Gundam Card Game", "union-arena": "Union Arena" };
+  const GT = { "pokemon": "Pokémon TCG", "pokemon-jp": "Pokémon Japan", "one-piece": "One Piece Card Game", "lorcana": "Disney Lorcana", "riftbound": "Riftbound", "palworld": "Palworld Card Game", "gundam": "Gundam Card Game", "union-arena": "Union Arena", "yugioh": "Yu-Gi-Oh!", "dragon-ball-fusion-world": "Dragon Ball Fusion World" };
   $("#gtiles").innerHTML = meta.games.map((g, i) => `<a class="gtile gt${i}" href="sets.html?game=${g.slug}"><b>${esc(GT[g.slug] || g.label)}</b><span>${g.sets} sets<i> · browse cards &amp; prices</i> →</span></a>`).join("");
   const horizon = new Date(Date.now() + 45 * 864e5).toISOString().slice(0, 10);
   $("#newsets").innerHTML = allSets.filter((s) => s.pub && s.pub <= horizon && !SPECIAL.test(s.n) && (s.lg || s.bbId || s.tc?.length))
@@ -375,7 +375,14 @@ function eraOf(s) {
     if (/starter|deck|bundle|sleeve|collection|set$/.test(n)) return "Products & Extras";
     return "Booster Sets";
   }
-  if (["lorcana", "riftbound", "palworld", "gundam"].includes(s.k)) {   // newer games: main sets vs. everything else, newest first
+  if (s.k === "yugioh") {   // by era, with decks/tins/promos apart
+    const n = s.n.toLowerCase();
+    if (/promo|tournament|prize|championship|judge|sneak peek|participation/.test(n)) return "Promos & Events";
+    if (/structure deck|starter deck|speed duel|tin|box|collection|pack|bundle|mega|duelist pack|deck/.test(n) && !/booster/.test(n)) return "Decks, Tins & Collections";
+    const y = (s.pub || "").slice(0, 4);
+    return !y ? "Other" : y >= "2023" ? "Booster Sets · 2023–now" : y >= "2017" ? "Booster Sets · 2017–2022" : y >= "2010" ? "Booster Sets · 2010–2016" : "Booster Sets · 2002–2009";
+  }
+  if (["lorcana", "riftbound", "palworld", "gundam", "dragon-ball-fusion-world"].includes(s.k)) {   // newer games: main sets vs. everything else, newest first
     const n = s.n.toLowerCase();
     if (/promo|judge|organized play|prototype|championship|event|league/.test(n)) return "Promos & Events";
     if (/illumineer|quest|starter|deck|bundle|gift|sleeve|collection|tin|box set/.test(n) && !/^bp\d/i.test(s.n)) return "Products & Extras";
@@ -387,7 +394,7 @@ function eraOf(s) {
   return e ? e[1] : "Other";
 }
 
-const NEWG = new Set(["lorcana", "riftbound", "palworld", "gundam", "union-arena"]);
+const NEWG = new Set(["lorcana", "riftbound", "palworld", "gundam", "union-arena", "yugioh", "dragon-ball-fusion-world"]);
 function setTile(s, today) {
   return `<a class="stile" href="set.html?id=${s.id}">
       <span class="simg${s.lg ? " logo" : s.tc?.length && (!s.bbId || NEWG.has(s.k)) ? " fan" : ""}">${s.lg ? `<img src="${esc(s.lg)}" alt="${esc(s.n)} logo" loading="lazy">` : s.bbId && !(s.tc?.length && NEWG.has(s.k)) ? imgTag(s.bbId, "", 1000)
@@ -406,7 +413,7 @@ async function pageSets() {
       .sort((a, b) => (b.pub || "").localeCompare(a.pub || ""));
     const groups = new Map();
     for (const s of list) { const e = eraOf(s); if (!groups.has(e)) groups.set(e, []); groups.get(e).push(s); }
-    if (!ERAS[game]) for (const k of ["Products & Extras", "Promos & Events", "Other"]) if (groups.has(k)) { const v = groups.get(k); groups.delete(k); groups.set(k, v); }
+    if (!ERAS[game]) for (const k of ["Decks, Tins & Collections", "Products & Extras", "Promos & Events", "Other"]) if (groups.has(k)) { const v = groups.get(k); groups.delete(k); groups.set(k, v); }
     if (ERAS[game]) for (const k of [PROMO_GROUP, "Other"]) if (groups.has(k)) { const v = groups.get(k); groups.delete(k); groups.set(k, v); }
     const eras = [...groups.keys()];
     if (era !== "all" && !groups.has(era)) era = "all";
@@ -521,7 +528,7 @@ function pullsHtml(set) {
 
 function gradedHtml(base, set, v) {
   const setName = set.n.replace(/^[A-Z0-9]+[a-z]?\s*[:\-–]\s*/, "");
-  const q = `${({ "one-piece": "One Piece", lorcana: "Lorcana", riftbound: "Riftbound", palworld: "Palworld", gundam: "Gundam Card Game", "union-arena": "Union Arena" })[set.k] || "Pokemon"} ${base.replace(/ - /, " ")} ${base.includes(v.no || "~") ? "" : v.no || ""} ${setName}`.replace(/\s+/g, " ").trim();
+  const q = `${({ "one-piece": "One Piece", lorcana: "Lorcana", riftbound: "Riftbound", palworld: "Palworld", gundam: "Gundam Card Game", "union-arena": "Union Arena", yugioh: "Yu-Gi-Oh", "dragon-ball-fusion-world": "Dragon Ball Fusion World" })[set.k] || "Pokemon"} ${base.replace(/ - /, " ")} ${base.includes(v.no || "~") ? "" : v.no || ""} ${setName}`.replace(/\s+/g, " ").trim();
   const ebay = (g) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q + " " + g)}&LH_Sold=1&LH_Complete=1&_sop=13`;
   const link = (h, t, s) => `<a class="glink" href="${h}" target="_blank" rel="noopener"><b>${t}</b><span>${s}</span></a>`;
   return `<section class="graded"><h2 style="font-size:24px">Graded prices &amp; gem rate</h2>
@@ -1127,6 +1134,8 @@ const GAME_META = {
   "palworld": { vendor: "Pocketpair", tag: "Palworld", sealed: "Palworld Sealed", single: "Palworld Single" },
   "gundam": { vendor: "Bandai", tag: "Gundam", sealed: "Gundam Sealed", single: "Gundam Single" },
   "union-arena": { vendor: "Bandai", tag: "Union Arena", sealed: "Union Arena Sealed", single: "Union Arena Single" },
+  "yugioh": { vendor: "Konami", tag: "Yu-Gi-Oh", sealed: "Yu-Gi-Oh Sealed", single: "Yu-Gi-Oh Single" },
+  "dragon-ball-fusion-world": { vendor: "Bandai", tag: "Dragon Ball", sealed: "Dragon Ball Sealed", single: "Dragon Ball Single" },
 };
 const slugify = (t) => t.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 200);
 const csvCell = (v) => { const t = String(v ?? ""); return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
@@ -1654,7 +1663,7 @@ const sparkSvg = (vals, up, w = 300, h = 70) => {
   return `<svg class="in-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,${h} ${pts} ${w},${h}" fill="${col}" opacity=".12"/><polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`;
 };
 const inChip = (l, v) => `<span class="in-chip ${v == null ? "" : v >= 0 ? "up" : "down"}">${l} ${v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`}</span>`;
-const GAME_LABEL = { pokemon: "Pokémon", "one-piece": "One Piece", lorcana: "Lorcana", riftbound: "Riftbound", gundam: "Gundam", "union-arena": "Union Arena", "pokemon-jp": "Pokémon JP" };
+const GAME_LABEL = { pokemon: "Pokémon", "one-piece": "One Piece", lorcana: "Lorcana", riftbound: "Riftbound", gundam: "Gundam", "union-arena": "Union Arena", yugioh: "Yu-Gi-Oh!", "dragon-ball-fusion-world": "Dragon Ball", "pokemon-jp": "Pokémon JP" };
 const cleanN = (n) => n.replace(/ \((Holofoil|Normal|Foil)\)$/, "").replace(/ \(Foil\)/, "");
 async function pageIntel() {
   const d = await getJSON("intel.json");

@@ -1042,3 +1042,5 @@ tr.grp td{background:var(--surface-2);font-size:13px;padding-top:8px;padding-bot
 .pb-cond div.on{border-color:var(--accent-2);background:color-mix(in srgb,var(--accent-2) 10%,transparent)}
 .pb-cond b{font-size:12px}.pb-cond span{font-size:13px;font-variant-numeric:tabular-nums}
 .pb-btns{display:flex;flex-wrap:wrap;gap:8px}
+.gtile.gt8{background:linear-gradient(135deg,#1b1206,#6b3d0a 55%,#d4a017)}
+.gtile.gt9{background:linear-gradient(135deg,#2b0d05,#c2410c 55%,#facc15)}

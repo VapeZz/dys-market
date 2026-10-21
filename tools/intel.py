@@ -112,7 +112,7 @@ def main(argv):
 
     # signals: a week of prices moving the same way, on cards worth $10+
     sig_up, sig_down, movers = [], [], []
-    for st, it in items(lambda s: s["k"] in ("pokemon", "one-piece", "lorcana", "riftbound", "gundam") and (s.get("pub") or "") >= modern_from, "c", 1000):
+    for st, it in items(lambda s: s["k"] in ("pokemon", "one-piece", "lorcana", "riftbound", "gundam", "yugioh", "dragon-ball-fusion-world") and (s.get("pub") or "") >= modern_from, "c", 1000):
         f = [v for v in (it.get("s") or []) if v]
         if len(f) < 5:
             continue
