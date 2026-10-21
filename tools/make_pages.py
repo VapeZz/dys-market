@@ -116,6 +116,7 @@ PAGES = {
 <section class="block" style="padding-top:12px">
   <div id="set-logo" class="set-logo" hidden></div>
   <h1 id="title" style="font-size:clamp(26px,4vw,40px)"></h1><p class="muted" id="sub" style="margin-top:4px"></p>
+  <div id="set-grade" hidden></div>
   <div class="set-bar">
     <div class="search set-q">''' + SEARCH + '''<input id="q" type="search" placeholder="Search…" aria-label="Search this set" autocomplete="off"></div>
     <select class="select" id="sort" aria-label="Sort"><option value="price">Price ↓</option><option value="low">Price ↑</option><option value="num">Card number</option><option value="name">Name</option></select>
@@ -142,6 +143,7 @@ PAGES = {
     <select class="select" id="set" aria-label="Set"></select>
     <label class="toggle"><input type="checkbox" id="recent"> Released in last 12 months</label></div>
   <p class="muted" id="note" style="margin:-6px 0 12px;font-size:13px"></p>
+  <div id="gmov" class="block" hidden style="padding:0 0 18px"><h2 style="font-size:20px;margin:0 0 4px">PSA 10 movers</h2><p class="muted" style="margin:0 0 10px;font-size:13px">Graded Pokémon cards: PSA 10 sold price this week vs the 90-day average.</p><div class="in-row" id="gmov-row"></div></div>
   {MOVERS}
 </section></div>'''),
 "search": ("Card search · Drive Your Style Market Insights", "Search every Pokémon, Pokémon Japan, One Piece, Lorcana, Riftbound, Gundam, Union Arena, Yu-Gi-Oh!, Dragon Ball and Palworld card and sealed product by name, set, number or rarity, with today's market price.", '''
@@ -350,6 +352,12 @@ PAGES = {
   <div class="in-cols"><div><h3 class="in-h3 up">Rising</h3><div class="in-list" id="in-up"></div></div><div><h3 class="in-h3 down">Cooling</h3><div class="in-list" id="in-down"></div></div></div>
   <h2 class="in-h2">Top movers · 24h</h2>
   <div class="in-row" id="in-movers"></div>
+  <div id="in-graded" hidden>
+    <span class="in-kicker" style="margin-top:28px">GRADED · REAL SOLD PRICES</span><h2 class="in-h2" style="margin-top:2px">Grading picks</h2>
+    <p class="muted in-note">Modern Pokémon cards where a PSA 10 pays off best: raw at the lowest listing + $33 grading and shipping, 30% odds of a 10 and 50% of a 9. <a href="grading.html" style="color:var(--accent)">Set your own numbers →</a></p>
+    <div class="in-row" id="in-picks"></div>
+    <div id="in-gmoves-wrap" hidden><h2 class="in-h2">PSA 10 movers</h2><p class="muted in-note">PSA 10 sold price this week vs its 90-day average.</p><div class="in-row" id="in-gmoves"></div></div>
+  </div>
   <div id="in-deals-wrap" hidden><h2 class="in-h2">Listed under market</h2><div class="in-row" id="in-deals"></div></div>
   <p class="muted in-foot">How this works: every index is a fixed basket of today's most valuable items, valued each day at its TCGplayer market price. A signal means a card's price moved the same way on most days this week and is at its weekly high (rising) or low (cooling); strength grows with the size and consistency of the move. Built from <span id="in-days">—</span> days of recorded prices and updated nightly. For research only, not financial advice.</p>
 </section></div>'''),

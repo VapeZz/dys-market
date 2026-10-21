@@ -36,7 +36,10 @@ def summarize(card):
             continue
         price = (s.get("smartMarketPrice") or {}).get("price") or s.get("medianPrice")
         if price:
-            out[g] = [round(price * 100), int(s["count"]), round(s.get("dailyVolume7Day") or 0, 2), s.get("marketTrend") or ""]
+            avg, p7 = s.get("averagePrice"), s.get("marketPrice7Day")
+            # [price, sales (90d), sales/day (7d), trend, 90-day average, 7-day market]
+            out[g] = [round(price * 100), int(s["count"]), round(s.get("dailyVolume7Day") or 0, 2), s.get("marketTrend") or "",
+                      round(avg * 100) if avg else None, round(p7 * 100) if p7 else None]
     return out
 
 
@@ -56,7 +59,11 @@ def main(argv):
     else:
         rows = json.load(open(os.path.join(site, "data", "grading.json")))["rows"]
         cutoff = (date.today() - timedelta(days=STALE_DAYS)).isoformat()
-        cands = [r for r in rows if r[7] in ("pokemon", "pokemon-jp") and 2000 <= r[3] <= 500000      # Pokémon (EN + JP), $20+
+        once = {}
+        for r in rows:
+            once[r[0]] = once.get(r[0], 0) + 1
+        # graded sales are per product, so only cards with a single printing under their id give clean numbers
+        cands = [r for r in rows if r[7] in ("pokemon", "pokemon-jp") and 2000 <= r[3] <= 500000 and once[r[0]] == 1      # Pokémon (EN + JP), $20+
                  and cache["cards"].get(str(r[0]), {}).get("at", "") <= cutoff]
         # never-fetched first, then oldest; within that, modern $30-$500 cards (what people grade most) before the rest
         cands.sort(key=lambda r: (str(r[0]) in cache["cards"], cache["cards"].get(str(r[0]), {}).get("at", ""),

@@ -1102,3 +1102,10 @@ body[data-page="cards"] .movers .thumb{width:96px;height:134px;border-radius:8px
 .gr-how summary{cursor:pointer}
 @media(max-width:600px){.gr-controls{grid-template-columns:1fr 1fr;gap:10px}.gr-f{font-size:12px}.gr-f:has(input[type=range]){grid-column:1/-1}}
 .gr-only{grid-column:1/-1}
+/* graded panel (card page) */
+.gp{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.gp-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.gp-sum{margin:0;font-size:15px}
+.gp-liq{font:600 11.5px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;text-transform:uppercase;padding:5px 9px;border-radius:999px;background:var(--chip);color:var(--ink-2)}
+.gp-liq.hot{background:color-mix(in srgb,var(--up) 16%,transparent);color:var(--up)}
+.gp-liq.slow{background:color-mix(in srgb,var(--down) 14%,transparent);color:var(--down)}

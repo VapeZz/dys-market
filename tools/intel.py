@@ -82,6 +82,60 @@ def card(st, it, **extra):
     return {"id": it["id"], "g": st["id"], "n": it["n"], "sn": st["n"], "k": st["k"], "no": it.get("no"), "r": it.get("r"), "p": it["p"], **extra}
 
 
+def clean_n(n):
+    return re.sub(r" \((Holofoil|Normal|Foil)\)$", "", n)
+
+
+def graded_intel(sd):
+    """Grading picks, PSA 10 movers and a PSA 10 index from data/graded.json (PokemonPriceTracker sold prices)."""
+    try:
+        graded = json.load(open(os.path.join(sd, "graded.json")))["cards"]
+        allrows = json.load(open(os.path.join(sd, "grading.json")))["rows"]
+        seen = {}
+        for r in allrows:
+            seen[r[0]] = seen.get(r[0], 0) + 1
+        # graded sales are per product: skip cards with several printings (1st Edition/Unlimited, Holo/Reverse) under one id
+        rows = {str(r[0]): r for r in allrows if seen[r[0]] == 1}
+        groups = json.load(open(os.path.join(sd, "meta.json")))["groups"]
+    except (OSError, ValueError, KeyError):
+        return {}
+    fee, o10, o9 = 3300, 0.30, 0.50          # $25 grading + $8 shipping; typical odds for a pack-fresh modern card
+    picks, moves, idx = [], [], []
+    for pid, c in graded.items():
+        r = rows.get(pid)
+        g = c.get("g") or {}
+        if not r or "psa10" not in g:
+            continue
+        _, gid, n, p, lo, rar, no, game, era = r
+        g10, n10, vol10 = g["psa10"][0], g["psa10"][1], g["psa10"][2]
+        g9 = g["psa9"][0] if "psa9" in g else p
+        sn = (groups.get(str(gid)) or [""])[0]
+        base = {"id": int(pid), "g": gid, "n": n, "sn": sn, "k": game, "p": p, "g10": g10, "g9": g9, "vol": vol10, "sales": n10}
+        if era == "modern" and n10 >= 8 and vol10 > 0 and g10 <= p * 20:
+            cost = min(p, lo or p) + fee
+            profit = o10 * g10 + o9 * g9 + (1 - o10 - o9) * p * 0.7 - cost
+            if profit > 0:
+                picks.append({**base, "profit": round(profit), "roi": round(profit / cost * 100)})
+        avg, p7 = (g["psa10"] + [None, None])[4:6]
+        if avg and p7 and n10 >= 15 and g10 >= 3000:
+            moves.append({**base, "ch": round((p7 - avg) / avg * 100, 1)})
+        if era == "modern":
+            idx.append((g10, avg, p7, base))
+    picks.sort(key=lambda x: -x["profit"])
+    up = sorted((m for m in moves if m["ch"] >= 5), key=lambda m: -m["ch"])[:6]
+    down = sorted((m for m in moves if m["ch"] <= -5), key=lambda m: m["ch"])[:6]
+    index = None
+    top = sorted(idx, key=lambda x: -x[0])[:50]
+    if len(top) >= 20:
+        v = sum(t[0] for t in top)
+        a = sum(t[1] or t[0] for t in top)
+        w = sum(t[2] or t[0] for t in top)
+        index = {"name": "PSA 10 Chase 50", "desc": "The 50 most valuable modern Pokémon cards in PSA 10, at recent sold prices", "n": len(top), "v": v,
+                 "dates": [], "s": [], "d1": None, "w1": round((w - a) / a * 100, 2) if a else None, "m1": None, "vs90": True,
+                 "top": [{"id": t[3]["id"], "g": t[3]["g"], "n": t[3]["n"], "p": t[0]} for t in top[:5]]}
+    return {"picks": picks[:8], "up": up, "down": down, "index": index, "n": len(graded)}
+
+
 def main(argv):
     site = argv[0]
     sd = os.path.join(site, "data")
@@ -186,7 +240,13 @@ def main(argv):
     if n_up:
         body += f" {n_up} card{'s' if n_up != 1 else ''} worth $10+ show steady week-long gains, {n_down} are cooling off."
 
-    out = {"date": today, "brief": {"head": head, "body": body.strip()}, "indices": indices,
+    graded = graded_intel(sd)
+    if graded.get("index"):
+        indices.append(graded["index"])
+    if graded.get("picks"):
+        p0 = graded["picks"][0]
+        body += f" Best grading pick: {clean_n(p0['n'])} ({p0['sn']}), PSA 10 sells for {p0['g10'] / p0['p']:.1f}x raw."
+    out = {"date": today, "brief": {"head": head, "body": body.strip()}, "indices": indices, "graded": graded,
            "signals": {"up": sig_up, "down": sig_down, "n_up": n_up, "n_down": n_down}, "movers": {"up": gainers, "down": losers}, "deals": deals,
            "history_days": len(indices[0]["dates"]) if indices else 0}
     with open(os.path.join(sd, "intel.json"), "w", encoding="utf-8") as fh:

@@ -429,7 +429,22 @@ async function pageSets() {
   draw();
 }
 
+async function setGradeRow(setId) {
+  const el = $("#set-grade"); if (!el) return;
+  const [graded, gd] = await Promise.all([getJSON("graded.json"), getJSON("grading.json")]).catch(() => [null, null]);
+  if (!graded || !gd) return;
+  const cnt = {}; gd.rows.forEach((r) => { cnt[r[0]] = (cnt[r[0]] || 0) + 1; });
+  const rows = gd.rows.filter((r) => String(r[1]) === String(setId) && cnt[r[0]] === 1 && graded.cards?.[r[0]]?.g?.psa10)
+    .map((r) => { const g = graded.cards[r[0]].g; return { id: r[0], g: r[1], n: r[2], p: r[3], g10: g.psa10[0], g9: g.psa9?.[0], vol: g.psa10[2] }; })
+    .sort((a, b) => (b.g10 - b.p) - (a.g10 - a.p)).slice(0, 8);
+  if (!rows.length) return;
+  el.hidden = false;
+  el.innerHTML = `<div class="block-head" style="margin-top:14px"><div><h2 style="font-size:20px">Best cards to grade in this set</h2><p>Biggest gap between the raw price and a PSA 10, from recent sold prices.</p></div><a class="more" href="grading.html">Grading Insights →</a></div>
+    <div class="in-row">${rows.map((x) => `<a class="in-mover" href="${prodUrl(x.id, x.g)}">${imgTag(x.id, "", 200)}<span class="in-name">${esc(cleanN(x.n))}</span>
+      <span class="in-price up">PSA 10 ${money(x.g10)}</span><span class="in-set">Raw ${money(x.p)} · ${(x.g10 / x.p).toFixed(1)}×${x.g9 ? ` · PSA 9 ${money(x.g9)}` : ""}</span></a>`).join("")}</div>`;
+}
 async function pageSet() {
+  setGradeRow(params.get("id"));
   const id = params.get("id");
   const [meta, set, allSets] = await Promise.all([getJSON("meta.json"), getJSON(`set/${id}.json`), getJSON("sets.json")]);
   document.title = `${set.n} prices · Drive Your Style Market Insights`;
@@ -538,16 +553,34 @@ function gradedHtml(base, set, v) {
   </section>`;
 }
 
+/* real graded sold prices on the card page (PokemonPriceTracker: recent eBay + Fanatics sales) */
+const GROWS = [["PSA", [["psa10", "10"], ["psa9", "9"], ["psa8", "8"]]], ["CGC", [["cgc10", "10"], ["cgc9_5", "9.5"], ["cgc9", "9"]]],
+  ["BGS", [["bgs10", "10"], ["bgs9_5", "9.5"], ["bgs9", "9"]]], ["TAG", [["tag10", "10"], ["tag9", "9"]]]];
+function gradedPanel(sec, gr, raw, at) {
+  if (!sec) return;
+  const rows = GROWS.flatMap(([co, gs]) => gs.filter(([k]) => gr[k]).map(([k, l]) => { const [p, n, vol, trend, avg, p7] = gr[k];
+    const ch = p7 && avg ? (p7 - avg) / avg * 100 : null;
+    return `<tr><td><b>${co} ${l}</b></td><td class="num"><b>${money(p)}</b></td><td class="num">${raw ? `${(p / raw).toFixed(1)}×` : "—"}</td>
+      <td class="num hide-sm">${chg(ch)}</td><td class="num">${vol >= 1 ? `${vol.toFixed(1)}/day` : vol > 0 ? `${Math.round(vol * 7)}/wk` : `${n} in 90d`}</td></tr>`; }));
+  if (!rows.length) return;
+  const p10 = gr.psa10?.[0], lvl = gr.psa10 ? (gr.psa10[2] >= 1 ? ["hot", "Sells daily"] : gr.psa10[2] > 0.2 ? ["ok", "Sells weekly"] : ["slow", "Slow seller"]) : null;
+  sec.insertAdjacentHTML("afterbegin", `<div class="gp"><div class="gp-head"><h2 style="font-size:24px;margin:0">Graded sold prices</h2>${lvl ? `<span class="gp-liq ${lvl[0]}">${lvl[1]}</span>` : ""}</div>
+    ${p10 && raw ? `<p class="gp-sum">A <b>PSA 10</b> sells for about <b>${money(p10)}</b>, <b>${(p10 / raw).toFixed(1)}×</b> the raw price.</p>` : ""}
+    <div class="table-wrap"><table><thead><tr><th>Grade</th><th class="num">Sold price</th><th class="num">× raw</th><th class="num hide-sm">7D vs 90D</th><th class="num">Sales</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>
+    <p class="muted" style="font-size:12px;margin:6px 0 0">Recent eBay and Fanatics sold prices (PokemonPriceTracker), updated ${esc(at)}. Prices vary with centering and label.</p></div>`);
+  const old = sec.querySelector(":scope > p.muted"); if (old && /isn't built in yet/.test(old.textContent)) old.textContent = "Check individual sales and population:";
+}
+
 /* ---------- Grade It? calculator ---------- */
 const GKEY = "dys-grade";
 const ODDS = { fresh: [55, 35, "Pack fresh"], nm: [30, 50, "Near mint"], lp: [5, 35, "Light play"] };
-function gradeCalc(el, rawCents, id) {
+function gradeCalc(el, rawCents, id, gr) {
   if (!el) return;
   let all = {}; try { all = JSON.parse(localStorage.getItem(GKEY)) || {}; } catch {}
   const saved = all[id] || {};
   const dollars = (c) => c == null ? "" : (c / 100).toFixed(2);
   const s = { cond: saved.cond || "nm", o10: saved.o10 ?? ODDS[saved.cond || "nm"][0], o9: saved.o9 ?? ODDS[saved.cond || "nm"][1],
-    raw: saved.raw ?? dollars(rawCents), p10: saved.p10 ?? "", p9: saved.p9 ?? "", p8: saved.p8 ?? "", fee: saved.fee ?? "25", ship: saved.ship ?? "20" };
+    raw: saved.raw ?? dollars(rawCents), p10: saved.p10 || (gr?.psa10 ? dollars(gr.psa10[0]) : ""), p9: saved.p9 || (gr?.psa9 ? dollars(gr.psa9[0]) : ""), p8: saved.p8 || (gr?.psa8 ? dollars(gr.psa8[0]) : ""), fee: saved.fee ?? "25", ship: saved.ship ?? "20" };
   const f = (k, l, extra = "") => `<label class="gfield"><span>${l}</span><input class="field" type="number" inputmode="decimal" min="0" step="0.01" data-g="${k}" value="${esc(s[k])}"${extra}></label>`;
   el.innerHTML = `<div class="gcalc-head"><div><h2>Grade It?</h2><p class="muted">Should you grade this card raw, or buy it already graded? Paste PSA prices from the sold links above.</p></div></div>
     <div class="gverdict" id="gv"><span class="gl">Verdict</span><b id="gv-t"></b><span id="gv-w" class="muted"></span></div>
@@ -620,8 +653,9 @@ function priceBreak(v, base) {
 
 async function pageProduct() {
   const id = Number(params.get("id")), gid = params.get("set");
-  const [meta, set] = await Promise.all([getJSON("meta.json"), getJSON(`set/${gid}.json`)]);
+  const [meta, set, graded] = await Promise.all([getJSON("meta.json"), getJSON(`set/${gid}.json`), getJSON("graded.json").catch(() => ({ cards: {} }))]);
   const variants = set.items.filter((i) => i.id === id);
+  const gr = variants.length === 1 ? graded.cards?.[id]?.g || null : null;   // graded sales are per product; skip when it has several printings
   if (!variants.length) { $("#prod").innerHTML = `<p class="empty-note">We don't have a price for this product yet.</p>`; return; }
   let v = variants[0];
   const base = v.n.replace(/ \((Holofoil|Reverse Holofoil|Normal|1st Edition.*?)\)$/, "");
@@ -656,7 +690,7 @@ async function pageProduct() {
     });
     paintCol();
     $("#sellit").addEventListener("click", () => sellAdd({ id, g: set.id, n: v.n, mkt: v.p }));
-    if (v.t === "c") gradeCalc($("#gcalc"), v.p, `${id}|${printCode(subOf(v.n))}`);
+    if (v.t === "c") { if (gr) gradedPanel($(".graded"), gr, v.p, graded.cards[id].at); gradeCalc($("#gcalc"), v.p, `${id}|${printCode(subOf(v.n))}`, gr); }
     const paint = () => { const on = wantHas(wantKey(id, v.n)); const b = $("#watch"); b.textContent = on ? "♥ On your Want list" : "♡ Want"; b.classList.toggle("wanted", on); b.setAttribute("aria-pressed", on); };
     $("#watch").addEventListener("click", () => { wantToggle({ id, g: set.id, n: v.n, at: v.p }); paint(); });
     paint();
@@ -724,6 +758,8 @@ async function pageTrends() {
 }
 
 async function pageCards() {
+  getJSON("intel.json").then((d) => { const gm = [...(d.graded?.up || []), ...(d.graded?.down || [])];
+    if (gm.length && $("#gmov")) { $("#gmov").hidden = false; $("#gmov-row").innerHTML = gm.map(gmCard).join(""); } }).catch(() => {});
   const [meta, sets] = await Promise.all([getJSON("meta.json"), getJSON("sets.json")]);
   const gl = Object.fromEntries(meta.games.map((g) => [g.slug, g.label]));
   let game = "all", setId = "", win = "7", recent = false;
@@ -1665,6 +1701,9 @@ const sparkSvg = (vals, up, w = 300, h = 70) => {
 const inChip = (l, v) => `<span class="in-chip ${v == null ? "" : v >= 0 ? "up" : "down"}">${l} ${v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`}</span>`;
 const GAME_LABEL = { pokemon: "Pokémon", "one-piece": "One Piece", lorcana: "Lorcana", riftbound: "Riftbound", gundam: "Gundam", "union-arena": "Union Arena", yugioh: "Yu-Gi-Oh!", "dragon-ball-fusion-world": "Dragon Ball", "pokemon-jp": "Pokémon JP" };
 const cleanN = (n) => n.replace(/ \((Holofoil|Normal|Foil)\)$/, "").replace(/ \(Foil\)/, "");
+
+const gmCard = (m) => `<a class="in-mover" href="${prodUrl(m.id, m.g)}">${imgTag(m.id, "", 200)}<span class="in-name">${esc(cleanN(m.n))}</span><span class="in-set">${esc(m.sn)}</span>
+  <span class="in-price ${m.ch >= 0 ? "up" : "down"}">${m.ch >= 0 ? "↑" : "↓"} ${Math.abs(m.ch).toFixed(1)}%</span><span class="in-set">PSA 10 ${money(m.g10)} · ${m.vol >= 1 ? `${m.vol.toFixed(1)}/day` : `${m.sales} sales`}</span></a>`;
 async function pageIntel() {
   const d = await getJSON("intel.json");
   const day = new Date(d.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();
@@ -1672,7 +1711,7 @@ async function pageIntel() {
     <h2>${esc(d.brief.head)}</h2><p>${esc(d.brief.body)}</p>`;
   $("#in-idx").innerHTML = d.indices.map((i) => { const ref = i.w1 ?? i.d1 ?? 0;
     return `<details class="in-card in-index"><summary><span class="in-lab">${esc(i.name.toUpperCase())}</span><b class="in-val">${money(i.v)}</b>${sparkSvg(i.s, ref >= 0)}
-      <span class="in-chips">${inChip("1D", i.d1)}${inChip("1W", i.w1)}${inChip("1M", i.m1)}</span></summary>
+      <span class="in-chips">${i.vs90 ? inChip("7D vs 90D", i.w1) : `${inChip("1D", i.d1)}${inChip("1W", i.w1)}${inChip("1M", i.m1)}`}</span></summary>
       <p class="muted in-desc">${esc(i.desc)}. Biggest pieces:</p><ol class="in-top">${i.top.map((t) => `<li><a href="${prodUrl(t.id, t.g)}">${esc(cleanN(t.n))}</a> <b>${money(t.p)}</b></li>`).join("")}</ol></details>`; }).join("");
   const sig = (c, kind) => `<a class="in-card in-pick ${kind}" href="${prodUrl(c.id, c.g)}"><span class="in-img">${imgTag(c.id, "", 200)}</span><span class="in-body">
       <span class="in-lab ${kind}">${kind === "up" ? "RISING" : "COOLING"} · ${c.strength}% STRENGTH</span>
@@ -1689,6 +1728,15 @@ async function pageIntel() {
     $("#in-deals").innerHTML = d.deals.map((x) => `<a class="in-mover" href="${prodUrl(x.id, x.g)}">${imgTag(x.id, "", 200)}<span class="in-name">${esc(cleanN(x.n))}</span><span class="in-set">${esc(x.sn)}</span>
       <span class="in-price up">${money(x.lo)}</span><span class="in-set">${x.off.toFixed(0)}% under ${money(x.p)} market</span></a>`).join(""); }
   $("#in-days").textContent = d.history_days;
+  const g = d.graded || {};
+  if (g.picks?.length) {
+    $("#in-graded").hidden = false;
+    $("#in-picks").innerHTML = g.picks.map((x) => `<a class="in-mover" href="${prodUrl(x.id, x.g)}">${imgTag(x.id, "", 200)}<span class="in-lab up">GRADING PICK · ${x.roi}% RETURN</span>
+      <span class="in-name">${esc(cleanN(x.n))}</span><span class="in-set">${esc(x.sn)}</span>
+      <span class="in-price up">+${money(x.profit)}</span><span class="in-set">Raw ${money(x.p)} · PSA 10 ${money(x.g10)} (${(x.g10 / x.p).toFixed(1)}×)</span></a>`).join("");
+    const gm = [...(g.up || []), ...(g.down || [])];
+    if (gm.length) { $("#in-gmoves-wrap").hidden = false; $("#in-gmoves").innerHTML = gm.map(gmCard).join(""); }
+  }
 }
 
 /* ---------- Grading Insights: which cards are worth grading, with every assumption editable ----------
@@ -1722,11 +1770,12 @@ async function pageGrading() {
     $("#gr-o10").textContent = `${st.o10}%`; $("#gr-o9").textContent = `${Math.round(o9 * 100)}%`;
     const fees = (st.fee + st.ship) * 100, q = st.q.trim().toLowerCase(), [k10, k9, l10, l9] = GK[st.co];
     const list = [];
+    const multi = new Set(); { const c = {}; for (const r of gd.rows) { c[r[0]] = (c[r[0]] || 0) + 1; if (c[r[0]] > 1) multi.add(r[0]); } }
     for (const [id, g, n, p, lo, r, no, game, era] of gd.rows) {
       if (p < st.min * 100 || p > st.max * 100 || (st.game !== "all" && game !== st.game) || (st.era !== "all" && era !== st.era)) continue;
       if (q && !(n + " " + setOf(g)).toLowerCase().includes(q)) continue;
       const buy = Math.min(p, lo || p), total = buy + fees;      // you'd buy at the lowest listing today
-      const gc = graded.cards?.[id]?.g || {}, G10 = gc[k10], G9 = gc[k9];
+      const gc = multi.has(id) ? {} : graded.cards?.[id]?.g || {}, G10 = gc[k10], G9 = gc[k9];
       if (st.only && !G10) continue;
       const nine = G9 ? G9[0] : p * (st.x9 || 1), low = p * 0.7;
       const be10 = o10 > 0 ? Math.max(0, (total - o9 * nine - o8 * low) / o10) : Infinity;
