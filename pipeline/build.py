@@ -54,6 +54,11 @@ def label(products, key):
 
 
 def build(groups, products, stock, log=print):
+    try:
+        _ld = json.load(open(os.path.join(config.DATA_DIR, "lows", "latest.json")))
+    except (OSError, ValueError, NameError):
+        _ld = {}
+    lows_now, mids_now = _ld.get("lows") or {}, _ld.get("mids") or {}
     products = {k: v for k, v in products.items() if not is_code_card(v)}
     matched = stock
     stock = {k: {"u": v["u"], "p": v["p"]} for k, v in matched.items() if v.get("a", True)}
@@ -255,6 +260,10 @@ def build(groups, products, stock, log=print):
                 item["s"] = series[idx[k]]
             if pid in stock:
                 item["dys"] = stock[pid]
+            if k in lows_now and lows_now[k]:
+                item["lo"] = lows_now[k]          # lowest TCGplayer listing right now
+            if k in mids_now and mids_now[k]:
+                item["md"] = mids_now[k]          # middle of current TCGplayer listings
             if p["t"] == "c" and gid in ptcg:
                 item["im"] = ptcg_img(ptcg[gid], p.get("no"))
             items.append(item)

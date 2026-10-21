@@ -592,6 +592,25 @@ function gradeCalc(el, rawCents, id) {
   calc();
 }
 
+/* DeckTradr-style price breakdown: live lowest listing vs recent-sales market, a blended value, spread and condition estimates */
+const COND = [["NM", 1], ["LP", 0.85], ["MP", 0.7], ["HP", 0.55], ["DMG", 0.4]];
+function priceBreak(v, base) {
+  if (v.p == null) return "";
+  const parts = [[v.p, 2], [v.lo, 1], [v.md, 1]].filter(([x]) => x);
+  const blend = Math.round(parts.reduce((a, [x, w]) => a + x * w, 0) / parts.reduce((a, [, w]) => a + w, 0));
+  const spread = v.lo ? (v.lo - v.p) / v.p * 100 : null;
+  const sold = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(cleanCard(v.n))}&LH_Sold=1&LH_Complete=1&_sop=13`;
+  return `<div class="pb panel">
+    <div class="pb-top"><div><span class="pb-lab">● LIVE · LOWEST LISTING</span><b class="pb-big">${v.lo ? money(v.lo) : "—"}</b><span class="muted pb-sm">cheapest on TCGplayer now</span></div>
+      <div><span class="pb-lab pb-accent">◆ DRIVE YOUR STYLE PRICE</span><b class="pb-big">${money(blend)}</b><span class="muted pb-sm">our blended value</span></div></div>
+    <div class="pb-mid"><div><span class="pb-lab">RECENT SALES</span><b>${money(v.p)}</b><span class="muted pb-sm">TCGplayer market</span></div>
+      <div class="pb-spread ${spread == null ? "" : spread >= 0 ? "up" : "down"}">${spread == null ? "—" : `${spread >= 0 ? "↗" : "↘"} ${Math.abs(spread).toFixed(1)}%`}<span class="muted pb-sm">spread</span></div>
+      <div><span class="pb-lab">MID LISTING</span><b>${v.md ? money(v.md) : "—"}</b><span class="muted pb-sm">typical asking</span></div></div>
+    ${v.t === "c" ? `<div class="pb-cond">${COND.map(([c, f]) => `<div class="${c === "NM" ? "on" : ""}"><b>${c}</b><span>${v.p * f >= 10000 ? "$" + Math.round(v.p * f / 100).toLocaleString("en-US") : money(Math.round(v.p * f))}</span></div>`).join("")}</div>
+    <p class="muted pb-sm" style="margin:6px 0 0">Condition prices are estimates from the Near Mint market price.</p>` : ""}
+    <div class="pb-btns"><a class="btn" href="${sold}" target="_blank" rel="noopener">Search eBay sold ↗</a><a class="btn" href="https://www.tcgplayer.com/product/${v.id}" target="_blank" rel="noopener">See on TCGplayer ↗</a></div></div>`;
+}
+
 async function pageProduct() {
   const id = Number(params.get("id")), gid = params.get("set");
   const [meta, set] = await Promise.all([getJSON("meta.json"), getJSON(`set/${gid}.json`)]);
@@ -610,6 +629,7 @@ async function pageProduct() {
         <div class="muted" style="margin-top:14px">Market price</div><div class="price-big">${v.p == null ? `<span class="muted" style="font-size:.6em">No market price yet</span>` : money(v.p)}</div>
         ${v.dys && below(v.dys.p, v.p) ? `<p style="margin:6px 0 0">${BELOW} <span class="muted">Our price ${money(v.dys.p)} is ${Math.round((1 - v.dys.p / v.p) * 100)}% under market</span></p>` : ""}
         <div class="kpis">${[["7", "7 days"], ["30", "30 days"], ["90", "90 days"], ["a", `Since ${fmtShort(meta.first)}`]].map(([k, l]) => `<div class="kpi"><div class="l">${l}</div>${chg(v.ch?.[k])}</div>`).join("")}</div>
+        ${priceBreak(v, base)}
         <div class="btns">${v.dys ? `<a class="btn primary" href="${esc(v.dys.u)}">Buy at Drive Your Style · ${money(v.dys.p)}</a>`
           : `<a class="btn primary" href="mailto:customerservice@driveyourstyle.net?subject=${encodeURIComponent("Request: " + v.n)}&body=${encodeURIComponent(`Hi Drive Your Style,\n\nI'm interested in: ${v.n} (${set.n}).\nMarket price today: ${money(v.p)}\nQuantity: 1\n\nPlease let me know if you can get it.\n\nThanks!`)}">Request from Drive Your Style</a>`}
           <button class="btn" id="addcol" type="button"></button>

@@ -1025,3 +1025,20 @@ tr.grp td{background:var(--surface-2);font-size:13px;padding-top:8px;padding-bot
 .sc-avoid>span:nth-child(2){display:flex;flex-direction:column;gap:2px;min-width:0;font-size:13.5px}
 .sc-avoid .muted{font-size:12.5px}
 .sc-avoid-p{text-align:right;display:flex;flex-direction:column;font-weight:700}
+/* price breakdown (card page) */
+.pb{padding:16px;margin-top:16px;display:flex;flex-direction:column;gap:14px}
+.pb-top,.pb-mid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pb-mid{grid-template-columns:1fr auto 1fr;align-items:center;border-top:1px solid var(--line);padding-top:12px}
+.pb-mid > div:last-child{text-align:right}
+.pb-top > div,.pb-mid > div{display:flex;flex-direction:column;gap:2px}
+.pb-lab{font:600 11px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.1em;color:var(--ink-3)}
+.pb-accent{color:var(--accent-2)}
+.pb-big{font-size:28px;font-variant-numeric:tabular-nums}
+.pb-sm{font-size:12px}
+.pb-spread{align-items:center;font-weight:700;font-size:15px;text-align:center}
+.pb-spread.up{color:var(--up)}.pb-spread.down{color:var(--down)}
+.pb-cond{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.pb-cond div{border:1px solid var(--line);border-radius:10px;padding:8px 4px;text-align:center;display:flex;flex-direction:column;gap:2px}
+.pb-cond div.on{border-color:var(--accent-2);background:color-mix(in srgb,var(--accent-2) 10%,transparent)}
+.pb-cond b{font-size:12px}.pb-cond span{font-size:13px;font-variant-numeric:tabular-nums}
+.pb-btns{display:flex;flex-wrap:wrap;gap:8px}
