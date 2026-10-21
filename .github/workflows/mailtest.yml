@@ -1,0 +1,29 @@
+name: Mail test (one-off)
+on: workflow_dispatch
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send a test email to our own inbox
+        env:
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import os, smtplib, ssl
+          from email.message import EmailMessage
+          pw = os.environ["SMTP_PASSWORD"].replace(" ", "")
+          for host in ("smtp.zoho.com", "smtppro.zoho.com"):
+              for user in ("customerservice@driveyourstyle.net", "keo.llaneza@gmail.com"):
+                  try:
+                      with smtplib.SMTP_SSL(host, 465, context=ssl.create_default_context(), timeout=30) as s:
+                          s.login(user, pw)
+                          m = EmailMessage(); m["From"] = f"Drive Your Style <{user}>"; m["To"] = "customerservice@driveyourstyle.net"
+                          m["Subject"] = "Test: Drive Your Style site email is working"; m.set_content("This is a test from your price site. Offer and price alerts will be sent from this address.")
+                          s.send_message(m)
+                      print(f"::notice title=Mail OK::{host} as {user}")
+                      raise SystemExit(0)
+                  except SystemExit: raise
+                  except Exception as e:
+                      print(f"::warning title=Mail fail::{host} as {user}: {str(e)[:160]}")
+          raise SystemExit(1)
+          PY
