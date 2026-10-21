@@ -111,6 +111,12 @@ jobs:
           python pipeline/scout.py 2>&1 | tee /tmp/scout.log
           echo "::notice title=Scout::$(tail -n 1 /tmp/scout.log)"
 
+      - name: Grading candidates
+        continue-on-error: true
+        run: |
+          python tools/grading.py site 2>&1 | tee /tmp/grading.log
+          echo "::notice title=Grading::$(tail -n 1 /tmp/grading.log)"
+
       - name: Market Intel (brief, indices, signals)
         continue-on-error: true
         run: |

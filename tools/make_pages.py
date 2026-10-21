@@ -362,7 +362,7 @@ PAGES = {
   <p class="muted gr-status" id="gr-status"></p>
   <div class="gr-list" id="gr-list"><div class="skeleton" style="height:240px"></div></div>
   <details class="in-card gr-how"><summary><b>How the estimate works</b></summary>
-    <p>All-in cost = today's raw market price + your grading cost + shipping and insurance. Break-even 10 price = the graded 10 price where the expected value of grading equals the all-in cost, using your odds: a 9 sells for the multiple of raw you set (1× by default) and anything lower for about 0.7× raw. The lower the break-even compared to raw (shown as ×), the easier grading pays off.</p>
+    <p>Only cards with a steady price and live listings near the market price are shown, so thin or spiking prices don't mislead the math. Promos, event and prize cards are left out. All-in cost = the lowest raw listing today + your grading cost + shipping and insurance. Break-even 10 price = the graded 10 price where the expected value of grading equals the all-in cost, using your odds: a 9 sells for the multiple of raw you set (1× by default) and anything lower for about 0.7× raw. The lower the break-even compared to raw (shown as ×), the easier grading pays off.</p>
     <p>When graded sold prices are available, cards are ranked by expected profit: (chance of 10 × 10 price) + (chance of 9 × 9 value) + (rest × lower value) − all-in cost. Selling fees and taxes are not included. Odds are your estimate, not a prediction; check centering and surfaces first. Estimates only, not financial advice.</p></details>
 </section></div>'''),
 "buyer": ("Buyer dashboard · Drive Your Style", "Owner's buyer dashboard.", '''
