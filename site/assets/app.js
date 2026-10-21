@@ -1407,7 +1407,7 @@ const acct = (() => {
           const r = await gql(`mutation($m: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $m) { userErrors { message } } }`,
             { m: [{ ownerId: a.id, namespace: "dys", key: "binder", type: "json", value: JSON.stringify({ name: c.name || "", updated: c.updated || Date.now(), items: c.items,
               alias: c.alias || "", pub: !!c.pub, likes: c.likes || [], follows: c.follows || [], want: (c.want || []).map(({ k, id, g, n, at, max, ts }) => ({ k, id, g, n, at, max, ts })),
-              box: c.box || "", offers: c.offers || [], oresp: c.oresp || {}, gw: !!c.gw, ref: c.ref || "" }) }] });
+              box: c.box || "", offers: c.offers || [], oresp: c.oresp || {}, gw: !!c.gw, ref: c.ref || "", binders: c.binders || [] }) }] });
           const e = r.metafieldsSet.userErrors; document.dispatchEvent(new CustomEvent("dys-sync", { detail: e.length ? "error" : "ok" }));
         } catch { document.dispatchEvent(new CustomEvent("dys-sync", { detail: "error" })); }
       }, 800);
@@ -1762,7 +1762,7 @@ async function pageCollection() {
     ex ? ex.qty++ : col.items.push(it); save(); toast(`Added ${r[1]}`); await loadChanges(); draw(); };
   const rawKey = (it) => `${it.id}|${it.code ?? printCode(subOf(it.n || ""))}`;
   const changes = {}, series = {}, setCards = {};
-  let dates = null, cq = "", csort = "value", grouped = false, range = "90";
+  let dates = null, cq = "", csort = "value", grouped = false, range = "90", binder = (() => { try { return localStorage.getItem("dys-binder") || ""; } catch { return ""; } })();
   let view = shared ? "binder" : (() => { try { return localStorage.getItem("dys-cview") || "list"; } catch { return "list"; } })();
   let shownNow = [];
   const loadChanges = async () => {
@@ -1792,10 +1792,20 @@ async function pageCollection() {
     for (const k of ["box", "offers", "oresp", "gw", "ref", "likes", "follows", "want", "socialAt"]) if (cur[k] !== undefined) col[k] = cur[k];
     colSet(col); };
 
+  const paintBinders = (all) => {
+    const el = $("#cbinder"); if (!el) return;
+    const names = col.binders || [], cnt = (f) => all.filter(f).reduce((a, i) => a + i.qty, 0);
+    if (binder && binder !== "__none" && !names.includes(binder)) binder = "";
+    el.hidden = false;
+    el.innerHTML = `<option value="">All cards (${cnt(() => true)})</option>${names.length ? `<option value="__none"${binder === "__none" ? " selected" : ""}>Not in a binder (${cnt((i) => !i.b)})</option>` : ""}
+      ${names.map((b) => `<option value="${esc(b)}"${binder === b ? " selected" : ""}>${esc(b)} (${cnt((i) => i.b === b)})</option>`).join("")}<option value="__new">＋ New binder…</option>`;
+  };
   const draw = () => {
     const all = col.items.map((it, ix) => { const r = byKey.get(rawKey(it)); const raw = r?.[4] ?? null;
       return { ...it, ix, name: it.n || r?.[1] || `#${it.id}`, raw, mkt: it.gr && it.gv != null ? it.gv : raw, est: !!it.gr && it.gv == null, ch: it.gr ? null : changes[rawKey(it)], t: r?.[3] }; });
-    const items = all.slice().sort((a, b) => csort === "name" ? a.name.localeCompare(b.name) : csort === "set" ? setName(a.g).localeCompare(setName(b.g)) || (b.mkt || 0) - (a.mkt || 0)
+    const inBinder = (i) => shared || !binder || (binder === "__none" ? !i.b : i.b === binder);
+    if (!shared) paintBinders(all);
+    const items = all.filter(inBinder).sort((a, b) => csort === "name" ? a.name.localeCompare(b.name) : csort === "set" ? setName(a.g).localeCompare(setName(b.g)) || (b.mkt || 0) - (a.mkt || 0)
       : csort === "recent" ? b.ix - a.ix : (b.mkt || 0) * b.qty - (a.mkt || 0) * a.qty);
     const value = items.reduce((a, i) => a + (i.mkt || 0) * i.qty, 0);
     const shown = items.filter((i) => !cq || (i.name + " " + setName(i.g)).toLowerCase().includes(cq));
@@ -1825,6 +1835,7 @@ async function pageCollection() {
     const list = grouped ? shown.slice().sort((a, b) => setName(a.g).localeCompare(setName(b.g)) || (b.mkt || 0) - (a.mkt || 0)) : shown;
     $("#list").innerHTML = list.length ? `<div class="table-wrap"><table><thead><tr><th>Item</th><th class="num">Qty${shared ? "" : " · paid"}</th><th class="num">Market</th><th class="num">Value</th><th class="num hide-sm">Change</th>${shared ? "" : "<th></th>"}</tr></thead><tbody>
       ${list.map((i, li) => `${grpRow(i)}<tr><td class="title">${shared ? "" : `<div class="tline"><label class="ph-wrap" data-ph="${esc(keyOf(i))}" title="Add your own photo">${imgTag(i.id, "")}<span class="cam-dot" aria-hidden="true">${CAM}</span><input type="file" accept="image/*" data-cam="${esc(keyOf(i))}" aria-label="Take or choose a photo of ${esc(i.name)}"></label>`}<a href="${prodUrl(i.id, i.g)}">${shared ? imgTag(i.id, "") : ""}<span>${i.gr ? `<span class="slab-badge">${esc(i.gr)}</span> ` : ""}${esc(i.name)}<span class="muted" style="display:block;font-size:12px;font-weight:400">${esc(setName(i.g))}</span></span></a>${shared ? "" : "</div>"}${ownerView ? offerBtn(i, li) : ""}
+          ${shared || !(col.binders || []).length ? "" : `<div class="grade-row"><select class="select grade-sel" data-bnd="${esc(keyOf(i))}" aria-label="Binder for ${esc(i.name)}"><option value="">No binder</option>${col.binders.map((b) => `<option${i.b === b ? " selected" : ""}>${esc(b)}</option>`).join("")}</select></div>`}
           ${shared || i.t === "s" ? "" : `<div class="grade-row"><select class="select grade-sel" data-grade="${esc(keyOf(i))}" aria-label="Raw or graded">${gradeOpts(i.gr || "")}</select>
             ${i.gr ? `<label class="gv">Value each $<input class="field" type="number" min="0" step="0.01" inputmode="decimal" placeholder="${i.raw != null ? (i.raw / 100).toFixed(2) : "0.00"}" value="${i.gv != null ? (i.gv / 100).toFixed(2) : ""}" data-gv="${esc(keyOf(i))}" aria-label="Value of your ${esc(i.gr)}"></label>
             <a class="sold-link" href="${esc(soldUrl(i.name, i.gr))}" target="_blank" rel="noopener">eBay sold ${esc(i.gr === "Other slab" ? "graded" : i.gr)} →</a>` : ""}</div>`}</td>
@@ -1857,6 +1868,7 @@ async function pageCollection() {
       };
     }
     const find = (k) => col.items.find((x) => keyOf(x) === k);
+    $("#list").querySelectorAll("[data-bnd]").forEach((el) => el.addEventListener("change", () => { const it = find(el.dataset.bnd); if (el.value) it.b = el.value; else delete it.b; save(); toast(el.value ? `Moved to ${el.value}` : "Removed from binder"); setTimeout(draw); }));
     $("#list").querySelectorAll("[data-qty]").forEach((el) => el.addEventListener("change", () => { const it = find(el.dataset.qty); it.qty = Math.max(1, Number(el.value) || 1); save(); setTimeout(draw); }));
     $("#list").querySelectorAll("[data-paid]").forEach((el) => el.addEventListener("change", () => { const it = find(el.dataset.paid); it.paid = el.value === "" ? null : Math.round(Number(el.value) * 100); save(); setTimeout(draw); }));
     $("#list").querySelectorAll("[data-grade]").forEach((el) => el.addEventListener("change", () => {
@@ -1893,6 +1905,14 @@ async function pageCollection() {
 
   $("#cq").addEventListener("input", (e) => { cq = e.target.value.trim().toLowerCase(); draw(); });
   $("#csort").addEventListener("change", (e) => { csort = e.target.value; draw(); });
+  $("#cbinder")?.addEventListener("change", (e) => {
+    let v = e.target.value;
+    if (v === "__new") {
+      const name = (prompt("Name your binder (e.g. Vintage, Trade binder, Display case):") || "").replace(/\s+/g, " ").trim().slice(0, 30);
+      if (name) { col.binders = [...new Set([...(col.binders || []), name])]; save(); toast(`Binder "${name}" created. Use the binder menu on each card in List view to add cards.`); v = name; } else v = binder;
+    }
+    binder = v; try { localStorage.setItem("dys-binder", binder); } catch {} draw();
+  });
   $("#cgroup").addEventListener("change", (e) => { grouped = e.target.checked; draw(); });
   tabs($("#cview"), [["binder", "Binder"], ["list", "List"]], view, (v) => { view = v; if (!shared) { try { localStorage.setItem("dys-cview", v); } catch {} } draw(); });
   tabs($("#crange"), [["30", "1M"], ["90", "3M"], ["365", "1Y"]], range, (r) => { range = r; plot(); });
@@ -1984,7 +2004,7 @@ async function pageCollection() {
         if (remote && (!local.items.length || (!justSignedIn && (remote.updated || 0) > (local.updated || 0)))) {
           col = { name: remote.name || local.name || "", items: remote.items || [], updated: remote.updated,
             alias: remote.alias || local.alias || "", pub: remote.pub ?? local.pub ?? false, likes: remote.likes || [], follows: remote.follows || [], want: remote.want || local.want || [], socialAt: local.socialAt,
-            box: remote.box || local.box || "", offers: remote.offers || local.offers || [], oresp: remote.oresp || local.oresp || {}, gw: remote.gw ?? local.gw ?? false, ref: remote.ref || local.ref || "" };
+            box: remote.box || local.box || "", offers: remote.offers || local.offers || [], oresp: remote.oresp || local.oresp || {}, gw: remote.gw ?? local.gw ?? false, ref: remote.ref || local.ref || "", binders: remote.binders || local.binders || [] };
           colSet(col, false);
         } else if (remote && justSignedIn) {          // first sign-in on this device: combine both
           const key = (x) => `${x.id}|${printCode(subOf(x.n || ""))}${x.gr ? "|" + x.gr : ""}`, m = new Map(remote.items.map((x) => [key(x), x]));
@@ -1992,7 +2012,7 @@ async function pageCollection() {
           const uni = (k) => [...new Set([...(remote[k] || []), ...(local[k] || [])])];
           col = { name: local.name || remote.name || "", items: [...m.values()], alias: local.alias || remote.alias || "", pub: local.pub ?? remote.pub ?? false,
             likes: uni("likes"), follows: uni("follows"), socialAt: local.socialAt,
-            box: remote.box || local.box || "", offers: [...new Map([...(remote.offers || []), ...(local.offers || [])].map((o) => [o.id, o])).values()], oresp: { ...(local.oresp || {}), ...(remote.oresp || {}) }, gw: remote.gw || local.gw || false, ref: remote.ref || local.ref || "",
+            box: remote.box || local.box || "", offers: [...new Map([...(remote.offers || []), ...(local.offers || [])].map((o) => [o.id, o])).values()], oresp: { ...(local.oresp || {}), ...(remote.oresp || {}) }, gw: remote.gw || local.gw || false, ref: remote.ref || local.ref || "", binders: [...new Set([...(remote.binders || []), ...(local.binders || [])])],
             want: [...new Map([...(remote.want || []), ...(local.want || [])].map((w) => [w.k, w])).values()] };
           colSet(col);
         } else { col = local; acct.push(local); }
@@ -2013,6 +2033,13 @@ async function pageCollectors() {
   const [data, me] = await Promise.all([getJSON("showcase.json").catch(() => ({ profiles: [], updated: 0 })), myPid()]);
   const all = data.profiles || [];
   let tab = params.get("tab") || "value", q = "";
+  if (all.length) {
+    const lead = all.slice().sort((a, b) => b.v - a.v).slice(0, 5), feed = all.slice().sort((a, b) => b.u - a.u).slice(0, 5);
+    const ago = (t) => { const m = Math.round((Date.now() - t) / 6e4); return m < 60 ? `${Math.max(1, m)}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`; };
+    $("#cboard").hidden = false;
+    $("#cboard").innerHTML = `<div class="in-card"><span class="in-lab">LEADERBOARD · COLLECTION VALUE</span><ol class="cb-list">${lead.map((p, i) => `<li><a href="collection.html?p=${p.p}"><span class="cb-rank">${["👑", "🥈", "🥉"][i] || i + 1}</span><b>${esc(p.a)}</b><span class="cb-v">${money(p.v)}</span></a></li>`).join("")}</ol></div>
+      <div class="in-card"><span class="in-lab">ACTIVITY</span><ul class="cb-list">${feed.map((p) => `<li><a href="collection.html?p=${p.p}"><span class="cb-thumb">${imgTag(p.top[0]?.[0], "", 200)}</span><span><b>${esc(p.a)}</b> updated their binder<span class="muted cb-sub">${p.n} item${p.n === 1 ? "" : "s"} · ${money(p.v)} · ${p.u ? ago(p.u) : ""}</span></span></a></li>`).join("")}</ul></div>`;
+  }
   if (me && all.some((p) => p.p === me)) { $("#join").textContent = "My public page →"; $("#join").href = `collection.html?p=${me}`; }
   const draw = () => {
     const follows = new Set(colGet().follows || []);
@@ -2061,7 +2088,22 @@ if (PAGE === "index") fetch("blog/latest.json", { cache: "no-cache" }).then((r) 
   $("#report-title").textContent = p.title;
   $("#report-block").hidden = false;
 }).catch(() => {});
-if ($("#intel-block")) getJSON("intel.json").then((d) => { $("#intel-head").textContent = d.brief.head; $("#intel-block").hidden = false; }).catch(() => {});
+if ($("#intel-block")) getJSON("intel.json").then((d) => {
+  $("#intel-head").textContent = d.brief.head;
+  $("#hi-date").textContent = new Date(d.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  $("#hi-idx").innerHTML = d.indices.slice(0, 2).map((i) => { const v = i.w1 ?? i.d1; return `<a class="in-card hi-tile" href="intel.html"><span class="in-lab">${esc(i.name.toUpperCase())} · ${i.w1 != null ? "7D" : "1D"}</span>
+    <span class="hi-ch ${v >= 0 ? "up" : "down"}">${v >= 0 ? "+" : ""}${(v ?? 0).toFixed(2)}%</span><b>${money(i.v)}</b><span class="muted hi-sub">Total value</span>${sparkSvg(i.s, (v ?? 0) >= 0, 300, 44)}</a>`; }).join("");
+  $("#intel-block").hidden = false;
+}).catch(() => {});
+/* movers ticker across the top of every page (from the nightly Intel data) */
+if (PAGE !== "links") getJSON("intel.json").then((d) => {
+  const ms = [...(d.movers?.up || []), ...(d.movers?.down || [])].sort(() => 0.5 - Math.random()).slice(0, 14);
+  if (!ms.length || $(".ticker")) return;
+  const row = ms.map((m) => `<a href="${prodUrl(m.id, m.g)}"><b>${esc(cleanN(m.n))}</b> <span class="muted">${esc(m.sn)}</span> <span class="${m.d1 >= 0 ? "up" : "down"}">${m.d1 >= 0 ? "▲" : "▼"} ${Math.abs(m.d1).toFixed(1)}%</span></a>`).join("");
+  const t = document.createElement("div"); t.className = "ticker"; t.setAttribute("aria-label", "Today's biggest card price moves");
+  t.innerHTML = `<div class="ticker-in">${row}${row.replace(/<a /g, '<a tabindex="-1" aria-hidden="true" ')}</div>`;
+  const top = $("header.top"); top ? top.before(t) : document.body.prepend(t);
+}).catch(() => {});
 [["search", ".big-q"], ["collection", "#add-box"], ["index", ".hero [data-search]"]].forEach(([pg, sel]) => { if (PAGE === pg) scanButton(document.querySelector(sel)); });
 document.querySelectorAll("[data-search]").forEach(initSearch);
 const normNum = (t) => t.replace(/\b0+(\d)/g, "$1");

@@ -66,7 +66,9 @@ PAGES = {
   <a class="hd-fan" id="hd-fan" href="cards.html" aria-label="See today's biggest movers"></a>
 </div></section>
 <section class="block" style="padding-top:4px"><div class="wrap"><div class="gtiles" id="gtiles"></div></div></section>
-@@GWBANNER@@<section class="block" id="intel-block" hidden style="padding-top:0;padding-bottom:12px"><div class="wrap"><a class="report-banner in-banner" href="intel.html"><div><b>⚡ Today's market brief</b><span id="intel-head"></span></div><span>Intel →</span></a></div></section>
+@@GWBANNER@@<section class="block" id="intel-block" hidden style="padding-top:0;padding-bottom:12px"><div class="wrap"><div class="hi-grid">
+  <a class="in-card hi-brief" href="intel.html"><span class="in-tag"><span class="in-dot"></span>DAILY MARKET BRIEF · <span id="hi-date"></span></span><b id="intel-head"></b><span class="hi-more">Read the brief →</span></a>
+  <div id="hi-idx" class="hi-idx"></div></div></div></section>
 <section class="block" id="report-block" hidden style="padding-top:0"><div class="wrap"><a class="report-banner" id="report-link" href="blog/"><div><b>📈 This week's market report</b><span id="report-title"></span></div><span>Read →</span></a></div></section>
 <section class="block" id="stock-block"><div class="wrap">
   <div class="block-head"><div><h2>In stock at Drive Your Style</h2><p>Our price next to today's market price.</p></div><a class="more" href="https://driveyourstyle.net/collections/sealed-product">Shop all →</a></div>
@@ -251,6 +253,7 @@ PAGES = {
     <p class="muted" style="font-size:12px;margin:6px 0 4px">Your current quantities at each day's market price.</p></div>
   <div id="csets" style="margin-bottom:18px"></div>
   <div class="ctools"><input class="field" id="cq" type="search" placeholder="Search your collection" aria-label="Search your collection">
+    <select class="select" id="cbinder" aria-label="Binder" hidden></select>
     <select class="select" id="csort" aria-label="Sort"><option value="value">Value</option><option value="recent">Recently added</option><option value="name">Name</option><option value="set">Set</option></select>
     <label class="toggle"><input type="checkbox" id="cgroup"> Group by set</label><div id="cview"></div></div>
   <div id="list"><div class="skeleton" style="height:200px"></div></div>
@@ -267,6 +270,7 @@ PAGES = {
   <div class="block-head"><div><span class="eyebrow"><b>●</b> Community</span><h1 style="font-size:36px;margin-top:8px">Collectors</h1>
     <p>Binders collectors chose to share. Tap one to see every card, like it, or follow the collector.</p></div>
     <a class="btn primary" href="collection.html" id="join">Share your binder →</a></div>
+  <div class="cboard" id="cboard" hidden></div>
   <div class="controls"><div id="ctab"></div><input class="field" id="cfind" type="search" placeholder="Find a collector" aria-label="Find a collector"></div>
   <p class="muted" id="cnote" style="font-size:13px;margin:4px 0 12px"></p>
   <div id="clist" class="col-grid"><div class="skeleton" style="height:220px"></div></div>

@@ -1044,3 +1044,33 @@ tr.grp td{background:var(--surface-2);font-size:13px;padding-top:8px;padding-bot
 .pb-btns{display:flex;flex-wrap:wrap;gap:8px}
 .gtile.gt8{background:linear-gradient(135deg,#1b1206,#6b3d0a 55%,#d4a017)}
 .gtile.gt9{background:linear-gradient(135deg,#2b0d05,#c2410c 55%,#facc15)}
+/* home brief + indices */
+.hi-grid{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:12px}
+@media(max-width:860px){.hi-grid{grid-template-columns:1fr 1fr}.hi-brief{grid-column:1/-1}}
+.hi-idx{display:contents}
+.hi-brief{display:flex;flex-direction:column;gap:10px;color:var(--ink);text-decoration:none}
+.hi-brief b{font-size:19px;line-height:1.3}
+.hi-more{margin-top:auto;font:600 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;color:var(--accent);text-transform:uppercase}
+.hi-tile{display:flex;flex-direction:column;gap:4px;color:var(--ink);text-decoration:none;min-width:0}
+.hi-tile b{font-size:22px;font-variant-numeric:tabular-nums}
+.hi-ch{font-size:24px;font-weight:800}.hi-ch.up{color:var(--up)}.hi-ch.down{color:var(--down)}
+.hi-sub{font-size:12px}
+.hi-tile .in-spark{height:44px;margin-top:4px}
+/* movers ticker */
+.ticker{overflow:hidden;white-space:nowrap;border-bottom:1px solid var(--line);background:var(--surface);font-size:12.5px}
+.ticker-in{display:inline-flex;gap:28px;padding:7px 0;animation:tick 70s linear infinite}
+.ticker:hover .ticker-in{animation-play-state:paused}
+.ticker a{color:var(--ink);text-decoration:none;display:inline-flex;gap:6px;align-items:baseline}
+.ticker .up{color:var(--up)}.ticker .down{color:var(--down)}
+@keyframes tick{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@media(prefers-reduced-motion:reduce){.ticker-in{animation:none}}
+/* collectors leaderboard */
+.cboard{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 16px}
+@media(max-width:760px){.cboard{grid-template-columns:1fr}}
+.cb-list{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+.cb-list a{display:flex;align-items:center;gap:10px;padding:7px 4px;border-radius:8px;color:var(--ink);text-decoration:none}
+.cb-list a:hover{background:var(--chip)}
+.cb-rank{width:26px;text-align:center;font-weight:700}
+.cb-v{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums}
+.cb-thumb img{width:34px;height:47px;object-fit:contain;border-radius:4px}
+.cb-sub{display:block;font-size:12px}
