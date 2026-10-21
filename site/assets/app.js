@@ -1698,8 +1698,8 @@ const GCOS = { PSA: "PSA", CGC: "CGC", BGS: "BGS", TAG: "TAG" };
 async function pageGrading() {
   const [meta, gd, graded] = await Promise.all([getJSON("meta.json"), getJSON("grading.json"), getJSON("graded.json").catch(() => ({ cards: {} }))]);
   const GK = { PSA: ["psa10", "psa9", "10", "9"], CGC: ["cgc10", "cgc9", "10", "9"], BGS: ["bgs9_5", "bgs9", "9.5", "9"], TAG: ["tag10", "tag9", "10", "9"] };
-  const KEY = "dys-grading3";
-  let st = { co: "PSA", fee: 25, ship: 8, o10: 30, o9: 50, x9: 1.0, game: "all", era: "modern", min: 30, max: 500, sort: "profit", q: "", only: true };
+  const KEY = "dys-grading4";
+  let st = { co: "PSA", fee: 25, ship: 8, o10: 30, o9: 50, x9: 1.0, game: "all", era: "all", min: 20, max: 5000, sort: "profit", q: "", only: true };
   try { st = { ...st, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch {}
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch {} };
   const setOf = (g) => meta.groups[g]?.[0] || "";

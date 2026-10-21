@@ -57,7 +57,9 @@ def main(argv):
     else:
         rows = json.load(open(os.path.join(site, "data", "grading.json")))["rows"]
         cands = [r for r in rows if r[7] == "pokemon" and 2000 <= r[3] <= 500000]      # English Pokémon, $20+
-        cands.sort(key=lambda r: (str(r[0]) in cache["cards"], cache["cards"].get(str(r[0]), {}).get("at", ""), -r[3]))
+        # never-fetched first, then oldest; within that, modern $30-$500 cards (what people grade most) before the rest
+        cands.sort(key=lambda r: (str(r[0]) in cache["cards"], cache["cards"].get(str(r[0]), {}).get("at", ""),
+                                  not (r[8] == "modern" and 3000 <= r[3] <= 50000), -r[3]))
         for r in cands[:PER_DAY]:
             pid = str(r[0])
             try:
