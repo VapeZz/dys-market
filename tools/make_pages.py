@@ -353,6 +353,18 @@ PAGES = {
   <div id="in-deals-wrap" hidden><h2 class="in-h2">Listed under market</h2><div class="in-row" id="in-deals"></div></div>
   <p class="muted in-foot">How this works: every index is a fixed basket of today's most valuable items, valued each day at its TCGplayer market price. A signal means a card's price moved the same way on most days this week and is at its weekly high (rising) or low (cooling); strength grows with the size and consistency of the move. Built from <span id="in-days">—</span> days of recorded prices and updated nightly. For research only, not financial advice.</p>
 </section></div>'''),
+"grading": ("Grading Insights: is your card worth grading? · Drive Your Style", "Free grading calculator for Pokémon, One Piece, Lorcana, Yu-Gi-Oh! and more. See the break-even PSA, CGC, BGS or TAG 10 price for every card, set your own grading cost and odds, and compare with real sold prices.", '''
+<div class="wrap"><section class="block">
+  <span class="in-kicker">FREE · NO SIGN-IN</span><h1 class="in-h">Grading Insights</h1>
+  <p class="muted" style="max-width:760px;margin:-6px 0 16px">Find the cards worth sending to PSA, CGC, BGS or TAG. Set your real grading cost and your odds of a 10, and every card shows the graded price it needs to sell for before grading pays off.</p>
+  <div class="in-card gr-controls" id="gr-controls"></div>
+  <div class="gr-bar"><div id="gr-sort"></div></div>
+  <p class="muted gr-status" id="gr-status"></p>
+  <div class="gr-list" id="gr-list"><div class="skeleton" style="height:240px"></div></div>
+  <details class="in-card gr-how"><summary><b>How the estimate works</b></summary>
+    <p>All-in cost = today's raw market price + your grading cost + shipping and insurance. Break-even 10 price = the graded 10 price where the expected value of grading equals the all-in cost, using your odds: a 9 sells for the multiple of raw you set (1× by default) and anything lower for about 0.7× raw. The lower the break-even compared to raw (shown as ×), the easier grading pays off.</p>
+    <p>When graded sold prices are available, cards are ranked by expected profit: (chance of 10 × 10 price) + (chance of 9 × 9 value) + (rest × lower value) − all-in cost. Selling fees and taxes are not included. Odds are your estimate, not a prediction; check centering and surfaces first. Estimates only, not financial advice.</p></details>
+</section></div>'''),
 "buyer": ("Buyer dashboard · Drive Your Style", "Owner's buyer dashboard.", '''
 <div class="wrap"><section class="block">
   <div class="block-head"><div><span class="eyebrow"><b>●</b> Owner only · unlisted</span><h1 style="font-size:34px;margin-top:8px">Buyer dashboard</h1>

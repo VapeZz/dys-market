@@ -132,7 +132,7 @@ document.documentElement.dataset.theme = getTheme();
 /* ---------- shell ---------- */
 const SEARCH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>`;
 function shell() {
-  const links = [["intel", "Intel"], ["sets", "Sets"], ["trends", "Trends"], ["cards", "Movers"], ["search", "Search"], ["compare", "Compare"], ["centering", "Centering"], ["calendar", "Calendar"], ["sneakers", "Sneakers"], ["watchlist", "Want list"], ["collection", "My Collection"], ["collectors", "Collectors"], ...(GIVEAWAY_ON ? [["giveaway", "🎁 Giveaway"]] : []), ["about", "About"]];
+  const links = [["intel", "Intel"], ["sets", "Sets"], ["trends", "Trends"], ["cards", "Movers"], ["search", "Search"], ["compare", "Compare"], ["centering", "Centering"], ["grading", "Grading"], ["calendar", "Calendar"], ["sneakers", "Sneakers"], ["watchlist", "Want list"], ["collection", "My Collection"], ["collectors", "Collectors"], ...(GIVEAWAY_ON ? [["giveaway", "🎁 Giveaway"]] : []), ["about", "About"]];
   $("#top").outerHTML = `<header class="top"><div class="wrap">
     <a class="brand" href="index.html" aria-label="Drive Your Style Market Insights home"><img class="logo-img logo-on-dark" src="assets/logo-light.png" alt="Drive Your Style" width="61" height="40"><img class="logo-img logo-on-light" src="assets/logo-dark.png" alt="" width="61" height="40"><span class="brand-sub">Market<br>Insights</span></a>
     <nav class="nav" id="nav">${links.map(([p, l]) => `<a href="${p}.html"${p === PAGE ? ' aria-current="page"' : ""}>${l}</a>`).join("")}
@@ -1691,6 +1691,73 @@ async function pageIntel() {
   $("#in-days").textContent = d.history_days;
 }
 
+/* ---------- Grading Insights: which cards are worth grading, with every assumption editable ----------
+   Works today from raw prices (break-even PSA 10 price per card). When eBay slab comps are connected
+   (data/slabs.json) it adds real graded prices and ranks by expected profit. */
+const GCOS = { PSA: "PSA", CGC: "CGC", BGS: "BGS", TAG: "TAG" };
+async function pageGrading() {
+  const [meta, rows, slabs] = await Promise.all([getJSON("meta.json"), getJSON("search.json"), getJSON("slabs.json").catch(() => null)]);
+  const KEY = "dys-grading";
+  let st = { co: "PSA", fee: 25, ship: 8, o10: 30, o9: 50, x9: 1.0, game: "all", min: 20, max: 1000, sort: "best", q: "" };
+  try { st = { ...st, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch {} };
+  const gameOf = (g) => meta.groups[g]?.[1], setOf = (g) => meta.groups[g]?.[0] || "";
+  const SKIPG = /code card|jumbo|oversize|\bbox\b|booster|bundle|deck|tin\b|collection|sleeve|playmat/i;
+  // graded comps by product id, when the eBay slab feed is live
+  const comps = new Map();
+  if (slabs?.cards) for (const [k, rec] of Object.entries(slabs.cards)) { const pid = Number(k.split(":").pop()); if (pid) comps.set(pid, rec); }
+  const games = meta.games.map((g) => [g.slug, g.label]);
+  $("#gr-controls").innerHTML = `
+    <label class="gr-f">Grading company<select class="select" data-k="co">${Object.keys(GCOS).map((c) => `<option${c === st.co ? " selected" : ""}>${c}</option>`).join("")}</select></label>
+    <label class="gr-f">Your grading cost per card $<input class="field" type="number" min="0" step="1" data-k="fee" value="${st.fee}"></label>
+    <label class="gr-f">Shipping + insurance per card $<input class="field" type="number" min="0" step="1" data-k="ship" value="${st.ship}"></label>
+    <label class="gr-f">Chance it grades a 10: <b id="gr-o10">${st.o10}%</b><input type="range" min="5" max="90" step="5" data-k="o10" value="${st.o10}"></label>
+    <label class="gr-f">Chance it grades a 9: <b id="gr-o9">${st.o9}%</b><input type="range" min="0" max="90" step="5" data-k="o9" value="${st.o9}"></label>
+    <label class="gr-f">A ${"9"} sells for × raw<input class="field" type="number" min="0.3" max="5" step="0.1" data-k="x9" value="${st.x9}"></label>
+    <label class="gr-f">Game<select class="select" data-k="game"><option value="all">All games</option>${games.map(([s, l]) => `<option value="${s}"${s === st.game ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
+    <label class="gr-f">Raw price from $<input class="field" type="number" min="0" step="1" data-k="min" value="${st.min}"></label>
+    <label class="gr-f">to $<input class="field" type="number" min="0" step="1" data-k="max" value="${st.max}"></label>
+    <label class="gr-f">Search<input class="field" type="search" data-k="q" value="${esc(st.q)}" placeholder="Card or set"></label>`;
+  const draw = () => {
+    const o10 = st.o10 / 100, o9 = Math.min(1 - o10, st.o9 / 100), o8 = Math.max(0, 1 - o10 - o9);
+    $("#gr-o10").textContent = `${st.o10}%`; $("#gr-o9").textContent = `${Math.round(o9 * 100)}%`;
+    const cost = (st.fee + st.ship) * 100, q = st.q.trim().toLowerCase();
+    const list = [];
+    for (const r of rows) {
+      const [id, n, g, t, p] = r;
+      if (t !== "c" || !p || p < st.min * 100 || p > st.max * 100 || SKIPG.test(n)) continue;
+      if (st.game !== "all" && gameOf(g) !== st.game) continue;
+      if (q && !(n + " " + setOf(g)).toLowerCase().includes(q)) continue;
+      const total = p + cost;
+      // break-even: the PSA 10 price at which expected value = total cost, assuming a 9 sells for raw x 1.3 and lower grades for raw
+      const nine = p * (st.x9 || 1), low = p * 0.7, be10 = o10 > 0 ? Math.max(0, (total - o9 * nine - o8 * low) / o10) : Infinity;
+      const c = comps.get(id)?.[st.co], g10 = c?.median ? Math.round(c.median * 100) : null;
+      const ev = g10 ? o10 * g10 + o9 * nine + o8 * low : null;
+      list.push({ id, n, g, p, total, be10, mult: be10 / p, g10, sales: c?.count || 0, profit: ev != null ? ev - total : null });
+    }
+    const live = list.some((x) => x.g10);
+    list.sort(st.sort === "price" ? (a, b) => b.p - a.p : st.sort === "cheap" ? (a, b) => a.mult - b.mult || b.p - a.p
+      : live ? (a, b) => (b.profit ?? -1e12) - (a.profit ?? -1e12) : (a, b) => a.mult - b.mult || b.p - a.p);
+    const top = list.slice(0, 120);
+    $("#gr-status").innerHTML = live ? `Ranked by expected profit using recent ${esc(st.co)} sold prices (median of eBay sales). ${list.filter((x) => x.g10).length} cards have graded sales.`
+      : `<b>${list.length.toLocaleString()} cards</b> match. Each shows the <b>break-even ${esc(st.co)} 10 price</b>: if 10s sell above it, grading pays off at your odds. Tap <b>${esc(st.co)} 10 sold</b> to compare against real eBay sales. Graded prices fill in automatically once the eBay feed is connected.`;
+    const sold = (n, gr) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(`${cleanCard(n)} ${gr}`)}&LH_Sold=1&LH_Complete=1&_sop=13`;
+    $("#gr-list").innerHTML = top.length ? top.map((x) => `<div class="gr-row in-card">
+      <a class="gr-img" href="${prodUrl(x.id, x.g)}#gcalc">${imgTag(x.id, "", 200)}</a>
+      <div class="gr-main"><a class="in-name" href="${prodUrl(x.id, x.g)}">${esc(cleanN(x.n))}</a><span class="in-set">${esc(setOf(x.g))}</span>
+        <div class="gr-stats"><div><span class="pb-lab">RAW</span><b>${money(x.p)}</b></div>
+          <div><span class="pb-lab">ALL-IN COST</span><b>${money(x.total)}</b></div>
+          <div><span class="pb-lab">BREAK-EVEN ${esc(st.co)} 10</span><b class="${x.mult <= 2.5 ? "up" : x.mult >= 5 ? "down" : ""}">${isFinite(x.be10) ? money(Math.round(x.be10)) : "—"}</b><small class="muted">${isFinite(x.mult) ? `${x.mult.toFixed(1)}× raw` : ""}</small></div>
+          ${x.g10 ? `<div><span class="pb-lab">${esc(st.co)} 10 SOLD</span><b>${money(x.g10)}</b><small class="muted">${x.sales} sales</small></div>
+          <div><span class="pb-lab">EXP. PROFIT</span><b class="${x.profit >= 0 ? "up" : "down"}">${x.profit >= 0 ? "+" : "−"}${money(Math.abs(Math.round(x.profit)))}</b></div>` : ""}</div>
+        <div class="gr-links"><a href="${sold(x.n, st.co + " 10")}" target="_blank" rel="noopener">${esc(st.co)} 10 sold ↗</a><a href="${sold(x.n, st.co + " 9")}" target="_blank" rel="noopener">${esc(st.co)} 9 sold ↗</a><a href="centering.html">Check centering →</a><a href="${prodUrl(x.id, x.g)}#gcalc">Full calculator →</a></div></div></div>`).join("")
+      : `<p class="panel empty-note">No cards match. Widen the price range or pick another game.</p>`;
+  };
+  $("#gr-controls").addEventListener("input", (e) => { const k = e.target.dataset.k; if (!k) return; st[k] = ["game", "co", "q"].includes(k) ? e.target.value : Number(e.target.value) || 0; save(); draw(); });
+  tabs($("#gr-sort"), [["best", "Best candidates"], ["price", "Highest raw price"], ["cheap", "Easiest break-even"]], st.sort, (v) => { st.sort = v; save(); draw(); });
+  draw();
+}
+
 /* graded slabs: each grade is its own line in the collection, valued at the owner's number (eBay sold is one tap away) */
 const GRADES = [["PSA", ["10", "9", "8", "7", "6", "5"]], ["CGC", ["10 Pristine", "10", "9.5", "9", "8.5", "8"]], ["BGS", ["10 Black Label", "10", "9.5", "9", "8.5"]],
   ["SGC", ["10", "9.5", "9", "8"]], ["TAG", ["10", "9", "8"]], ["ACE", ["10", "9", "8"]]];
@@ -2352,7 +2419,7 @@ async function pageCentering() {
   window.dysCentering($("#cz-root"));
 }
 
-const pages = { centering: pageCentering, search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, demand: pageDemand, importer: pageImporter, collection: pageCollection, collectors: pageCollectors, sell: pageSell, buyer: pageBuyer, scout: pageScout, giveaway: pageGiveaway, intel: pageIntel };
+const pages = { centering: pageCentering, search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, demand: pageDemand, importer: pageImporter, collection: pageCollection, collectors: pageCollectors, sell: pageSell, buyer: pageBuyer, scout: pageScout, giveaway: pageGiveaway, intel: pageIntel, grading: pageGrading };
 (pages[PAGE] || (async () => {}))().then(() => offerNudge()).catch((err) => {
   console.error(err);
   const main = $("main");
