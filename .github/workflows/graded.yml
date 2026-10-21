@@ -1,0 +1,41 @@
+name: Graded prices refresh
+
+# Paid PokemonPriceTracker plan: refreshes graded (PSA/CGC/BGS/TAG) sold prices in batches
+# every 4 hours, each card at most every 3 days, and updates just data/graded.json on the site.
+on:
+  schedule:
+    - cron: "20 */4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Refresh a batch of graded prices
+        env:
+          PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
+          PPT_PER_RUN: "900"
+        run: |
+          set -e
+          R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git clone -q --depth 1 --branch data "$R" /tmp/db
+          git clone -q --depth 1 --branch gh-pages "$R" /tmp/pages
+          python tools/graded.py /tmp/pages /tmp/db/data/graded | tee /tmp/g.log
+          for d in /tmp/db /tmp/pages; do
+            git -C $d config user.name "dys-market-bot"; git -C $d config user.email "dys-market-bot@users.noreply.github.com"
+          done
+          git -C /tmp/db add data/graded && (git -C /tmp/db diff --cached --quiet || (git -C /tmp/db commit -q -m "Graded prices $(date -u +%FT%H:%MZ)" && git -C /tmp/db push -q origin data))
+          git -C /tmp/pages add data/graded.json && (git -C /tmp/pages diff --cached --quiet || (git -C /tmp/pages commit -q -m "Graded prices $(date -u +%FT%H:%MZ)" && git -C /tmp/pages push -q origin gh-pages))
+          echo "::notice title=Graded::$(tail -n 1 /tmp/g.log)"

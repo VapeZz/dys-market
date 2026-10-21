@@ -14,15 +14,16 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from datetime import date
+from datetime import date, timedelta
 
 API = "https://www.pokemonpricetracker.com/api/v2/cards"
-PER_DAY = int(os.environ.get("PPT_PER_DAY", "45"))
+PER_RUN = int(os.environ.get("PPT_PER_RUN", "45"))       # cards per run (paid plan: hundreds; free plan: 45/day)
+STALE_DAYS = int(os.environ.get("PPT_STALE_DAYS", "3"))   # refresh a card's graded prices this often
 GRADES = ["psa10", "psa9", "psa8", "cgc10", "cgc9_5", "cgc9", "bgs10", "bgs9_5", "bgs9", "tag10", "tag9"]
 
 
-def fetch(pid, key):
-    req = urllib.request.Request(f"{API}?tcgPlayerId={pid}&includeEbay=true&days=90",
+def fetch(pid, key, jp=False):
+    req = urllib.request.Request(f"{API}?tcgPlayerId={pid}&includeEbay=true&days=90{'&language=japanese' if jp else ''}",
                                  headers={"Authorization": "Bearer " + key, "User-Agent": "dys-market"})
     with urllib.request.urlopen(req, timeout=60) as r:
         return json.load(r).get("data")
@@ -52,18 +53,18 @@ def main(argv):
     fetched = 0
     if not key:
         print("::warning title=Graded prices::PPT_API_KEY not set; using cached prices only")
-    elif cache.get("last_run") == today:
-        print("graded: already refreshed today; using cache")
     else:
         rows = json.load(open(os.path.join(site, "data", "grading.json")))["rows"]
-        cands = [r for r in rows if r[7] == "pokemon" and 2000 <= r[3] <= 500000]      # English Pokémon, $20+
+        cutoff = (date.today() - timedelta(days=STALE_DAYS)).isoformat()
+        cands = [r for r in rows if r[7] in ("pokemon", "pokemon-jp") and 2000 <= r[3] <= 500000      # Pokémon (EN + JP), $20+
+                 and cache["cards"].get(str(r[0]), {}).get("at", "") <= cutoff]
         # never-fetched first, then oldest; within that, modern $30-$500 cards (what people grade most) before the rest
         cands.sort(key=lambda r: (str(r[0]) in cache["cards"], cache["cards"].get(str(r[0]), {}).get("at", ""),
                                   not (r[8] == "modern" and 3000 <= r[3] <= 50000), -r[3]))
-        for r in cands[:PER_DAY]:
+        for r in cands[:PER_RUN]:
             pid = str(r[0])
             try:
-                cache["cards"][pid] = {"at": today, "g": summarize(fetch(pid, key))}
+                cache["cards"][pid] = {"at": today, "g": summarize(fetch(pid, key, r[7] == "pokemon-jp"))}
                 fetched += 1
             except urllib.error.HTTPError as e:
                 if e.code in (401, 402, 403, 429):
