@@ -885,6 +885,7 @@ tr.grp td{background:var(--surface-2);font-size:13px;padding-top:8px;padding-bot
 .cz-rot input{flex:1;accent-color:var(--accent)}
 .cz-rot span{font-variant-numeric:tabular-nums;color:var(--ink-3);min-width:44px;text-align:right}
 .cz-note{font-size:13px;margin:10px 0 0}
+.cz-nudge{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}.cz-nudge[hidden]{display:none}.cz-nudge .cz-nl{font-weight:700;font-size:14px;min-width:96px}.cz-nudge .btn{padding:10px 18px;font-size:16px;touch-action:manipulation;user-select:none;-webkit-user-select:none}.cz-nudge .muted{font-size:12px}
 .cz-k{display:inline-block;width:18px;height:0;border-top:2px solid #5ee7ff;vertical-align:middle;margin:0 4px 0 2px}
 .cz-k.i{border-top:2px dashed #ff7ad9;margin-left:10px}
 .cz-out{padding:16px;display:grid;gap:14px}

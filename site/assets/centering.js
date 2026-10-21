@@ -171,6 +171,22 @@
     }
     return best;
   }
+  let raf = 0;
+  function paintNudge() {
+    const n = root.querySelector("#cz-nudge"); if (!n) return;
+    n.hidden = !sel || !sides[side];
+    if (!sel) return;
+    const v = VERT[sel], names = { oL: "Left edge", iL: "Left border", iR: "Right border", oR: "Right edge", oT: "Top edge", iT: "Top border", iB: "Bottom border", oB: "Bottom edge" };
+    n.querySelector(".cz-nl").textContent = names[sel] || "Line";
+    n.querySelector('[data-d="-1"]').textContent = v ? "◀" : "▲";
+    n.querySelector('[data-d="1"]').textContent = v ? "▶" : "▼";
+  }
+  function nudge(dir) {
+    if (!sel || !sides[side]) return;
+    const st = sides[side], lim = VERT[sel] ? st.work.width : st.work.height;
+    st.g[sel] = Math.max(0, Math.min(lim, st.g[sel] + dir * Math.max(0.5, 1 / Math.max(view.s, 0.2) * 0.5)));
+    clamp(sel); draw(); readout();
+  }
   function pos(e) { const r = cv().getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
   function bind() {
     const c = cv();
@@ -179,18 +195,33 @@
       const [px, py] = pos(e), k = hit(px, py);
       if (!k) return;
       e.preventDefault(); c.setPointerCapture(e.pointerId);
-      sel = k; drag = { k, px, py, start: sides[side].g[k], from: VERT[k] ? px : py };
-      draw();
+      // precision drag: the line moves slower than the finger (finer control), and we keep a short history
+      // so the tiny slip when a finger lifts off doesn't move the line
+      const gain = e.pointerType === "mouse" ? 0.6 : 0.35;
+      sel = k; drag = { k, px, py, start: sides[side].g[k], from: VERT[k] ? px : py, gain, touch: e.pointerType !== "mouse", hist: [[performance.now(), sides[side].g[k]]] };
+      paintNudge(); draw();
     });
     c.addEventListener("pointermove", (e) => {
       if (!drag) { if (sides[side]) { const [px, py] = pos(e); const k = hit(px, py); c.style.cursor = k ? (VERT[k] ? "ew-resize" : "ns-resize") : "default"; } return; }
       const [px, py] = pos(e), st = sides[side];
       drag.px = px; drag.py = py;
       const lim = VERT[drag.k] ? st.work.width : st.work.height;
-      st.g[drag.k] = Math.max(0, Math.min(lim, drag.start + ((VERT[drag.k] ? px : py) - drag.from) / view.s));
-      clamp(drag.k); draw(); readout();
+      st.g[drag.k] = Math.max(0, Math.min(lim, drag.start + ((VERT[drag.k] ? px : py) - drag.from) * drag.gain / view.s));
+      clamp(drag.k);
+      const now = performance.now();
+      drag.hist.push([now, st.g[drag.k]]);
+      while (drag.hist.length > 2 && now - drag.hist[0][0] > 400) drag.hist.shift();
+      if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); readout(); });
     });
-    const end = () => { if (drag) { drag = null; draw(); readout(); } };
+    const end = () => {
+      if (!drag) return;
+      const st = sides[side], back = drag.touch ? 120 : 50, t = performance.now() - back;
+      // use where the line was just before release, not the slip as the finger/mouse lets go
+      let v = null;
+      for (const [ht, hv] of drag.hist) if (ht <= t) v = hv;
+      if (v != null && st) { st.g[drag.k] = v; clamp(drag.k); }
+      drag = null; draw(); readout();
+    };
     c.addEventListener("pointerup", end); c.addEventListener("pointercancel", end);
     c.addEventListener("keydown", (e) => {
       if (!sel || !sides[side]) return;
@@ -240,6 +271,7 @@
   function paintSide() {
     root.querySelectorAll("#cz-side button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.s === side)));
     const st = sides[side];
+    paintNudge();
     root.querySelector("#cz-empty").hidden = !!st;
     root.querySelector("#cz-edit").hidden = !st;
     root.querySelector("#cz-empty-h").textContent = side === "front" ? "Photo of the front" : "Photo of the back";
@@ -280,7 +312,8 @@
               <button class="btn" type="button" id="cz-auto">Re-detect</button>
               <label class="btn"><input type="file" accept="image/*" id="cz-new" hidden>New photo</label>
             </div>
-            <p class="muted cz-note"><span class="cz-k o"></span> card edge <span class="cz-k i"></span> print border · Drag any line to line it up exactly. A zoom appears while you drag.</p>
+            <div class="cz-nudge" id="cz-nudge" hidden><span class="cz-nl">Line</span><button class="btn" type="button" data-d="-1" aria-label="Move line back">◀</button><button class="btn" type="button" data-d="1" aria-label="Move line forward">▶</button><span class="muted">tap or hold to fine-tune</span></div>
+            <p class="muted cz-note"><span class="cz-k o"></span> card edge <span class="cz-k i"></span> print border · Drag a line close, then use the arrows to fine-tune. A zoom appears while you drag.</p>
           </div>
         </div>
         <aside class="cz-out panel" aria-live="polite"><h2>Result</h2><div id="cz-res"></div></aside>
@@ -293,6 +326,13 @@
       root.querySelector("#cz-rotv").textContent = `${st.rot > 0 ? "+" : ""}${st.rot.toFixed(1)}°`; draw(); readout();
     });
     root.querySelector("#cz-auto").addEventListener("click", () => { const st = sides[side]; if (st) { st.g = detect(st.work); draw(); readout(); } });
+    root.querySelectorAll("#cz-nudge button").forEach((b) => {
+      let tm, iv;
+      const stop = () => { clearTimeout(tm); clearInterval(iv); };
+      b.addEventListener("pointerdown", (e) => { e.preventDefault(); const d = Number(b.dataset.d); nudge(d); tm = setTimeout(() => { iv = setInterval(() => nudge(d), 60); }, 350); });
+      ["pointerup", "pointerleave", "pointercancel"].forEach((ev) => b.addEventListener(ev, stop));
+      b.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); nudge(Number(b.dataset.d)); } });
+    });
     bind();
     let t; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(draw, 120); });
     paintSide();
