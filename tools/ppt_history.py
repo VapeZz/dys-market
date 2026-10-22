@@ -6,9 +6,12 @@
 
 Needs PPT_API_KEY.
 """
+import glob
+import gzip
 import json
 import os
 import sys
+from datetime import date
 import time
 import urllib.error
 import urllib.request
@@ -52,6 +55,130 @@ def main(argv):
             except urllib.error.HTTPError as e:
                 print(f"::warning title=PPT {label}::HTTP {e.code} {e.read()[:200]!r}")
             time.sleep(1.2)
+    elif cmd == "fetch":
+        fetch(argv[1], argv[2])
+
+
+PER_RUN = int(os.environ.get("PPT_HIST_PER_RUN", "4500"))
+MIN_CARD = 200          # cards worth $2+ (all sealed)
+
+
+def num(p):
+    for k in ("market", "price", "marketPrice", "value", "unopenedPrice", "avg"):
+        v = p.get(k) if isinstance(p, dict) else None
+        if isinstance(v, (int, float)) and v > 0:
+            return v
+    return None
+
+
+def series(item, sealed):
+    """[(YYYY-MM-DD, cents)] for the primary printing, Near Mint (cards) or unopened (sealed)."""
+    ph = item.get("priceHistory")
+    if sealed:
+        pts = ph if isinstance(ph, list) else (ph or {}).get("history") or []
+    else:
+        conds = (ph or {}).get("conditions") or {}
+        pts = (conds.get("Near Mint") or {}).get("history") or []
+    out = []
+    for pt in pts:
+        d, v = (pt.get("date") or "")[:10], num(pt)
+        if len(d) == 10 and v:
+            out.append((d, round(v * 100)))
+    return out
+
+
+def snap_path(snapdir, day):
+    return os.path.join(snapdir, f"{day}.json.gz")
+
+
+def fetch(site, store):
+    snapdir = os.path.join(store, "snapshots")
+    days = sorted(os.path.basename(f)[:10] for f in glob.glob(os.path.join(snapdir, "*.json.gz")))
+    latest = json.load(gzip.open(snap_path(snapdir, days[-1]), "rt"))
+    keys_of = {}
+    for k in latest:
+        keys_of.setdefault(k.split(":", 1)[0], []).append(k)
+    donep = os.path.join(store, "ppt-history-done.json")
+    try:
+        done = set(json.load(open(donep)))
+    except (OSError, ValueError):
+        done = set()
+    cands = []
+    for f in glob.glob(os.path.join(site, "data", "set", "*.json")):
+        d = json.load(open(f))
+        if d.get("k") != "pokemon":
+            continue
+        for i in d["items"]:
+            pid = str(i["id"])
+            if not i.get("p") or pid in done or pid not in keys_of:
+                continue
+            if i["t"] == "s" or i["p"] >= MIN_CARD:
+                cands.append((i["p"], pid, i["t"] == "s"))
+    uniq = {}
+    for p, pid, sealed in sorted(cands, reverse=True):
+        uniq.setdefault(pid, (p, sealed))
+    todo = list(uniq.items())[:PER_RUN]
+    key = (os.environ.get("PPT_API_KEY") or "").strip()
+    add = {}          # day -> {key: cents}
+    got = skipped = 0
+    sp = os.path.join(store, "ppt-history-start.txt")      # first day of our own nightly tracking
+    try:
+        first_day = open(sp).read().strip()
+    except OSError:
+        first_day = days[0]
+        open(sp, "w").write(first_day)
+    for pid, (p, sealed) in todo:
+        try:
+            d = get(f"/{'sealed-products' if sealed else 'cards'}?tcgPlayerId={pid}&includeHistory=true&days=180", key)
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 402, 403, 429):
+                print(f"::warning title=History::stopped: HTTP {e.code} {e.read()[:160]!r}")
+                break
+            done.add(pid)
+            continue
+        except Exception as e:
+            print(f"history: {pid} failed: {e}")
+            time.sleep(2)
+            continue
+        data = d.get("data")
+        item = data[0] if isinstance(data, list) and data else data
+        done.add(pid)
+        if not isinstance(item, dict):
+            skipped += 1
+            continue
+        ks = keys_of[pid]
+        if sealed:
+            k = ks[0] if len(ks) == 1 else next((x for x in ks if x.endswith(":Normal")), None)
+        else:
+            prim = (item.get("prices") or {}).get("primaryPrinting") or ""
+            k = f"{pid}:{prim}" if f"{pid}:{prim}" in latest else (ks[0] if len(ks) == 1 else None)
+        pts = series(item, sealed)
+        if not k or not pts:
+            skipped += 1
+            continue
+        # sanity: their latest price must match ours (same printing / product)
+        now = latest.get(k)
+        if now and not (0.65 <= pts[-1][1] / now <= 1.5):
+            skipped += 1
+            continue
+        for day, cents in pts:
+            if day < first_day:                      # only fill days before our own tracking started
+                add.setdefault(day, {})[k] = cents
+        got += 1
+        time.sleep(1.05)
+    for day, vals in add.items():
+        path = snap_path(snapdir, day)
+        try:
+            cur = json.load(gzip.open(path, "rt"))
+        except (OSError, ValueError):
+            cur = {}
+        for k, v in vals.items():
+            cur.setdefault(k, v)
+        with gzip.open(path, "wt", encoding="utf-8") as f:
+            json.dump(cur, f, separators=(",", ":"))
+    json.dump(sorted(done), open(donep, "w"))
+    left = len(uniq) - len(todo)
+    print(f"history: {got} products backfilled, {skipped} skipped, {len(add)} past days written, {left} products left")
 
 
 if __name__ == "__main__":

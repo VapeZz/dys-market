@@ -26,7 +26,7 @@ jobs:
       - name: Refresh a batch of graded prices
         env:
           PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
-          PPT_PER_RUN: "900"
+          PPT_PER_RUN: "300"   # lowered while the price-history backfill runs; back to 900 after
         run: |
           set -e
           R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
