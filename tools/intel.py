@@ -171,7 +171,7 @@ def main(argv):
 
     # signals: a week of prices moving the same way, on cards worth $10+
     sig_up, sig_down, movers = [], [], []
-    for st, it in items(lambda s: s["k"] in ("pokemon", "one-piece", "lorcana", "riftbound", "gundam", "yugioh", "dragon-ball-fusion-world") and (s.get("pub") or "") >= modern_from, "c", 1000):
+    for st, it in items(lambda s: s["k"] in ("pokemon", "pokemon-jp", "one-piece", "lorcana", "riftbound", "gundam", "yugioh", "dragon-ball-fusion-world", "union-arena") and (s.get("pub") or "") >= modern_from, "c", 1000):
         f = [v for v in (it.get("s") or []) if v]
         if len(f) < 5:
             continue
@@ -192,17 +192,25 @@ def main(argv):
         elif w is not None and w <= -5 and downs >= 0.6 and f[-1] <= min(f[:-1]):
             strength = min(95, round(35 + min(-w, 40) * 0.9 + downs * 25))
             sig_down.append(card(st, it, w=w, cons=round(downs * 100), strength=strength, why=f"Down {-w:.0f}% over {len(f) - 1} days, falling on {sum(x < 0 for x in moves)} of {len(moves)} price changes and at its low for the week."))
-    def spread(lst, n, per=2):
-        """strongest first, at most `per` from one game so every game gets a look"""
-        lst.sort(key=lambda c: (-c["strength"], -c["p"]))
-        out, used = [], {}
+    GAME_ORDER = ["pokemon", "one-piece", "pokemon-jp", "yugioh", "lorcana", "dragon-ball-fusion-world", "gundam", "riftbound", "union-arena"]
+
+    def spread(lst, n, per=8):
+        """Up to `per` strongest per game, merged round-robin (Pokémon first) so every game shows,
+        instead of the most volatile small games filling the whole list."""
+        lst.sort(key=lambda c: (-c["strength"], -abs(c["w"]), -c["p"]))
+        by = {}
         for c in lst:
-            if used.get(c["k"], 0) < per:
-                out.append(c)
-                used[c["k"]] = used.get(c["k"], 0) + 1
-        return (out + [c for c in lst if c not in out])[:n]
+            if len(by.setdefault(c["k"], [])) < per:
+                by[c["k"]].append(c)
+        order = sorted(by, key=lambda k: GAME_ORDER.index(k) if k in GAME_ORDER else 99)
+        out = []
+        for i in range(per):
+            for k in order:
+                if i < len(by[k]):
+                    out.append(by[k][i])
+        return out[:n]
     n_up, n_down = len(sig_up), len(sig_down)
-    sig_up, sig_down = spread(sig_up, 16, 4), spread(sig_down, 16, 4)
+    sig_up, sig_down = spread(sig_up, 80), spread(sig_down, 80)
     gainers = sorted((m for m in movers if m["d1"] > 0), key=lambda m: -m["d1"])[:10]
     losers = sorted((m for m in movers if m["d1"] < 0), key=lambda m: m["d1"])[:10]
 
