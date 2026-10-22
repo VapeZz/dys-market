@@ -1,6 +1,8 @@
 /* Drive Your Style Market Insights — shared site script */
 (() => {
 const STORE = "https://driveyourstyle.net";
+/* what Drive Your Style has in stock right now (id -> {u, p, m, n, g, t}); pages render after it loads */
+const STK = new Map();
 const PAGE = document.body.dataset.page;
 const GIVEAWAY_ON = false;
 const $ = (s, el = document) => el.querySelector(s);
@@ -71,8 +73,18 @@ function affUrl(href) {
   }
   return href;
 }
-if (AFF_ON) ["click", "auxclick", "contextmenu"].forEach((ev) => document.addEventListener(ev, (e) => {
+function storeUrl(href, where) {
+  let u; try { u = new URL(href); } catch (e) { return href; }
+  if (u.hostname.replace(/^www\./, "") !== "driveyourstyle.net" || u.searchParams.has("utm_source")) return href;
+  u.searchParams.set("utm_source", "market"); u.searchParams.set("utm_medium", "referral"); u.searchParams.set("utm_campaign", PAGE || "site");
+  if (where) u.searchParams.set("utm_content", where);
+  return u.toString();
+}
+["click", "auxclick", "contextmenu"].forEach((ev) => document.addEventListener(ev, (e) => {
   const a = e.target.closest && e.target.closest("a[href^='http']"); if (!a || a.dataset.aff) return;
+  const st = storeUrl(a.href, a.dataset.where || "");
+  if (st !== a.href) { a.href = st; a.dataset.aff = "1"; return; }
+  if (!AFF_ON) return;
   const n = affUrl(a.href); if (n !== a.href) { a.href = n; a.rel = "noopener sponsored"; a.dataset.aff = "1"; }
 }, true));
 
@@ -207,11 +219,15 @@ function initSearch(box) {
     const q = input.value.trim().toLowerCase().replace(/é/g, "e");
     if (!rows || q.length < 2) { out.classList.remove("open"); return; }
     const terms = q.split(/\s+/);
-    const hits = rankHits(rows, terms, (r) => alias((r[1] + " " + (meta.groups[r[2]]?.[0] || "")).toLowerCase().replace(/é/g, "e")), (r) => r[1], 12);
+    const hay = (r) => alias((r[1] + " " + (meta.groups[r[2]]?.[0] || "")).toLowerCase().replace(/é/g, "e"));
+    let hits = rankHits(rows, terms, hay, (r) => r[1], 12);
+    // anything we have in stock that matches goes first (up to 3)
+    const stockHits = rows.filter((r) => STK.has(r[0]) && terms.every((t) => hay(r).includes(t))).slice(0, 3);
+    if (stockHits.length) hits = [...stockHits, ...hits.filter((r) => !stockHits.includes(r))].slice(0, 12);
     sel = -1;
     out.innerHTML = hits.length ? hits.map((r) => `<a href="${prodUrl(r[0], r[2])}">${imgTag(r[0])}
       <span class="name"><b>${esc(r[1])}</b><span>${esc(meta.groups[r[2]]?.[0] || "")} · ${r[3] === "s" ? "Sealed" : "Card"}</span></span>
-      <span class="figs" style="margin-left:auto"><b>${money(r[4])}</b></span></a>`).join("")
+      <span class="figs" style="margin-left:auto"><b>${money(r[4])}</b>${STK.has(r[0]) ? `<span class="instock-tag">In stock</span>` : ""}</span></a>`).join("")
       : `<div class="empty">No matches for "${esc(input.value)}"</div>`;
     out.innerHTML += `<a class="all-res" href="search.html?q=${encodeURIComponent(input.value.trim())}"><b>Search every card for "${esc(input.value.trim())}" →</b></a>`;
     out.classList.add("open");
@@ -250,7 +266,7 @@ function moverRows(list, meta, limit, win) {
     const [id, name, gid, now, old, p] = r;
     return `<a class="row" href="${prodUrl(id, gid)}"><span class="rank">${i + 1}</span>${imgTag(id)}
       <span class="name"><b>${esc(name)}</b><span>${esc(meta.groups[gid]?.[0] || "")}</span></span>
-      <span class="figs"><b>${money(now)}</b>${chg(p)}<span class="muted" style="font-size:12px;display:block">from ${money(old)}</span></span></a>`;
+      <span class="figs"><b>${money(now)}</b>${chg(p)}<span class="muted" style="font-size:12px;display:block">from ${money(old)}</span>${STK.has(id) ? `<span class="instock-tag">In stock</span>` : ""}</span></a>`;
   }).join("");
 }
 const BAND_TOP = { "5": 2000, "20": 10000 };
@@ -457,6 +473,7 @@ async function pageSet() {
   const sinfo = allSets.find((s) => String(s.id) === String(set.id));
   if (sinfo?.lg) { $("#set-logo").innerHTML = `<img src="${esc(sinfo.lg)}" alt="${esc(set.n)} logo">`; $("#set-logo").hidden = false; }
   $("#sub").textContent = `${gl[set.k] || ""}${set.pub ? " · Released " + fmtDate(set.pub) : ""}`;
+  stockRow($("#set-grade"), set.items.filter((i) => i.dys), `Available now from ${set.n}`, "set");
   const cards = set.items.filter((i) => i.t === "c"), sealed = set.items.filter((i) => i.t === "s");
   const rarities = [...cards.reduce((m, c) => m.set(c.r || "Other", (m.get(c.r || "Other") || 0) + 1), new Map())]
     .sort((a, b) => a[1] - b[1]).map(([r]) => r);
@@ -654,6 +671,23 @@ function priceBreak(v, base) {
     <div class="pb-btns"><a class="btn" href="${sold}" target="_blank" rel="noopener">Search eBay sold ↗</a><a class="btn" href="https://www.tcgplayer.com/product/${v.id}" target="_blank" rel="noopener">See on TCGplayer ↗</a></div></div>`;
 }
 
+/* "In stock at Drive Your Style" tiles for a list of set items that have i.dys */
+function dysBuyBox(v, ebc) {
+  const vsMkt = v.p ? Math.round((1 - v.dys.p / v.p) * 100) : null;
+  const eb = ebc?.r?.[0], vsEb = eb ? eb - v.dys.p : null;
+  return `<a class="dys-buy" href="${esc(v.dys.u)}" data-where="product-box"><span class="ds-tag">● IN STOCK AT DRIVE YOUR STYLE</span>
+    <span class="db-row"><b>${money(v.dys.p)}</b><span class="db-go">Buy now →</span></span>
+    <span class="db-sub">${vsMkt != null && vsMkt > 0 ? `${vsMkt}% under market · ` : ""}${vsEb != null && vsEb > 0 ? `${money(vsEb)} less than the cheapest on eBay · ` : ""}Ships from Las Vegas</span></a>`;
+}
+function stockRow(anchor, items, title, where, pos = "beforebegin") {
+  if (!anchor || !items.length) return;
+  const rows = items.slice().sort((a, b) => (below(b.dys.p, b.p) - below(a.dys.p, a.p)) || (b.p || 0) - (a.p || 0)).slice(0, 12);
+  anchor.insertAdjacentHTML(pos, `<div class="dys-stock panel"><div class="ds-head"><div><span class="ds-tag">● IN STOCK · SHIPS FROM LAS VEGAS</span><h2>${esc(title)}</h2></div>
+    <a class="more" href="${STORE}/collections/all" data-where="${where}-all">Shop all →</a></div>
+    <div class="stockrow">${rows.map((i) => `<a class="scard" href="${esc(i.dys.u)}" data-where="${where}"><span class="si">${imgTag(i.id, "", 1000, i.im)}${below(i.dys.p, i.p) ? `<span class="badge deal">Below market</span>` : ""}</span>
+      <span class="t">${esc(i.n.replace(/ \((Holofoil|Normal|Reverse Holofoil)\)$/, ""))}</span><span class="pp"><b>${money(i.dys.p)}</b>${i.p ? `<span class="muted">Mkt ${money(i.p)}</span>` : ""}</span></a>`).join("")}</div></div>`);
+}
+
 /* live eBay Buy It Now prices (tools/ebay_prices.py), shipping included */
 function ebayRow(e, mkt) {
   if (!e || !(e.r || e.p10)) return "";
@@ -685,7 +719,8 @@ async function pageProduct() {
         ${v.dys && below(v.dys.p, v.p) ? `<p style="margin:6px 0 0">${BELOW} <span class="muted">Our price ${money(v.dys.p)} is ${Math.round((1 - v.dys.p / v.p) * 100)}% under market</span></p>` : ""}
         <div class="kpis">${[["7", "7 days"], ["30", "30 days"], ["90", "90 days"], ["a", `Since ${fmtShort(meta.first)}`]].map(([k, l]) => `<div class="kpi"><div class="l">${l}</div>${chg(v.ch?.[k])}</div>`).join("")}</div>
         ${priceBreak(v, base)}${ebayRow(ebc, v.p)}
-        <div class="btns">${v.dys ? `<a class="btn primary" href="${esc(v.dys.u)}">Buy at Drive Your Style · ${money(v.dys.p)}</a>`
+        ${v.dys ? dysBuyBox(v, ebc) : ""}
+        <div class="btns">${v.dys ? ""
           : `<a class="btn primary" href="mailto:customerservice@driveyourstyle.net?subject=${encodeURIComponent("Request: " + v.n)}&body=${encodeURIComponent(`Hi Drive Your Style,\n\nI'm interested in: ${v.n} (${set.n}).\nMarket price today: ${money(v.p)}\nQuantity: 1\n\nPlease let me know if you can get it.\n\nThanks!`)}">Request from Drive Your Style</a>`}
           <button class="btn" id="addcol" type="button"></button>
           <button class="btn" id="sellit" type="button" title="Get a cash or store-credit offer from Drive Your Style">💵 Sell to us</button>
@@ -694,7 +729,8 @@ async function pageProduct() {
           <button class="btn" id="watch" type="button"></button></div>
         <div class="chart-card"><div class="chart-head"><b>Price history</b><div id="range"></div></div><div class="chart" id="chart"></div>
           <p class="muted" style="font-size:12px;margin:6px 0 4px">Nightly TCGplayer market price. Gaps mean no market price was recorded that day.</p></div>
-      </div>${v.t === "c" ? gradedHtml(base, set, v) : ""}${v.t === "s" ? pullsHtml(set) : moreHtml(set, id)}`;
+      </div><div id="ps-stock" class="ps-stock"></div>${v.t === "c" ? gradedHtml(base, set, v) : ""}${v.t === "s" ? pullsHtml(set) : moreHtml(set, id)}`;
+    stockRow($("#ps-stock"), set.items.filter((i) => i.dys && i.id !== id), `${v.dys ? "More" : "In stock"} from ${set.n}`, "product-set", "afterbegin");
     const ck = `${id}|${printCode(subOf(v.n))}`;
     const paintCol = () => { const n = sumOwned().get(ck) || 0; $("#addcol").textContent = n ? `✓ In collection (${n}) · add 1` : "＋ Add to collection"; };
     $("#addcol").addEventListener("click", () => {
@@ -2272,7 +2308,7 @@ async function pageSearch() {
       return `<div class="ctile${r[3] === "s" ? " sealed" : ""}${qty ? " owned" : ""}"><a href="${prodUrl(r[0], r[2])}" class="cimg">${imgTag(r[0], "", 1000, alt)}</a>
         <button class="cadd" type="button" data-add="${esc(k)}" data-i="${r[0]}" aria-label="Add ${esc(r[1])} to My Collection">${qty ? `✓${qty > 1 ? qty : ""}` : "+"}</button>
         <a href="${prodUrl(r[0], r[2])}" class="cinfo"><span class="cn"><b>${esc(r[1])}</b>${r[5] ? `<small>${esc(r[5])}</small>` : ""}</span>
-        <span class="cp">${r[4] == null ? `<small class="muted">No price yet</small>` : `<b>${money(r[4])}</b>`}<em>${esc((st?.n || "").replace(/^(ME|SV|SWSH|SM|M)\d*[a-z]?:\s*/i, ""))}</em></span></a></div>`;
+        <span class="cp">${r[4] == null ? `<small class="muted">No price yet</small>` : `<b>${money(r[4])}</b>`}<em>${esc((st?.n || "").replace(/^(ME|SV|SWSH|SM|M)\d*[a-z]?:\s*/i, ""))}</em>${STK.has(r[0]) ? `<em class="instock">In stock</em>` : ""}</span></a></div>`;
     }).join("") + (out.length > lim ? `<div class="cmore"><button class="btn" id="smore" type="button">Show more (${(out.length - lim).toLocaleString()} left)</button></div>` : "")
       + (!out.length ? `<div class="panel empty-note" style="grid-column:1/-1">No matches. Try fewer words, or just the card number like 199/165.</div>` : "");
     $("#smore")?.addEventListener("click", () => { lim += 120; draw(); });
@@ -2484,7 +2520,8 @@ async function pageCentering() {
 }
 
 const pages = { centering: pageCentering, search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, demand: pageDemand, importer: pageImporter, collection: pageCollection, collectors: pageCollectors, sell: pageSell, buyer: pageBuyer, scout: pageScout, giveaway: pageGiveaway, intel: pageIntel, grading: pageGrading };
-(pages[PAGE] || (async () => {}))().then(() => offerNudge()).catch((err) => {
+getJSON("stock.json").then((a) => a.forEach((x) => STK.set(x.id, x))).catch(() => {})
+  .then(() => (pages[PAGE] || (async () => {}))()).then(() => offerNudge()).catch((err) => {
   console.error(err);
   const main = $("main");
   if (main) main.insertAdjacentHTML("afterbegin", `<div class="wrap"><p class="panel empty-note" style="margin-top:24px">Couldn't load market data right now. Please refresh in a minute.</p></div>`);

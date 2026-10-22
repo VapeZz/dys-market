@@ -177,7 +177,7 @@ def write_demand(binders, data, rows):
     """Want lists -> data/wanted.json (public Most wanted) and data/demand.json (owner's report). Counts only, no names."""
     price = {f"{r[0]}|{code_of(sub_of(r[1]))}": (r[4], r[1], r[2]) for r in rows}
     try:
-        stock = {s["id"]: s for s in json.load(open(os.path.join(data, "stock.json"))) if s.get("a")}
+        stock = {s["id"]: s for s in json.load(open(os.path.join(data, "stock.json"))) if s.get("a", True)}
     except (OSError, ValueError):
         stock = {}
     agg, wanters = {}, 0

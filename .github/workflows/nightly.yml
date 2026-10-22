@@ -174,6 +174,17 @@ jobs:
           if [ $rc -ne 0 ]; then echo "::error title=Sneaker carousel::$(tail -c 600 /tmp/snks.log | tr '\n' ' ')"; exit 1; fi
           echo "::notice title=Sneaker carousel::$(tail -n 1 /tmp/snks.log)"
 
+      - name: Weekly In stock & under market carousel (Wednesdays)
+        continue-on-error: true
+        run: |
+          if [ "$(date -u +%u)" != "3" ]; then echo "Not Wednesday; skipping"; exit 0; fi
+          set +e
+          python -c "import playwright" 2>/dev/null || { pip install -q playwright==1.56.0 && python -m playwright install --with-deps chromium; }; pip install -q imageio-ffmpeg numpy > /tmp/deals.log 2>&1
+          python tools/deals_social.py site/data data/social-deals --date "$(date -u +%F)" > /tmp/deals.log 2>&1; rc=$?
+          cat /tmp/deals.log
+          if [ $rc -ne 0 ]; then echo "::error title=Deals carousel::$(tail -c 600 /tmp/deals.log | tr '\n' ' ')"; exit 1; fi
+          echo "::notice title=Deals carousel::$(tail -n 1 /tmp/deals.log)"
+
       - name: Card of the Day (TikTok, daily)
         continue-on-error: true
         run: |
@@ -218,6 +229,7 @@ jobs:
           if [ -d data/social-daily ]; then mkdir -p site/social-daily && cp -r data/social-daily/. site/social-daily/; fi
           if [ -d data/social-daily-other ]; then mkdir -p site/social-daily-other && cp -r data/social-daily-other/. site/social-daily-other/; fi
           if [ -d data/intel-daily ]; then mkdir -p site/intel-daily && cp -r data/intel-daily/. site/intel-daily/; fi
+          if [ -d data/social-deals ]; then mkdir -p site/social-deals && cp -r data/social-deals/. site/social-deals/; fi
 
       - name: Sync Shopify prices to market
         continue-on-error: true
