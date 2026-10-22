@@ -1,0 +1,39 @@
+name: Pokémon price history backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "probe | fetch | merge"
+        required: true
+        default: "probe"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Run
+        env:
+          PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
+        run: |
+          set -e
+          if [ "${{ inputs.mode }}" = "probe" ]; then python tools/ppt_history.py probe; exit 0; fi
+          R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git clone -q --depth 1 --branch data "$R" /tmp/db
+          git clone -q --depth 1 --branch gh-pages "$R" /tmp/pages
+          python tools/ppt_history.py ${{ inputs.mode }} /tmp/pages /tmp/db/data | tee /tmp/h.log
+          git -C /tmp/db config user.name "dys-market-bot"; git -C /tmp/db config user.email "dys-market-bot@users.noreply.github.com"
+          git -C /tmp/db add -A data && (git -C /tmp/db diff --cached --quiet || (git -C /tmp/db commit -q -m "Price history backfill (${{ inputs.mode }})" && git -C /tmp/db push -q origin data))
+          echo "::notice title=History::$(tail -n 1 /tmp/h.log)"
