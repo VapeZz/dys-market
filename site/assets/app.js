@@ -55,7 +55,7 @@ const HEARTS = (on) => on ? "♥" : "♡";
    tcgplayer / stockx / goat: the program's "deep link" prefix that ends in ?u= (Impact style), e.g.
      "https://partner.tcgplayer.com/c/1234567/1830156/21018?u="
    ebay: your eBay Partner Network campaign id (campid), e.g. "5339123456". */
-const AFF = { tcgplayer: "", stockx: "", goat: "", ebay: "" };
+const AFF = { tcgplayer: "", stockx: "", goat: "", ebay: "5339229587" };
 const AFF_ON = Object.values(AFF).some(Boolean);
 function affUrl(href) {
   let u; try { u = new URL(href); } catch (e) { return href; }
@@ -66,7 +66,7 @@ function affUrl(href) {
   if (h === "goat.com") return deep("goat");
   if (h === "ebay.com" && AFF.ebay && !u.searchParams.has("campid")) {
     u.searchParams.set("mkcid", "1"); u.searchParams.set("mkrid", "711-53200-19255-0"); u.searchParams.set("siteid", "0");
-    u.searchParams.set("campid", AFF.ebay); u.searchParams.set("toolid", "10001"); u.searchParams.set("mkevt", "1");
+    u.searchParams.set("campid", AFF.ebay); u.searchParams.set("customid", `dys-${PAGE}`); u.searchParams.set("toolid", "10001"); u.searchParams.set("mkevt", "1");
     return u.toString();
   }
   return href;
