@@ -131,11 +131,13 @@ document.documentElement.dataset.theme = getTheme();
 
 /* ---------- shell ---------- */
 const SEARCH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>`;
+// header links that fold into the ☰ menu on narrower desktops: 1 = below 1800px, 2 = below 1440px
+const NAV_TIER = { search: 1, compare: 1, centering: 1, calendar: 1, sneakers: 1, watchlist: 1, about: 1, giveaway: 1, trends: 2, collectors: 2 };
 function shell() {
   const links = [["intel", "Intel"], ["sets", "Sets"], ["trends", "Trends"], ["cards", "Movers"], ["search", "Search"], ["compare", "Compare"], ["centering", "Centering"], ["grading", "Grading"], ["calendar", "Calendar"], ["sneakers", "Sneakers"], ["watchlist", "Want list"], ["collection", "My Collection"], ["collectors", "Collectors"], ...(GIVEAWAY_ON ? [["giveaway", "🎁 Giveaway"]] : []), ["about", "About"]];
   $("#top").outerHTML = `<header class="top"><div class="wrap">
     <a class="brand" href="index.html" aria-label="Drive Your Style Market Insights home"><img class="logo-img logo-on-dark" src="assets/logo-light.png" alt="Drive Your Style" width="61" height="40"><img class="logo-img logo-on-light" src="assets/logo-dark.png" alt="" width="61" height="40"><span class="brand-sub">Market<br>Insights</span></a>
-    <nav class="nav" id="nav">${links.map(([p, l]) => `<a href="${p}.html"${p === PAGE ? ' aria-current="page"' : ""}>${l}</a>`).join("")}
+    <nav class="nav" id="nav">${links.map(([p, l]) => `<a href="${p}.html"${NAV_TIER[p] ? ` class="nav-x${NAV_TIER[p]}"` : ""}${p === PAGE ? ' aria-current="page"' : ""}>${l}</a>`).join("")}
       <a href="${STORE}" class="nav-shop">Shop the store →</a></nav>
     <div class="top-actions">
       ${PAGE !== "index" ? `<div class="search" data-search>${SEARCH_ICON}<input type="search" placeholder="Search products & cards" aria-label="Search"><div class="results"></div></div>` : ""}
@@ -444,6 +446,7 @@ async function setGradeRow(setId) {
       <span class="in-price up">PSA 10 ${money(x.g10)}</span><span class="in-set">Raw ${money(x.p)} · ${(x.g10 / x.p).toFixed(1)}×${x.g9 ? ` · PSA 9 ${money(x.g9)}` : ""}</span></a>`).join("")}</div>`;
 }
 async function pageSet() {
+  if (!params.get("id")) { location.replace("sets.html"); return; }   // bare set.html (old links, crawlers)
   setGradeRow(params.get("id"));
   const id = params.get("id");
   const [meta, set, allSets] = await Promise.all([getJSON("meta.json"), getJSON(`set/${id}.json`), getJSON("sets.json")]);
@@ -662,6 +665,7 @@ function ebayRow(e, mkt) {
 
 async function pageProduct() {
   const id = Number(params.get("id")), gid = params.get("set");
+  if (!id || !gid) { location.replace("sets.html"); return; }   // bare product.html (old links, crawlers)
   const [meta, set, graded, eb] = await Promise.all([getJSON("meta.json"), getJSON(`set/${gid}.json`), getJSON("graded.json").catch(() => ({ cards: {} })), getJSON("ebay.json").catch(() => ({ cards: {} }))]);
   const variants = set.items.filter((i) => i.id === id);
   const gr = variants.length === 1 ? graded.cards?.[id]?.g || null : null;   // graded sales are per product; skip when it has several printings

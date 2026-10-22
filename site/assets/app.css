@@ -35,10 +35,18 @@ img{max-width:100%;display:block}
 .top-actions{margin-left:auto;display:flex;align-items:center;gap:10px}
 .shop-btn{padding:9px 16px;border-radius:999px;background:var(--ink);color:var(--bg);font-weight:700;font-size:14px;white-space:nowrap}
 .menu-btn{display:none;background:none;border:1px solid var(--line-strong);color:var(--ink);border-radius:10px;padding:8px 10px;font:inherit;cursor:pointer}
-@media(max-width:1360px){
-  .nav{display:none;position:absolute;top:64px;left:0;right:0;flex-direction:column;background:var(--bg);border-bottom:1px solid var(--line);padding:8px 16px 16px;margin:0}
-  .nav.open{display:flex}
+/* desktop: the most-used links stay in the bar, the rest fold into the ☰ menu so the header never overflows */
+@media(max-width:1799px){
+  .nav a.nav-x1{display:none}
   .menu-btn{display:block}
+  .nav.open{position:absolute;top:64px;left:0;right:0;flex-direction:column;background:var(--bg);border-bottom:1px solid var(--line);padding:8px 16px 16px;margin:0;z-index:60}
+  .nav.open a.nav-x1,.nav.open a.nav-x2{display:block}
+}
+@media(max-width:1439px){.nav a.nav-x2{display:none}}
+@media(min-width:1101px) and (max-width:1799px){.nav.open{left:auto;right:max(16px,calc((100vw - 1280px)/2));width:260px;border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:8px}}
+@media(max-width:1100px){
+  .nav{display:none;position:absolute;top:64px;left:0;right:0;flex-direction:column;background:var(--bg);border-bottom:1px solid var(--line);padding:8px 16px 16px;margin:0;z-index:60}
+  .nav.open{display:flex}
 }
 @media(max-width:860px){.shop-btn{display:none}}
 
@@ -65,7 +73,7 @@ h1,h2,h3{font-family:var(--display);letter-spacing:-.01em;margin:0}
 .results a:hover,.results a.active{background:var(--surface-2)}
 .results .muted{font-size:12px}
 .results .empty{padding:14px;color:var(--ink-3)}
-.top .search{flex:1;max-width:340px}
+.top .search{flex:1 1 260px;max-width:340px;min-width:170px}
 .top .search input{padding:10px 12px 10px 38px;font-size:14px;box-shadow:none;border-radius:10px}
 .top .search svg{left:12px;width:16px;height:16px}
 @media(max-width:860px){.top .search{display:none}}
