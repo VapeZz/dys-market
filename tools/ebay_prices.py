@@ -140,6 +140,18 @@ def main(argv):
                 print(f"ebay: {pid} failed: {e}")
         cache["last_run"] = today
         json.dump(cache, open(cpath, "w"), separators=(",", ":"))
+        # daily history of eBay asking prices: cheapest raw / PSA 10 Buy It Now, for cards checked today
+        hdir = os.path.join(store, "history")
+        os.makedirs(hdir, exist_ok=True)
+        hpath = os.path.join(hdir, f"{today}.json")
+        try:
+            hist = json.load(open(hpath))
+        except (OSError, ValueError):
+            hist = {}
+        for pid, c in cache["cards"].items():
+            if c.get("at") == today and (c.get("r") or c.get("p10")):
+                hist[pid] = [(c.get("r") or [None])[0], (c.get("p10") or [None])[0]]
+        json.dump(hist, open(hpath, "w"), separators=(",", ":"))
     cards = {pid: c for pid, c in cache["cards"].items() if c.get("r") or c.get("p10")}
     with open(os.path.join(site, "data", "ebay.json"), "w", encoding="utf-8") as f:
         json.dump({"updated": cache.get("last_run"), "cards": cards}, f, separators=(",", ":"))
