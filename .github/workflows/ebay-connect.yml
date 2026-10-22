@@ -1,0 +1,43 @@
+name: Connect eBay store
+
+# Leave "code" empty to get the eBay sign-in link (shown in the run summary).
+# After approving on eBay, paste the code from market.driveyourstyle.net/ebay-ok.html here (within 5 minutes).
+on:
+  workflow_dispatch:
+    inputs:
+      code:
+        description: "Code from the eBay approval page (leave empty to get the sign-in link)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  connect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Connect
+        env:
+          EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
+          EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+          CODE: ${{ inputs.code }}
+        run: |
+          set -e
+          echo "::add-mask::$CODE"
+          if [ -z "$CODE" ]; then python tools/ebay_user.py link; exit 0; fi
+          pip install -q cryptography
+          R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git clone -q --depth 1 --branch data "$R" /tmp/db
+          python tools/ebay_user.py connect "$CODE" /tmp/db/data/ebay-user
+          git -C /tmp/db config user.name "dys-market-bot"; git -C /tmp/db config user.email "dys-market-bot@users.noreply.github.com"
+          git -C /tmp/db add data/ebay-user && git -C /tmp/db commit -q -m "eBay store connected" && git -C /tmp/db push -q origin data
