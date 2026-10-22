@@ -67,11 +67,18 @@ def token_call(form):
 def access_token(store):
     """A fresh user access token (2 hours) from the saved refresh token."""
     saved = unseal(open(os.path.join(store, "user.enc")).read().strip())
-    d = token_call({"grant_type": "refresh_token", "refresh_token": saved["refresh_token"], "scope": " ".join(SCOPES)})
+    d = token_call({"grant_type": "refresh_token", "refresh_token": saved["refresh_token"]})   # all scopes the owner approved
     return d["access_token"]
 
 
 def whoami(tok):
+    try:
+        return _whoami(tok)
+    except Exception:
+        return "(connected)"
+
+
+def _whoami(tok):
     req = urllib.request.Request("https://apiz.ebay.com/commerce/identity/v1/user/", headers={"Authorization": "Bearer " + tok})
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.load(r).get("username", "?")
