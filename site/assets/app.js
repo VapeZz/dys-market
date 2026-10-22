@@ -651,11 +651,21 @@ function priceBreak(v, base) {
     <div class="pb-btns"><a class="btn" href="${sold}" target="_blank" rel="noopener">Search eBay sold ↗</a><a class="btn" href="https://www.tcgplayer.com/product/${v.id}" target="_blank" rel="noopener">See on TCGplayer ↗</a></div></div>`;
 }
 
+/* live eBay Buy It Now prices (tools/ebay_prices.py), shipping included */
+function ebayRow(e, mkt) {
+  if (!e || !(e.r || e.p10)) return "";
+  const cell = (x, lab) => x ? `<a class="eb-cell" href="${esc(x[2])}" target="_blank" rel="noopener nofollow"><span class="pb-lab">${lab}</span><b>${money(x[0])}</b>
+    <span class="muted pb-sm">${x[1] > 1 ? `cheapest of ${x[1]} listings` : "1 listing"}${lab === "RAW" && mkt ? ` · ${x[0] <= mkt ? `<span class="up">${Math.round((1 - x[0] / mkt) * 100)}% under market</span>` : `${Math.round((x[0] / mkt - 1) * 100)}% over market`}` : ""}</span><span class="eb-go">View on eBay ↗</span></a>` : "";
+  return `<div class="eb panel"><div class="eb-head"><b>eBay Buy It Now</b><span class="muted pb-sm">US listings, shipping included · checked ${esc(fmtShort(e.at))}</span></div>
+    <div class="eb-grid">${cell(e.r, "RAW")}${cell(e.p10, "PSA 10")}</div></div>`;
+}
+
 async function pageProduct() {
   const id = Number(params.get("id")), gid = params.get("set");
-  const [meta, set, graded] = await Promise.all([getJSON("meta.json"), getJSON(`set/${gid}.json`), getJSON("graded.json").catch(() => ({ cards: {} }))]);
+  const [meta, set, graded, eb] = await Promise.all([getJSON("meta.json"), getJSON(`set/${gid}.json`), getJSON("graded.json").catch(() => ({ cards: {} })), getJSON("ebay.json").catch(() => ({ cards: {} }))]);
   const variants = set.items.filter((i) => i.id === id);
   const gr = variants.length === 1 ? graded.cards?.[id]?.g || null : null;   // graded sales are per product; skip when it has several printings
+  const ebc = variants.length === 1 ? eb.cards?.[id] || null : null;
   if (!variants.length) { $("#prod").innerHTML = `<p class="empty-note">We don't have a price for this product yet.</p>`; return; }
   let v = variants[0];
   const base = v.n.replace(/ \((Holofoil|Reverse Holofoil|Normal|1st Edition.*?)\)$/, "");
@@ -670,7 +680,7 @@ async function pageProduct() {
         <div class="muted" style="margin-top:14px">Market price</div><div class="price-big">${v.p == null ? `<span class="muted" style="font-size:.6em">No market price yet</span>` : money(v.p)}</div>
         ${v.dys && below(v.dys.p, v.p) ? `<p style="margin:6px 0 0">${BELOW} <span class="muted">Our price ${money(v.dys.p)} is ${Math.round((1 - v.dys.p / v.p) * 100)}% under market</span></p>` : ""}
         <div class="kpis">${[["7", "7 days"], ["30", "30 days"], ["90", "90 days"], ["a", `Since ${fmtShort(meta.first)}`]].map(([k, l]) => `<div class="kpi"><div class="l">${l}</div>${chg(v.ch?.[k])}</div>`).join("")}</div>
-        ${priceBreak(v, base)}
+        ${priceBreak(v, base)}${ebayRow(ebc, v.p)}
         <div class="btns">${v.dys ? `<a class="btn primary" href="${esc(v.dys.u)}">Buy at Drive Your Style · ${money(v.dys.p)}</a>`
           : `<a class="btn primary" href="mailto:customerservice@driveyourstyle.net?subject=${encodeURIComponent("Request: " + v.n)}&body=${encodeURIComponent(`Hi Drive Your Style,\n\nI'm interested in: ${v.n} (${set.n}).\nMarket price today: ${money(v.p)}\nQuantity: 1\n\nPlease let me know if you can get it.\n\nThanks!`)}">Request from Drive Your Style</a>`}
           <button class="btn" id="addcol" type="button"></button>

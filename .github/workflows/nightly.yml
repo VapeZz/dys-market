@@ -125,6 +125,12 @@ jobs:
           python tools/graded.py site data/graded 2>&1 | tee /tmp/graded.log
           echo "::notice title=Graded::$(tail -n 1 /tmp/graded.log)"
 
+      - name: eBay Buy It Now prices (cache only; ebay.yml refreshes)
+        continue-on-error: true
+        run: |
+          python tools/ebay_prices.py site data/ebay 2>&1 | tee /tmp/ebay.log
+          echo "::notice title=eBay::$(tail -n 1 /tmp/ebay.log)"
+
       - name: Market Intel (brief, indices, signals)
         continue-on-error: true
         run: |
