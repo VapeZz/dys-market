@@ -34,8 +34,10 @@ def token():
 
 
 def search(q, category=CCG_SINGLES, limit=50, filters="buyingOptions:{FIXED_PRICE},deliveryCountry:US,itemLocationCountry:US"):
-    url = f"{API}/buy/browse/v1/item_summary/search?" + urllib.parse.urlencode(
-        {"q": q, "category_ids": category, "limit": limit, "filter": filters, "sort": "price"})
+    params = {"q": q, "limit": limit, "filter": filters, "sort": "price"}
+    if category:
+        params["category_ids"] = category
+    url = f"{API}/buy/browse/v1/item_summary/search?" + urllib.parse.urlencode(params)
     req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token(), "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"})
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.load(r)

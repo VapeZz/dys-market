@@ -1,0 +1,40 @@
+name: eBay store report
+
+# Private health check of the connected eBay store. The report is encrypted to the public key
+# given as input and saved to data/ebay-user/report.enc on the data branch.
+on:
+  workflow_dispatch:
+    inputs:
+      pubkey:
+        description: "RSA public key (DER, base64) to encrypt the report to"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build report
+        env:
+          EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
+          EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+          PUBKEY: ${{ inputs.pubkey }}
+        run: |
+          set -e
+          pip install -q cryptography
+          R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git clone -q --depth 1 --branch data "$R" /tmp/db
+          python tools/ebay_store.py /tmp/db/data/ebay-user /tmp/db/data/ebay-user/report.enc "$PUBKEY"
+          git -C /tmp/db config user.name "dys-market-bot"; git -C /tmp/db config user.email "dys-market-bot@users.noreply.github.com"
+          git -C /tmp/db add data/ebay-user/report.enc && git -C /tmp/db commit -q -m "eBay store report" && git -C /tmp/db push -q origin data
