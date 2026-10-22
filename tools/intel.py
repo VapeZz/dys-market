@@ -111,14 +111,19 @@ def graded_intel(sd):
         g9 = g["psa9"][0] if "psa9" in g else p
         sn = (groups.get(str(gid)) or [""])[0]
         base = {"id": int(pid), "g": gid, "n": n, "sn": sn, "k": game, "p": p, "g10": g10, "g9": g9, "vol": vol10, "sales": n10}
+        if not (1.1 * p <= g10 <= 60 * p):       # a PSA 10 below raw or 60x over it is a mismatched listing, not a real comp
+            continue
         if era == "modern" and n10 >= 8 and vol10 > 0 and g10 <= p * 20:
             cost = min(p, lo or p) + fee
             profit = o10 * g10 + o9 * g9 + (1 - o10 - o9) * p * 0.7 - cost
             if profit > 0:
                 picks.append({**base, "profit": round(profit), "roi": round(profit / cost * 100)})
         avg, p7 = (g["psa10"] + [None, None])[4:6]
-        if avg and p7 and n10 >= 15 and g10 >= 3000:
-            moves.append({**base, "ch": round((p7 - avg) / avg * 100, 1)})
+        # weekly move needs real weekly volume, and a believable size (thin vintage sales swing wildly)
+        if avg and p7 and n10 >= 15 and vol10 >= 0.3 and g10 >= 3000 and 0.5 <= p7 / g10 <= 2 and 0.5 <= avg / g10 <= 2:
+            chg = (p7 - avg) / avg * 100
+            if abs(chg) <= 60:
+                moves.append({**base, "ch": round(chg, 1)})
         if era == "modern":
             idx.append((g10, avg, p7, base))
     picks.sort(key=lambda x: -x["profit"])
@@ -197,9 +202,32 @@ def main(argv):
                 used[c["k"]] = used.get(c["k"], 0) + 1
         return (out + [c for c in lst if c not in out])[:n]
     n_up, n_down = len(sig_up), len(sig_down)
-    sig_up, sig_down = spread(sig_up, 6), spread(sig_down, 4)
-    gainers = sorted((m for m in movers if m["d1"] > 0), key=lambda m: -m["d1"])[:6]
-    losers = sorted((m for m in movers if m["d1"] < 0), key=lambda m: m["d1"])[:6]
+    sig_up, sig_down = spread(sig_up, 16, 4), spread(sig_down, 16, 4)
+    gainers = sorted((m for m in movers if m["d1"] > 0), key=lambda m: -m["d1"])[:10]
+    losers = sorted((m for m in movers if m["d1"] < 0), key=lambda m: m["d1"])[:10]
+
+    # market pulse: how each game's cards ($5+) moved over the last 7 days (falls back to all recorded days)
+    labels = {g["slug"]: g["label"] for g in meta.get("games", [])}
+    pulse, all_up, all_n = [], 0, 0
+    for k in labels:
+        chs = []
+        for st, it in items(lambda s, k=k: s["k"] == k, "c", 500):
+            c = (it.get("ch") or {})
+            v = c.get("7") if c.get("7") is not None else c.get("a")
+            if v is not None:
+                chs.append(v)
+        if len(chs) < 30:
+            continue
+        chs.sort()
+        up = sum(1 for v in chs if v > 1)
+        down = sum(1 for v in chs if v < -1)
+        all_up += up
+        all_n += up + down
+        pulse.append({"k": k, "label": labels[k], "n": len(chs), "med": round(chs[len(chs) // 2], 1),
+                      "up": round(up / len(chs) * 100), "down": round(down / len(chs) * 100)})
+    pulse.sort(key=lambda g: -g["n"])
+    breadth = round(all_up / all_n * 100) if all_n else None
+    mood = None if breadth is None else ("Heating up" if breadth >= 55 else "Cooling off" if breadth <= 45 else "Mixed")
 
     deals = []
     try:
@@ -248,6 +276,7 @@ def main(argv):
         body += f" Best grading pick: {clean_n(p0['n'])} ({p0['sn']}), PSA 10 sells for {p0['g10'] / p0['p']:.1f}x raw."
     out = {"date": today, "brief": {"head": head, "body": body.strip()}, "indices": indices, "graded": graded,
            "signals": {"up": sig_up, "down": sig_down, "n_up": n_up, "n_down": n_down}, "movers": {"up": gainers, "down": losers}, "deals": deals,
+           "pulse": {"games": pulse, "breadth": breadth, "mood": mood},
            "history_days": len(indices[0]["dates"]) if indices else 0}
     with open(os.path.join(sd, "intel.json"), "w", encoding="utf-8") as fh:
         json.dump(out, fh, separators=(",", ":"), ensure_ascii=False)

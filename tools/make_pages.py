@@ -341,25 +341,36 @@ PAGES = {
     <p><b>General:</b> The Sponsor may verify eligibility and disqualify entries that break these rules or use fake accounts. This giveaway is not sponsored, endorsed or administered by The Pokémon Company, Nintendo, Instagram, TikTok, Facebook or YouTube. By entering you agree to these rules.</p>
   </div>
 </section></div>'''),
-"intel": ("Market Intel: daily brief, indices and signals · Drive Your Style", "Daily trading card market brief: Chase 100 and Modern Sealed 100 indices, cards with steady rising or cooling prices, and today's biggest movers for Pokémon, One Piece and more.", '''
+"intel": ("Market Intel: daily brief, indices and signals · Drive Your Style", "Daily trading card market brief: market mood, Chase 100 and Modern Sealed 100 indices, cards with steady rising or cooling prices, today's biggest movers and the best cards to grade for Pokémon, One Piece and more.", '''
 <div class="wrap in-wrap"><section class="block">
-  <span class="in-kicker">TODAY</span><h1 class="in-h">Daily Market Brief</h1>
-  <div class="in-card in-brief" id="in-brief"><div class="skeleton" style="height:90px"></div></div>
-  <h2 class="in-h2">Market Indices</h2>
-  <div class="in-grid" id="in-idx"><div class="skeleton" style="height:160px"></div><div class="skeleton" style="height:160px"></div></div>
-  <span class="in-kicker" style="margin-top:28px">DRIVE YOUR STYLE</span><h2 class="in-h2" style="margin-top:2px">Signals</h2>
+  <span class="in-kicker" id="in-kick">TODAY</span><h1 class="in-h">Market Intel</h1>
+  <div class="in-hero">
+    <div class="in-card in-brief" id="in-brief"><div class="skeleton" style="height:120px"></div></div>
+    <div class="in-card in-mood" id="in-mood"><div class="skeleton" style="height:120px"></div></div>
+  </div>
+  <div class="in-stats" id="in-stats"></div>
+  <nav class="in-nav" id="in-nav" aria-label="Sections">
+    <a href="#s-idx">Indices</a><a href="#s-pulse">By game</a><a href="#s-sig">Signals</a><a href="#s-mov">Movers</a><a href="#s-grade" id="in-nav-grade" hidden>Grading picks</a><a href="#s-psa" id="in-nav-psa" hidden>PSA 10</a>
+  </nav>
+  <h2 class="in-h2" id="s-idx">Market indices</h2>
+  <div class="in-grid in-grid4" id="in-idx"><div class="skeleton" style="height:160px"></div><div class="skeleton" style="height:160px"></div></div>
+  <div id="s-pulse-wrap" hidden><h2 class="in-h2" id="s-pulse">This week by game</h2><p class="muted in-note">Share of cards worth $5+ that rose or fell more than 1% over the last 7 days.</p><div class="in-pulse" id="in-pulse"></div></div>
+  <span class="in-kicker" style="margin-top:28px">DRIVE YOUR STYLE</span><h2 class="in-h2" style="margin-top:2px" id="s-sig">Signals</h2>
   <p class="muted in-note" id="in-sig-note"></p>
+  <div class="in-filter" id="in-sig-games"></div>
   <div class="in-cols"><div><h3 class="in-h3 up">Rising</h3><div class="in-list" id="in-up"></div></div><div><h3 class="in-h3 down">Cooling</h3><div class="in-list" id="in-down"></div></div></div>
-  <h2 class="in-h2">Top movers · 24h</h2>
+  <div class="in-more"><button class="btn" type="button" id="in-sig-more" hidden>Show more signals</button></div>
+  <div class="in-head2"><h2 class="in-h2" id="s-mov">Top movers · 24h</h2><div id="in-mov-tabs"></div></div>
   <div class="in-row" id="in-movers"></div>
   <div id="in-graded" hidden>
-    <span class="in-kicker" style="margin-top:28px">GRADED · REAL SOLD PRICES</span><h2 class="in-h2" style="margin-top:2px">Grading picks</h2>
+    <span class="in-kicker" style="margin-top:28px">GRADED · REAL SOLD PRICES</span><h2 class="in-h2" style="margin-top:2px" id="s-grade">Grading picks</h2>
     <p class="muted in-note">Modern Pokémon cards where a PSA 10 pays off best: raw at the lowest listing + $33 grading and shipping, 30% odds of a 10 and 50% of a 9. <a href="grading.html" style="color:var(--accent)">Set your own numbers →</a></p>
     <div class="in-row" id="in-picks"></div>
-    <div id="in-gmoves-wrap" hidden><h2 class="in-h2">PSA 10 movers</h2><p class="muted in-note">PSA 10 sold price this week vs its 90-day average.</p><div class="in-row" id="in-gmoves"></div></div>
+    <div id="in-gmoves-wrap" hidden><div class="in-head2"><h2 class="in-h2" id="s-psa">PSA 10 movers</h2><div id="in-gm-tabs"></div></div><p class="muted in-note">PSA 10 sold price this week vs its 90-day average, for cards that sell at least a couple of times a week.</p><div class="in-row" id="in-gmoves"></div></div>
   </div>
   <div id="in-deals-wrap" hidden><h2 class="in-h2">Listed under market</h2><div class="in-row" id="in-deals"></div></div>
-  <p class="muted in-foot">How this works: every index is a fixed basket of today's most valuable items, valued each day at its TCGplayer market price. A signal means a card's price moved the same way on most days this week and is at its weekly high (rising) or low (cooling); strength grows with the size and consistency of the move. Built from <span id="in-days">—</span> days of recorded prices and updated nightly. For research only, not financial advice.</p>
+  <div class="in-card in-cta"><div><b>Track your own cards</b><span class="muted">Add your collection and see its value move every day. Free.</span></div><a class="btn primary" href="collection.html">Start my collection →</a></div>
+  <p class="muted in-foot">How this works: every index is a fixed basket of today's most valuable items, valued each day at its TCGplayer market price. A signal means a card's price moved the same way on most days this week and is at its weekly high (rising) or low (cooling); strength grows with the size and consistency of the move. Market mood is the share of cards worth $5+ that rose versus fell this week. Built from <span id="in-days">—</span> days of recorded prices and updated nightly. For research only, not financial advice.</p>
 </section></div>'''),
 "grading": ("Grading Insights: is your card worth grading? · Drive Your Style", "Free grading calculator for Pokémon, One Piece, Lorcana, Yu-Gi-Oh! and more. See the break-even PSA, CGC, BGS or TAG 10 price for every card, set your own grading cost and odds, and compare with real sold prices.", '''
 <div class="wrap"><section class="block">

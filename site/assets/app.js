@@ -702,7 +702,8 @@ async function pageProduct() {
   if (!id || !gid) { location.replace("sets.html"); return; }   // bare product.html (old links, crawlers)
   const [meta, set, graded, eb] = await Promise.all([getJSON("meta.json"), getJSON(`set/${gid}.json`), getJSON("graded.json").catch(() => ({ cards: {} })), getJSON("ebay.json").catch(() => ({ cards: {} }))]);
   const variants = set.items.filter((i) => i.id === id);
-  const gr = variants.length === 1 ? graded.cards?.[id]?.g || null : null;   // graded sales are per product; skip when it has several printings
+  let gr = variants.length === 1 ? graded.cards?.[id]?.g || null : null;   // graded sales are per product; skip when it has several printings
+  if (gr?.psa10 && variants[0].p && !(gr.psa10[0] >= variants[0].p * 1.1 && gr.psa10[0] <= variants[0].p * 60)) gr = null;   // mismatched comp
   const ebc = variants.length === 1 ? eb.cards?.[id] || null : null;
   if (!variants.length) { $("#prod").innerHTML = `<p class="empty-note">We don't have a price for this product yet.</p>`; return; }
   let v = variants[0];
@@ -1755,38 +1756,106 @@ const cleanN = (n) => n.replace(/ \((Holofoil|Normal|Foil)\)$/, "").replace(/ \(
 const gmCard = (m) => `<a class="in-mover" href="${prodUrl(m.id, m.g)}">${imgTag(m.id, "", 200)}<span class="in-name">${esc(cleanN(m.n))}</span><span class="in-set">${esc(m.sn)}</span>
   <span class="in-price ${m.ch >= 0 ? "up" : "down"}">${m.ch >= 0 ? "↑" : "↓"} ${Math.abs(m.ch).toFixed(1)}%</span><span class="in-set">PSA 10 ${money(m.g10)} · ${m.vol >= 1 ? `${m.vol.toFixed(1)}/day` : `${m.sales} sales`}</span></a>`;
 async function pageIntel() {
-  const d = await getJSON("intel.json");
-  const day = new Date(d.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();
-  $("#in-brief").innerHTML = `<div class="in-tag"><span class="in-dot"></span>DRIVE YOUR STYLE DAILY BRIEF · ${day}</div>
-    <h2>${esc(d.brief.head)}</h2><p>${esc(d.brief.body)}</p>`;
+  const [d, meta] = await Promise.all([getJSON("intel.json"), getJSON("meta.json").catch(() => null)]);
+  const day = new Date(d.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  $("#in-kick").textContent = `TODAY · ${day.toUpperCase()}`;
+  $("#in-brief").innerHTML = `<div class="in-tag"><span class="in-dot"></span>DAILY MARKET BRIEF</div>
+    <h2>${esc(d.brief.head)}</h2><p>${esc(d.brief.body)}</p>
+    <div class="in-share"><button class="btn" type="button" id="in-share">Share today's brief</button></div>`;
+  $("#in-share").addEventListener("click", async () => {
+    const data = { title: "Drive Your Style Market Intel", text: d.brief.head, url: location.origin + location.pathname + "?ref=share" };
+    try { if (navigator.share) await navigator.share(data); else { await navigator.clipboard.writeText(`${data.text} ${data.url}`); toast("Link copied"); } } catch {}
+  });
+
+  // market mood gauge: share of $5+ cards rising vs falling this week
+  const pu = d.pulse || {}, br = pu.breadth;
+  if (br != null) {
+    const ang = Math.PI * (1 - br / 100), cx = 110, cy = 104, r = 84;
+    const nx = cx + r * Math.cos(ang), ny = cy - r * Math.sin(ang);
+    const col = br >= 55 ? "var(--up)" : br <= 45 ? "var(--down)" : "#e7b84a";
+    $("#in-mood").innerHTML = `<span class="in-lab">MARKET MOOD · 7 DAYS</span>
+      <svg viewBox="0 0 220 124" class="in-gauge" role="img" aria-label="${br}% of cards rising">
+        <defs><linearGradient id="mg" x1="0" x2="1"><stop offset="0" stop-color="var(--down)"/><stop offset=".5" stop-color="#e7b84a"/><stop offset="1" stop-color="var(--up)"/></linearGradient></defs>
+        <path d="M26 104 A84 84 0 0 1 194 104" fill="none" stroke="url(#mg)" stroke-width="14" stroke-linecap="round" opacity=".9"/>
+        <line x1="${cx}" y1="${cy}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="var(--ink)" stroke-width="4" stroke-linecap="round"/><circle cx="${cx}" cy="${cy}" r="7" fill="var(--ink)"/></svg>
+      <b class="in-mood-l" style="color:${col}">${esc(pu.mood || "")}</b>
+      <span class="muted in-mood-s">${br}% of moving cards rose this week · ${d.signals.n_up} steady risers, ${d.signals.n_down} cooling</span>`;
+  } else $("#in-mood").hidden = true;
+
+  // quick stats
+  const g = d.graded || {}, top = d.movers.up?.[0], pick = g.picks?.[0], ch100 = d.indices.find((i) => i.name === "Chase 100");
+  const stat = (l, v, sub, href) => `<${href ? `a href="${href}"` : "div"} class="in-stat"><span class="in-lab">${l}</span><b>${v}</b><span class="muted">${sub}</span></${href ? "a" : "div"}>`;
+  $("#in-stats").innerHTML = [
+    meta ? stat("TRACKED", (meta.cards + meta.sealed).toLocaleString(), `cards & sealed · ${meta.games.length} games`) : "",
+    ch100 ? stat("CHASE 100", money(ch100.v), `${(ch100.w1 ?? ch100.d1 ?? 0) >= 0 ? "▲" : "▼"} ${Math.abs(ch100.w1 ?? ch100.d1 ?? 0).toFixed(1)}% this week`) : "",
+    top ? stat("TOP GAINER · 24H", `<span class="up">+${top.d1.toFixed(0)}%</span>`, esc(cleanN(top.n)), prodUrl(top.id, top.g)) : "",
+    pick ? stat("BEST TO GRADE", `<span class="up">+${money(pick.profit)}</span>`, esc(cleanN(pick.n)), prodUrl(pick.id, pick.g)) : "",
+  ].join("");
+
+  // sticky section chips: highlight the section in view
+  const navLinks = [...document.querySelectorAll("#in-nav a")];
+  const spy = () => { let cur = navLinks[0]; for (const a of navLinks) { const t = document.querySelector(a.getAttribute("href")); if (t && !a.hidden && t.getBoundingClientRect().top < 160) cur = a; } navLinks.forEach((a) => a.classList.toggle("on", a === cur)); };
+  addEventListener("scroll", spy, { passive: true });
+
   $("#in-idx").innerHTML = d.indices.map((i) => { const ref = i.w1 ?? i.d1 ?? 0;
-    return `<details class="in-card in-index"><summary><span class="in-lab">${esc(i.name.toUpperCase())}</span><b class="in-val">${money(i.v)}</b>${sparkSvg(i.s, ref >= 0)}
-      <span class="in-chips">${i.vs90 ? inChip("7D vs 90D", i.w1) : `${inChip("1D", i.d1)}${inChip("1W", i.w1)}${inChip("1M", i.m1)}`}</span></summary>
+    return `<details class="in-card in-index"><summary><span class="in-lab">${esc(i.name.toUpperCase())}</span><b class="in-val">${money(i.v)}</b>${sparkSvg(i.s, ref >= 0) || `<span class="in-flat muted">Sold-price index</span>`}
+      <span class="in-chips">${i.vs90 ? inChip("7D vs 90D", i.w1) : `${inChip("1D", i.d1)}${inChip("1W", i.w1)}${inChip("1M", i.m1)}`}</span><span class="in-open">What's inside ▾</span></summary>
       <p class="muted in-desc">${esc(i.desc)}. Biggest pieces:</p><ol class="in-top">${i.top.map((t) => `<li><a href="${prodUrl(t.id, t.g)}">${esc(cleanN(t.n))}</a> <b>${money(t.p)}</b></li>`).join("")}</ol></details>`; }).join("");
+
+  // pulse by game
+  if (pu.games?.length) {
+    $("#s-pulse-wrap").hidden = false;
+    $("#in-pulse").innerHTML = pu.games.map((x) => { const flat = Math.max(0, 100 - x.up - x.down);
+      return `<a class="in-card in-game" href="sets.html?game=${esc(x.k)}"><span class="in-lab">${esc(x.label.toUpperCase())}</span>
+        <b class="${x.up > x.down ? "up" : x.down > x.up ? "down" : ""}">${x.up > x.down ? "Rising" : x.down > x.up ? "Cooling" : "Flat"}</b>
+        <span class="in-bar"><i class="u" style="width:${x.up}%"></i><i class="f" style="width:${flat}%"></i><i class="d" style="width:${x.down}%"></i></span>
+        <span class="muted in-game-s"><span class="up">${x.up}% up</span> · <span class="down">${x.down}% down</span> · ${x.n.toLocaleString()} cards</span></a>`; }).join("");
+  }
+
+  // signals with a game filter and "show more"
   const sig = (c, kind) => `<a class="in-card in-pick ${kind}" href="${prodUrl(c.id, c.g)}"><span class="in-img">${imgTag(c.id, "", 200)}</span><span class="in-body">
       <span class="in-lab ${kind}">${kind === "up" ? "RISING" : "COOLING"} · ${c.strength}% STRENGTH</span>
       <b class="in-name">${esc(cleanN(c.n))}</b><span class="in-set">${esc((GAME_LABEL[c.k] || "") + " · " + c.sn)}</span>
       <span class="in-price ${kind}">${money(c.p)} <small>${c.w >= 0 ? "+" : ""}${c.w.toFixed(1)}% this week</small></span>
+      <span class="in-meter"><i style="width:${c.strength}%"></i></span>
       <span class="in-why">${esc(c.why)}</span></span></a>`;
-  $("#in-up").innerHTML = d.signals.up.map((c) => sig(c, "up")).join("") || `<p class="muted">No steady risers today.</p>`;
-  $("#in-down").innerHTML = d.signals.down.map((c) => sig(c, "down")).join("") || `<p class="muted">Nothing cooling off today.</p>`;
-  $("#in-sig-note").textContent = `${d.signals.n_up} rising and ${d.signals.n_down} cooling cards worth $10+ today. Showing the strongest.`;
+  const ORDER = Object.keys(GAME_LABEL);
+  const games = [...new Set([...d.signals.up, ...d.signals.down].map((c) => c.k))].sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
+  let sg = "all", sigN = 4;
+  const drawSig = () => {
+    const f = (l) => l.filter((c) => sg === "all" || c.k === sg);
+    const up = f(d.signals.up), dn = f(d.signals.down);
+    $("#in-up").innerHTML = up.slice(0, sigN).map((c) => sig(c, "up")).join("") || `<p class="muted">No steady risers here today.</p>`;
+    $("#in-down").innerHTML = dn.slice(0, sigN).map((c) => sig(c, "down")).join("") || `<p class="muted">Nothing cooling off here today.</p>`;
+    $("#in-sig-more").hidden = Math.max(up.length, dn.length) <= sigN;
+  };
+  if (games.length > 1) tabs($("#in-sig-games"), [["all", "All games"], ...games.map((k) => [k, GAME_LABEL[k] || k])], sg, (v) => { sg = v; sigN = 4; drawSig(); });
+  $("#in-sig-more").addEventListener("click", () => { sigN += 6; drawSig(); });
+  drawSig();
+  $("#in-sig-note").textContent = `${d.signals.n_up} rising and ${d.signals.n_down} cooling cards worth $10+ today. Strongest first.`;
+
   const mv = (m) => `<a class="in-mover" href="${prodUrl(m.id, m.g)}">${imgTag(m.id, "", 200)}<span class="in-name">${esc(cleanN(m.n))}</span><span class="in-set">${esc(m.sn)}</span>
-      <span class="in-price ${m.d1 >= 0 ? "up" : "down"}">${m.d1 >= 0 ? "↑" : "↓"} ${Math.abs(m.d1).toFixed(1)}%</span><span class="in-set">${money(m.was)} → ${money(m.p)}</span></a>`;
-  $("#in-movers").innerHTML = [...d.movers.up, ...d.movers.down].map(mv).join("");
+      <span class="in-price ${m.d1 >= 0 ? "up" : "down"}">${m.d1 >= 0 ? "↑" : "↓"} ${Math.abs(m.d1).toFixed(1)}%</span><span class="in-set">${money(m.was)} → ${money(m.p)}</span>${STK.has(m.id) ? `<span class="instock-tag">In stock</span>` : ""}</a>`;
+  const drawMov = (k) => { $("#in-movers").innerHTML = (d.movers[k] || []).map(mv).join("") || `<p class="muted">No big moves today.</p>`; };
+  tabs($("#in-mov-tabs"), [["up", "Gainers"], ["down", "Drops"]], "up", drawMov);
+  drawMov("up");
   if (d.deals?.length) { $("#in-deals-wrap").hidden = false;
     $("#in-deals").innerHTML = d.deals.map((x) => `<a class="in-mover" href="${prodUrl(x.id, x.g)}">${imgTag(x.id, "", 200)}<span class="in-name">${esc(cleanN(x.n))}</span><span class="in-set">${esc(x.sn)}</span>
       <span class="in-price up">${money(x.lo)}</span><span class="in-set">${x.off.toFixed(0)}% under ${money(x.p)} market</span></a>`).join(""); }
   $("#in-days").textContent = d.history_days;
-  const g = d.graded || {};
   if (g.picks?.length) {
-    $("#in-graded").hidden = false;
+    $("#in-graded").hidden = false; $("#in-nav-grade").hidden = false;
     $("#in-picks").innerHTML = g.picks.map((x) => `<a class="in-mover" href="${prodUrl(x.id, x.g)}">${imgTag(x.id, "", 200)}<span class="in-lab up">GRADING PICK · ${x.roi}% RETURN</span>
       <span class="in-name">${esc(cleanN(x.n))}</span><span class="in-set">${esc(x.sn)}</span>
       <span class="in-price up">+${money(x.profit)}</span><span class="in-set">Raw ${money(x.p)} · PSA 10 ${money(x.g10)} (${(x.g10 / x.p).toFixed(1)}×)</span></a>`).join("");
-    const gm = [...(g.up || []), ...(g.down || [])];
-    if (gm.length) { $("#in-gmoves-wrap").hidden = false; $("#in-gmoves").innerHTML = gm.map(gmCard).join(""); }
+    if ((g.up || []).length || (g.down || []).length) {
+      $("#in-gmoves-wrap").hidden = false; $("#in-nav-psa").hidden = false;
+      const drawGm = (k) => { $("#in-gmoves").innerHTML = (g[k] || []).map(gmCard).join("") || `<p class="muted">None this week.</p>`; };
+      tabs($("#in-gm-tabs"), [["up", "Rising"], ["down", "Falling"]], "up", drawGm);
+      drawGm("up");
+    }
   }
+  spy();
 }
 
 /* ---------- Grading Insights: which cards are worth grading, with every assumption editable ----------
@@ -1825,7 +1894,9 @@ async function pageGrading() {
       if (p < st.min * 100 || p > st.max * 100 || (st.game !== "all" && game !== st.game) || (st.era !== "all" && era !== st.era)) continue;
       if (q && !(n + " " + setOf(g)).toLowerCase().includes(q)) continue;
       const buy = Math.min(p, lo || p), total = buy + fees;      // you'd buy at the lowest listing today
-      const gc = multi.has(id) ? {} : graded.cards?.[id]?.g || {}, G10 = gc[k10], G9 = gc[k9];
+      let gc = multi.has(id) ? {} : graded.cards?.[id]?.g || {};
+      if (gc.psa10 && !(gc.psa10[0] >= p * 1.1 && gc.psa10[0] <= p * 60)) gc = {};      // mismatched comp
+      const G10 = gc[k10], G9 = gc[k9];
       if (st.only && !G10) continue;
       const nine = G9 ? G9[0] : p * (st.x9 || 1), low = p * 0.7;
       const be10 = o10 > 0 ? Math.max(0, (total - o9 * nine - o8 * low) / o10) : Infinity;
