@@ -128,17 +128,27 @@ def fetch(site, store):
         first_day = days[0]
         open(sp, "w").write(first_day)
     for pid, (p, sealed) in todo:
-        try:
-            d = get(f"/{'sealed-products' if sealed else 'cards'}?tcgPlayerId={pid}&includeHistory=true&days=180", key)
-        except urllib.error.HTTPError as e:
-            if e.code in (401, 402, 403, 429):
-                print(f"::warning title=History::stopped: HTTP {e.code} {e.read()[:160]!r}")
+        d, stop = None, False
+        for attempt in range(4):
+            try:
+                d = get(f"/{'sealed-products' if sealed else 'cards'}?tcgPlayerId={pid}&limit=1&includeHistory=true&days=180", key)
                 break
-            done.add(pid)
-            continue
-        except Exception as e:
-            print(f"history: {pid} failed: {e}")
-            time.sleep(2)
+            except urllib.error.HTTPError as e:
+                body = e.read()[:200]
+                if e.code == 429 and b"inute" in body and attempt < 3:      # per-minute limit: wait for the window
+                    time.sleep(65)
+                    continue
+                if e.code in (401, 402, 403, 429):
+                    print(f"::warning title=History::stopped: HTTP {e.code} {body!r}")
+                    stop = True
+                break
+            except Exception as e:
+                print(f"history: {pid} failed: {e}")
+                time.sleep(2)
+                break
+        if stop:
+            break
+        if d is None:
             continue
         data = d.get("data")
         item = data[0] if isinstance(data, list) and data else data
@@ -165,7 +175,7 @@ def fetch(site, store):
             if day < first_day:                      # only fill days before our own tracking started
                 add.setdefault(day, {})[k] = cents
         got += 1
-        time.sleep(1.05)
+        time.sleep(2.1)
     for day, vals in add.items():
         path = snap_path(snapdir, day)
         try:

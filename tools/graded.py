@@ -23,7 +23,7 @@ GRADES = ["psa10", "psa9", "psa8", "cgc10", "cgc9_5", "cgc9", "bgs10", "bgs9_5",
 
 
 def fetch(pid, key, jp=False):
-    req = urllib.request.Request(f"{API}?tcgPlayerId={pid}&includeEbay=true&days=90{'&language=japanese' if jp else ''}",
+    req = urllib.request.Request(f"{API}?tcgPlayerId={pid}&limit=1&includeEbay=true&days=90{'&language=japanese' if jp else ''}",
                                  headers={"Authorization": "Bearer " + key, "User-Agent": "dys-market"})
     with urllib.request.urlopen(req, timeout=60) as r:
         return json.load(r).get("data")
