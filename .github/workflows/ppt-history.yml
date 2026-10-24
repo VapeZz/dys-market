@@ -1,9 +1,7 @@
 name: Pokémon price history backfill
 
 on:
-  schedule:
-    - cron: "10 8,16 * * *"     # two batches a day until done (then each run is a no-op)
-  workflow_dispatch:
+  workflow_dispatch:            # one-time backfill, finished Oct 24 2026
     inputs:
       mode:
         description: "probe | fetch | merge"
