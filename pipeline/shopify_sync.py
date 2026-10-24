@@ -26,9 +26,21 @@ SKU_PREFIX = "TCGP-"
 # Safety net. A price is HELD (left as is) instead of changed when:
 #  - market dropped more than MAX_DROP since the current price (one night), or
 #  - market jumped more than MAX_RISE (usually bad data).
-# Prices also never go below the item's "Cost per item" in Shopify.
+# Prices also never go below a profit floor: "Cost per item" in Shopify plus MIN_MARGIN,
+# plus card processing fees (2.9% + 30c), rounded up to .99. Items without a cost use market.
 MAX_DROP = float(os.environ.get("SYNC_MAX_DROP", "0.15"))
 MAX_RISE = float(os.environ.get("SYNC_MAX_RISE", "0.50"))
+
+MIN_MARGIN = float(os.environ.get("SYNC_MIN_MARGIN", "0.08"))     # keep at least 8% over cost after fees
+
+
+def floor_price(cost):
+    """Lowest price that keeps MIN_MARGIN over cost after 2.9% + 30c card fees, rounded up to .99."""
+    raw = (cost * (1 + MIN_MARGIN) + 30) / (1 - 0.029)
+    dollars = int(raw // 100)
+    p = dollars * 100 + 99
+    return p if p >= raw else p + 100
+
 
 PRINTING_CODES = {"Normal": "", "Holofoil": "H", "Reverse Holofoil": "RH"}
 
@@ -57,8 +69,8 @@ def market_cents(latest, pid, code):
 def decide(have, market, cost=None):
     """Return (new_price_cents or None, note). None means leave the price alone."""
     target, note = market, ""
-    if cost and target < cost:
-        target, note = cost, "at your cost (market is lower)"
+    if cost and target < floor_price(cost):
+        target, note = floor_price(cost), "at your profit floor (market is lower)"
     if target == have:
         return None, "unchanged"
     if have > 0:
@@ -124,11 +136,11 @@ def main(argv):
                 held.append({"t": v["product"]["title"], "pid": v["product"]["id"].rsplit("/", 1)[-1],
                              "have": have, "mkt": market, "why": note.split(": ", 1)[-1]})
             continue
-        floored += note.startswith("at your cost")
+        floored += note.startswith("at your profit floor")
         by_product.setdefault(v["product"]["id"], []).append({"id": v["id"], "price": f"{new / 100:.2f}"})
 
     changed = sum(len(x) for x in by_product.values())
-    print(f"sync: {len(variants)} synced variants, {changed} updated ({floored} kept at cost), {unchanged} unchanged, "
+    print(f"sync: {len(variants)} synced variants, {changed} updated ({floored} at the profit floor), {unchanged} unchanged, "
           f"{len(missing)} without a market price, {len(skipped)} held by the safety net")
     for s in skipped:
         print("  held:", s)
