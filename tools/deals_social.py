@@ -134,7 +134,7 @@ def main(argv):
             "slides": [f"{base}/slide-{n}.jpg" for n in range(1, len(slides) + 1)],
             "slides_tiktok": [f"{base}/tt-{n}.jpg" for n in range(1, len(tt) + 1)],
             "short": f"{base}/short.mp4" if video else None,
-            "short_title": f"In stock & under market this week 🔥 {top['name']}"[:90] + " #shorts"}
+            "short_title": f"{top['name'][:45]} for {top['off'] * 100:.0f}% UNDER market price 🔥 Is it a steal? #pokemon"}
     json.dump(post, open(os.path.join(out, "post.json"), "w"), indent=1, ensure_ascii=False)
     json.dump(post, open(os.path.join(out_root, "latest.json"), "w"), ensure_ascii=False)
     history = [h for h in history if h["date"] != today.isoformat()] + [{"date": today.isoformat(), "sig": sig}]

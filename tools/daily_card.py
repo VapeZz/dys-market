@@ -149,6 +149,19 @@ def render(site_data, c, period, game, out, offline=False):
 SIDEWAYS = re.compile(r"\bBREAK\b|\bLEGEND\b|jumbo|oversize", re.I)   # landscape cards don't fit the portrait slides
 
 
+def yt_title(short, c, period, tag):
+    """YouTube Shorts title: curiosity hook + question (vidIQ scored this pattern 90 vs 82 for the plain one)."""
+    when = "in ONE week" if period == "this week" else "lately"
+    for name in (short, short[:40].rsplit(" ", 1)[0]):
+        if c["pct"] is not None:
+            t = f"{name} jumped {c['pct']:.0f}% {when} 📈 Is it worth buying now? {tag}"
+        else:
+            t = f"{name} is the chase card of {c['set']} 🔥 Is it worth {money(c['now'])}? {tag}"
+        if len(t) <= 100:
+            return t
+    return t[:100]
+
+
 def main(argv):
     site_data, out_root = argv[0], argv[1]
     today = date.fromisoformat(argv[argv.index("--date") + 1]) if "--date" in argv else date.today()
@@ -206,7 +219,7 @@ def main(argv):
     post = {"date": today.isoformat(), "game": game, "card": c, "caption": caption,
             "slides": [f"{web}/{today.isoformat()}/slide-{n}.jpg" for n in range(1, 4)],
             "short": f"{web}/{today.isoformat()}/short.mp4" if video else None,
-            "short_title": f"{hook} {first_tag} #shorts"[:100],
+            "short_title": yt_title(short, c, period, first_tag),
             "title": f"{label} card of the day 📈"}
     json.dump(post, open(os.path.join(out, "post.json"), "w"), indent=1, ensure_ascii=False)
     json.dump(post, open(os.path.join(out_root, "latest.json"), "w"), indent=1, ensure_ascii=False)

@@ -172,7 +172,7 @@ def main(argv):
     post = {"date": today.isoformat(), "span": span, "caption": caption, "caption_tiktok": caption_tt,
             "slides_tiktok": [f"{SITE}/social-sneakers/{today.isoformat()}/tt-{i}.jpg" for i in range(1, len(tt) + 1)],
             "short": f"{SITE}/social-sneakers/{today.isoformat()}/short.mp4" if video else None,
-            "short_title": f"Sneaker drops this week 👟 {span} #sneakers #shorts"[:100],
+            "short_title": f"Biggest sneaker drops this week 👟 {hot['n']} — cop or drop? #sneakers"[:100],
             "drops": [{k: r.get(k) for k in ("d", "n", "c", "r", "h")} for r in feat],
             "slides": [f"{SITE}/social-sneakers/{today.isoformat()}/slide-{i}.jpg" for i in range(1, len(slides) + 1)]}
     json.dump(post, open(os.path.join(out, "post.json"), "w"), indent=1, ensure_ascii=False)

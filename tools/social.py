@@ -196,7 +196,7 @@ def main(argv):
             "slides": [f"{SITE}/social/{today.isoformat()}/slide-{i}.jpg" for i in range(1, len(slides) + 1)],
             "slides_tiktok": [f"{SITE}/social/{today.isoformat()}/tt-{i}.jpg" for i in range(1, len(tt) + 1)],
             "short": f"{SITE}/social/{today.isoformat()}/short.mp4" if video else None,
-            "short_title": f"Trending Pokémon cards this week 📈 #1 is up {top['pct']:.0f}% #pokemon #shorts"}
+            "short_title": f"These Pokémon cards jumped up to {top['pct']:.0f}% in ONE week 📈 Is #1 worth buying now? #pokemon"}
     json.dump(post, open(os.path.join(out, "post.json"), "w"), indent=1, ensure_ascii=False)
     json.dump(post, open(os.path.join(out_root, "latest.json"), "w"), indent=1, ensure_ascii=False)
     # keep the last 8 weeks
