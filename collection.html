@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Collection · Drive Your Style Market Insights</title>
+<meta name="description" content="Track your Pokémon, One Piece, Lorcana, Riftbound, Gundam, Union Arena, Yu-Gi-Oh!, Dragon Ball and Palworld card collection with live market values.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Drive Your Style Market Insights">
+<meta property="og:title" content="My Collection · Drive Your Style Market Insights">
+<meta property="og:description" content="Track your Pokémon, One Piece, Lorcana, Riftbound, Gundam, Union Arena, Yu-Gi-Oh!, Dragon Ball and Palworld card collection with live market values.">
+<meta property="og:image" content="https://market.driveyourstyle.net/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="My Collection · Drive Your Style Market Insights">
+<meta name="twitter:description" content="Track your Pokémon, One Piece, Lorcana, Riftbound, Gundam, Union Arena, Yu-Gi-Oh!, Dragon Ball and Palworld card collection with live market values.">
+<meta name="twitter:image" content="https://market.driveyourstyle.net/assets/og.png">
+<link rel="canonical" href="https://market.driveyourstyle.net/collection.html">
+<meta name="theme-color" content="#0b0d14">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=40143253877">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="DYS Market">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<script data-goatcounter="https://driveyourstyle.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("dys-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
+</head>
+<body data-page="collection">
+<header id="top"></header>
+<main>
+
+<div class="wrap"><section class="block">
+  <div class="block-head"><div><span class="eyebrow"><b>●</b> Members</span><h1 id="title" style="font-size:36px;margin-top:8px">My collection</h1>
+    <p id="shared-note" class="muted" hidden>A collection shared from Drive Your Style. <a href="collection.html" style="color:var(--accent)">Start your own →</a></p></div></div>
+  <div id="acct" class="panel acct-bar" hidden></div>
+  <div id="prof" class="panel prof-panel" hidden></div>
+  <div id="offers" class="panel prof-panel" hidden></div>
+  <div id="giveaway" class="panel prof-panel gw-panel" hidden></div>
+  <div id="mine">
+    <div class="search" id="add-box" style="max-width:640px"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="add-q" type="search" placeholder="Search a card or product to add" aria-label="Search a card or product to add" autocomplete="off"><div class="results" id="add-results"></div></div>
+    <p class="muted" id="added" style="min-height:20px;font-size:14px;margin:8px 0 0" role="status"></p>
+  </div>
+  <div class="stats" id="stats" style="margin:18px 0"></div>
+  <div class="panel sell-cta" id="sell-cta" hidden><div><b>Thinking of selling?</b><span>Get a cash or store-credit offer from Drive Your Style for your whole collection.</span></div><button class="btn primary" id="sell-col" type="button">💵 Get an offer</button></div>
+  <div class="chart-card" id="cchart-wrap" hidden style="margin-bottom:18px"><div class="chart-head"><b>Collection value</b><div id="crange"></div></div><div class="chart" id="cchart"></div>
+    <p class="muted" style="font-size:12px;margin:6px 0 4px">Your current quantities at each day's market price.</p></div>
+  <div id="csets" style="margin-bottom:18px"></div>
+  <div class="ctools"><input class="field" id="cq" type="search" placeholder="Search your collection" aria-label="Search your collection">
+    <select class="select" id="cbinder" aria-label="Binder" hidden></select>
+    <select class="select" id="csort" aria-label="Sort"><option value="value">Value</option><option value="recent">Recently added</option><option value="name">Name</option><option value="set">Set</option></select>
+    <label class="toggle"><input type="checkbox" id="cgroup"> Group by set</label><div id="cview"></div></div>
+  <div id="list"><div class="skeleton" style="height:200px"></div></div>
+  <div id="tools" class="panel" style="margin-top:18px;padding:14px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+    <label class="muted" style="font-size:14px;flex:1;min-width:200px">Collection name <input class="field" id="name" maxlength="60" placeholder="e.g. Keo's binder" style="width:100%;margin-top:4px"></label>
+    <button class="btn primary" id="share" type="button">Share</button>
+    <button class="btn" id="backup" type="button">Back up</button>
+    <label class="btn" style="cursor:pointer">Restore<input id="restore" type="file" accept="application/json,.json" hidden></label>
+  </div>
+  <p class="muted" style="font-size:13px;margin-top:10px">Your collection saves on this device. Use <b>Back up</b> to keep a copy or move it to another phone. Tap the camera on any item to use your own photo; photos stay on this phone. Raw cards use the nightly TCGplayer market price (Near Mint). For a slab, pick its grade under the card and enter what it's worth; the eBay sold link shows recent sales for that grade. Values aren't an offer to buy.</p>
+</section></div>
+</main>
+<footer id="foot"></footer>
+<script src="assets/app.js?v=40143253877"></script>
+</body>
+</html>
