@@ -1,0 +1,35 @@
+name: eBay listing edits
+
+on:
+  workflow_dispatch:
+    inputs:
+      file:
+        description: "Edit file in tools/ebay-edits/"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  revise:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Apply edits
+        env:
+          EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
+          EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+        run: |
+          set -e
+          pip install -q cryptography
+          R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git clone -q --depth 1 --branch data "$R" /tmp/db
+          cd tools && python ebay_revise.py /tmp/db/data/ebay-user "ebay-edits/${{ inputs.file }}"
