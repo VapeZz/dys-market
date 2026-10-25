@@ -34,6 +34,10 @@ on:
         description: "Publish this week's Market Report blog post now (runs automatically on Sundays)"
         type: boolean
         default: false
+      howto:
+        description: "Make a How-to tool post now (runs automatically on Tuesdays and Fridays)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -185,6 +189,17 @@ jobs:
           if [ $rc -ne 0 ]; then echo "::error title=Deals carousel::$(tail -c 600 /tmp/deals.log | tr '\n' ' ')"; exit 1; fi
           echo "::notice title=Deals carousel::$(tail -n 1 /tmp/deals.log)"
 
+      - name: How-to tool post (Tuesdays and Fridays)
+        continue-on-error: true
+        run: |
+          if [ "${{ inputs.howto }}" != "true" ] && [ "$(date -u +%u)" != "2" ] && [ "$(date -u +%u)" != "5" ]; then echo "Not Tue/Fri; skipping"; exit 0; fi
+          set +e
+          python -c "import playwright" 2>/dev/null || { pip install -q playwright==1.56.0 && python -m playwright install --with-deps chromium; }; pip install -q imageio-ffmpeg numpy pillow > /tmp/howto.log 2>&1
+          python tools/howto_social.py site data/social-howto --date "$(date -u +%F)" > /tmp/howto.log 2>&1; rc=$?
+          cat /tmp/howto.log
+          if [ $rc -ne 0 ]; then echo "::error title=How-to post::$(tail -c 600 /tmp/howto.log | tr '\n' ' ')"; exit 1; fi
+          echo "::notice title=How-to post::$(tail -n 1 /tmp/howto.log)"
+
       - name: Card of the Day (TikTok, daily)
         continue-on-error: true
         run: |
@@ -230,6 +245,7 @@ jobs:
           if [ -d data/social-daily-other ]; then mkdir -p site/social-daily-other && cp -r data/social-daily-other/. site/social-daily-other/; fi
           if [ -d data/intel-daily ]; then mkdir -p site/intel-daily && cp -r data/intel-daily/. site/intel-daily/; fi
           if [ -d data/social-deals ]; then mkdir -p site/social-deals && cp -r data/social-deals/. site/social-deals/; fi
+          if [ -d data/social-howto ]; then mkdir -p site/social-howto && cp -r data/social-howto/. site/social-howto/; fi
 
       - name: Sync Shopify prices to market
         continue-on-error: true
