@@ -71,6 +71,17 @@ BOXKEY = re.compile(r"^[A-Za-z0-9_-]{20,64}$")
 OID = re.compile(r"^[A-Za-z0-9_-]{6,40}$")
 
 
+def num_id(v):
+    """A customer-supplied card/set id, kept only if it is a plain number (it ends up in public pages)."""
+    return int(v) if re.fullmatch(r"\d{1,12}", str(v if v is not None else "")) else None
+
+
+def grade_txt(v):
+    """A customer-supplied grade label, reduced to letters, digits, spaces and . - +"""
+    t = re.sub(r"[^A-Za-z0-9 .+\-]", "", str(v or ""))[:30].strip()
+    return t or None
+
+
 def _ev(e, by):
     """One sanitized step of an offer thread, or None."""
     if not isinstance(e, dict) or e.get("act") not in ACTS:
@@ -146,7 +157,7 @@ def write_offers(binders, data):
             h = thread(o.get("h"), resp if isinstance(resp, list) else [])
             if not h:
                 continue
-            card = {"id": o.get("cid"), "g": o.get("g"), "n": str(o.get("n") or "")[:120], "gr": str(o.get("gr") or "")[:30] or None}
+            card = {"id": num_id(o.get("cid")), "g": num_id(o.get("g")), "n": str(o.get("n") or "")[:120], "gr": grade_txt(o.get("gr"))}
             inbox.setdefault(o["to"], []).append({"id": o["id"], "card": card, "h": h})
             rows.append({"id": o["id"], "to": o["to"], "alias": (cb.get("alias") or "")[:20], "cust": cgid.rsplit("/", 1)[-1], "card": card, "h": h})
             n += 1
@@ -192,7 +203,7 @@ def write_demand(binders, data, rows):
             if k in seen:
                 continue
             seen.add(k)
-            a = agg.setdefault(k, {"id": iid, "g": w.get("g"), "n": (w.get("n") or "")[:120], "c": 0, "maxes": []})
+            a = agg.setdefault(k, {"id": iid, "g": num_id(w.get("g")), "n": (w.get("n") or "")[:120], "c": 0, "maxes": []})
             a["c"] += 1
             if isinstance(w.get("max"), (int, float)) and w["max"] > 0:
                 a["maxes"].append(int(w["max"]))
@@ -269,14 +280,14 @@ def main(argv):
                 iid, qty = int(it["id"]), max(1, int(it.get("qty") or 1))
             except (KeyError, TypeError, ValueError):
                 continue
-            gr = str(it["gr"])[:30] if it.get("gr") else None
+            gr = grade_txt(it.get("gr"))
             gv = it.get("gv") if gr and isinstance(it.get("gv"), (int, float)) else None
             mkt = price.get(f"{iid}|{code_of(sub_of(it.get('n') or ''))}")
             each = gv if gv is not None else mkt
             value += (each or 0) * qty
             if kind.get(iid) == "c":
                 cards += qty
-            row = {"id": iid, "g": it.get("g"), "n": (it.get("n") or "")[:120], "qty": qty}
+            row = {"id": iid, "g": num_id(it.get("g")), "n": (it.get("n") or "")[:120], "qty": qty}
             if gr:
                 row["gr"], row["gv"] = gr, gv
             items.append((each or 0, row))
