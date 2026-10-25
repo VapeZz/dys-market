@@ -27,9 +27,11 @@ jobs:
         env:
           EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
           EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+          EDIT_FILE: ${{ inputs.file }}
         run: |
           set -e
           pip install -q cryptography
           R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
           git clone -q --depth 1 --branch data "$R" /tmp/db
-          cd tools && python ebay_revise.py /tmp/db/data/ebay-user "ebay-edits/${{ inputs.file }}"
+          case "$EDIT_FILE" in *..*|/*|*[!A-Za-z0-9._/-]*) echo "::error::bad file name"; exit 1;; esac
+          cd tools && python ebay_revise.py /tmp/db/data/ebay-user "ebay-edits/$EDIT_FILE"

@@ -7,6 +7,16 @@ const PAGE = document.body.dataset.page;
 const GIVEAWAY_ON = false;
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+/* Untrusted card rows (shared #c= links, public binders, want lists) are reduced to safe values before they reach any HTML. */
+const safeId = (v) => (/^\d{1,12}$/.test(String(v ?? "")) ? Number(v) : null);   // ids stay numbers, like the site data
+const safeTok = (v, n = 40) => String(v ?? "").replace(/[^A-Za-z0-9 ._+\-]/g, "").slice(0, n);
+const cleanItem = (it) => {
+  const out = { ...it, id: safeId(it.id), g: safeId(it.g), qty: Math.min(9999, Math.max(1, parseInt(it.qty, 10) || 1)) };
+  if (it.code != null) out.code = safeTok(it.code, 12);
+  if (it.gr) { out.gr = safeTok(it.gr, 30); out.gv = Number.isFinite(Number(it.gv)) && it.gv !== null && it.gv !== "" ? Number(it.gv) : null; }
+  else { delete out.gr; delete out.gv; }
+  return out;
+};
 const params = new URLSearchParams(location.search);
 const cache = {};
 const getJSON = (path) => (cache[path] ||= fetch(`data/${path}`, { cache: "no-cache" }).then((r) => {
@@ -26,12 +36,12 @@ const chg = (p) => {
   const arrow = p > 0 ? "▲" : p < 0 ? "▼" : "";
   return `<span class="chg ${cls}">${arrow} ${Math.abs(p).toFixed(1)}%</span>`;
 };
-const img = (id, size = 200) => `https://tcgplayer-cdn.tcgplayer.com/product/${id}_${size === 1000 ? "in_1000x1000" : size + "w"}.jpg`;
+const img = (id, size = 200) => `https://tcgplayer-cdn.tcgplayer.com/product/${encodeURIComponent(id)}_${size === 1000 ? "in_1000x1000" : size + "w"}.jpg`;
 const NOIMG = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 350"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2a2f45"/><stop offset="1" stop-color="#151827"/></linearGradient></defs><rect x="4" y="4" width="242" height="342" rx="16" fill="url(#g)" stroke="#3a4060" stroke-width="3"/><circle cx="125" cy="150" r="38" fill="none" stroke="#6b7395" stroke-width="6"/><path d="M87 150h76" stroke="#6b7395" stroke-width="6"/><circle cx="125" cy="150" r="11" fill="#151827" stroke="#6b7395" stroke-width="6"/><text x="125" y="240" fill="#8b93b5" font-family="Arial,sans-serif" font-size="20" text-anchor="middle">No image yet</text></svg>');
 window.dysImg = (el) => { if (el.dataset.alt && !el.dataset.tried) { el.dataset.tried = "1"; el.src = el.dataset.alt; } else { el.onerror = null; el.src = NOIMG; } };
 const imgTag = (id, cls = "thumb", size = 200, alt = "") =>
   `<img class="${cls}" src="${img(id, size)}"${alt ? ` data-alt="${esc(alt)}"` : ""} alt="" loading="lazy" onerror="dysImg(this)">`;
-const prodUrl = (id, gid) => `product.html?id=${id}&set=${gid}`;
+const prodUrl = (id, gid) => `product.html?id=${encodeURIComponent(id ?? "")}&set=${encodeURIComponent(gid ?? "")}`;
 const fmtDate = (d) => d ? new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
 const below = (ours, mkt) => ours != null && mkt != null && ours < mkt;
 const BELOW = `<span class="badge deal">Below market</span>`;
@@ -328,7 +338,7 @@ async function pageIndex() {
   moversPanel($("#card-movers"), { kind: "cards", meta, limit: 5 });
   moversPanel($("#sealed-movers"), { kind: "sealed", meta, limit: 5 });
   getJSON("wanted.json").then((w) => {
-    const top = (w.top || []).slice(0, 12); if (!top.length) return;
+    const top = (w.top || []).map((i) => ({ ...i, id: safeId(i.id), g: safeId(i.g), c: Math.max(0, parseInt(i.c, 10) || 0) })).filter((i) => i.id).slice(0, 12); if (!top.length) return;
     $("#wanted-block").hidden = false;
     $("#wanted").innerHTML = top.map((i) => `<a class="scard" href="${prodUrl(i.id, i.g)}"><span class="si">${imgTag(i.id, "", 1000)}<span class="badge want">♥ ${i.c} want${i.c > 1 ? "" : "s"} this</span></span>
       <span class="t">${esc(i.n)}</span><span class="pp"><b>${money(i.m)}</b>${i.st ? `<span class="muted">In stock</span>` : ""}</span></a>`).join("");
@@ -1977,7 +1987,7 @@ async function pageCollection() {
   let col = colGet(), prof = null, tallied = 0, ownerView = false;
   if (viewPid) {
     [prof, tallied] = await Promise.all([getJSON(`showcase/${viewPid}.json`).catch(() => null), getJSON("showcase.json").then((d) => d.updated).catch(() => 0)]);
-    col = prof ? { name: prof.bn || "", items: prof.items } : { name: "", items: [] };
+    col = prof ? { name: prof.bn || "", items: (prof.items || []).map(cleanItem).filter((i) => i.id) } : { name: "", items: [] };
     $("#mine").hidden = true; $("#tools").hidden = true;
     document.title = prof ? `${prof.a} · Collectors · Drive Your Style` : "Collector not found · Drive Your Style";
     $("#shared-note").hidden = false;
@@ -1987,7 +1997,7 @@ async function pageCollection() {
     if (prof) socialButtons($("#prof-soc"), prof, tallied);
     ownerView = !!prof && await isOwner();
   } else if (shared) {
-    try { const d = b64d(location.hash.slice(3)); col = { name: d.n || "", items: (d.i || []).map(([id, g, qty, code, gr, gv]) => ({ id, g, qty, code, ...(gr ? { gr, gv: gv ?? null } : {}) })) }; }
+    try { const d = b64d(location.hash.slice(3)); col = { name: d.n || "", items: (Array.isArray(d.i) ? d.i : []).filter(Array.isArray).slice(0, 5000).map(([id, g, qty, code, gr, gv]) => cleanItem({ id, g, qty, code, ...(gr ? { gr, gv: gv ?? null } : {}) })).filter((i) => i.id) }; }
     catch { col = { name: "", items: [] }; }
     $("#mine").hidden = true; $("#shared-note").hidden = false;
   }
@@ -2052,7 +2062,7 @@ async function pageCollection() {
     for (const i of all) { const b = bySet.get(i.g) || { cards: new Set(), value: 0 }; if (i.t === "c") b.cards.add(i.id); b.value += (i.mkt || 0) * i.qty; bySet.set(i.g, b); }
     const sets = [...bySet].map(([g, b]) => ({ g, have: b.cards.size, total: setCards[g] || 0, value: b.value })).filter((x) => x.have).sort((a, b) => b.have / (b.total || 1) - a.have / (a.total || 1));
     $("#csets").innerHTML = sets.length ? `<h2 style="font-size:20px;margin:0 0 10px">Set progress</h2><div class="cset-list">${sets.map((x) => { const p = x.total ? Math.round(x.have / x.total * 100) : 0;
-      return `<a class="cset" href="set.html?id=${x.g}"><span class="cset-top"><b>${esc(setName(x.g))}</b><span>${x.have}/${x.total || "?"} · ${p}%</span></span><span class="bar"><i style="width:${Math.max(2, p)}%"></i></span><span class="muted" style="font-size:12px">${money(x.value)} in this set</span></a>`; }).join("")}</div>` : "";
+      return `<a class="cset" href="set.html?id=${encodeURIComponent(x.g)}"><span class="cset-top"><b>${esc(setName(x.g))}</b><span>${x.have}/${x.total || "?"} · ${p}%</span></span><span class="bar"><i style="width:${Math.max(2, p)}%"></i></span><span class="muted" style="font-size:12px">${money(x.value)} in this set</span></a>`; }).join("")}</div>` : "";
     const paidItems = items.filter((i) => i.paid != null);
     const paid = paidItems.reduce((a, i) => a + i.paid * i.qty, 0);
     const paidValue = paidItems.reduce((a, i) => a + (i.mkt || 0) * i.qty, 0);
@@ -2077,7 +2087,7 @@ async function pageCollection() {
           ${shared || i.t === "s" ? "" : `<div class="grade-row"><select class="select grade-sel" data-grade="${esc(keyOf(i))}" aria-label="Raw or graded">${gradeOpts(i.gr || "")}</select>
             ${i.gr ? `<label class="gv">Value each $<input class="field" type="number" min="0" step="0.01" inputmode="decimal" placeholder="${i.raw != null ? (i.raw / 100).toFixed(2) : "0.00"}" value="${i.gv != null ? (i.gv / 100).toFixed(2) : ""}" data-gv="${esc(keyOf(i))}" aria-label="Value of your ${esc(i.gr)}"></label>
             <a class="sold-link" href="${esc(soldUrl(i.name, i.gr))}" target="_blank" rel="noopener">eBay sold ${esc(i.gr === "Other slab" ? "graded" : i.gr)} →</a>` : ""}</div>`}</td>
-        <td class="num">${shared ? i.qty : `<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><input class="field" type="number" min="1" max="9999" value="${i.qty}" data-qty="${esc(keyOf(i))}" aria-label="Quantity" style="width:72px"><input class="field" type="number" min="0" step="0.01" placeholder="paid $" value="${i.paid != null ? (i.paid / 100).toFixed(2) : ""}" data-paid="${esc(keyOf(i))}" aria-label="Paid each" style="width:72px"></div>`}</td>
+        <td class="num">${shared ? esc(i.qty) : `<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><input class="field" type="number" min="1" max="9999" value="${i.qty}" data-qty="${esc(keyOf(i))}" aria-label="Quantity" style="width:72px"><input class="field" type="number" min="0" step="0.01" placeholder="paid $" value="${i.paid != null ? (i.paid / 100).toFixed(2) : ""}" data-paid="${esc(keyOf(i))}" aria-label="Paid each" style="width:72px"></div>`}</td>
         <td class="num">${money(i.mkt)}${i.gr ? `<span class="muted mkt-note">${i.est ? "raw price · set value" : "your value"}</span>` : ""}</td>
         <td class="num"><b>${money(i.mkt == null ? null : i.mkt * i.qty)}</b></td>
         <td class="num hide-sm">${chg(bestCh(i.ch))}</td>

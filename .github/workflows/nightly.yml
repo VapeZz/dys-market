@@ -78,14 +78,18 @@ jobs:
 
       - name: Backfill past prices for new games
         if: ${{ inputs.merge_games != '' }}
+        env:
+          MERGE_GAMES: ${{ inputs.merge_games }}
         run: |
           which 7z || sudo apt-get install -y p7zip-full
-          python pipeline/backfill.py --merge "${{ inputs.merge_games }}"
+          python pipeline/backfill.py --merge "$MERGE_GAMES"
 
       - name: Past prices for new games from our price archive
         if: ${{ inputs.merge_archive != '' }}
         continue-on-error: true
-        run: python pipeline/merge_archive.py "${{ inputs.merge_archive }}"
+        env:
+          MERGE_ARCHIVE: ${{ inputs.merge_archive }}
+        run: python pipeline/merge_archive.py "$MERGE_ARCHIVE"
 
       - name: Download today's prices and build site data
         env:
