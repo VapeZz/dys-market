@@ -27,7 +27,7 @@ def main(a):
             items = rows[k * 4:(k + 1) * 4]
             if not items: break
             cards = "".join(f'<div class="it"><div class="im"><img src="{img(r["id"], 400)}"></div><div class="n">{esc(re.sub(r" [(](Holofoil|Normal)[)]$", "", r["n"]))}</div>'
-                            f'<div class="p">{money(r["p"])}</div><div class="m">{"<span class=u>Under market</span>" if r.get("m") and r["p"] < r["m"] else ("Market " + money(r["m"]) if r.get("m") else "")}</div></div>' for r in items)
+                            f'<div class="p">{money(r["p"])}</div><div class="m">{"<span class=u>Under market</span>" if r.get("m") and r["p"] < r["m"] else "Ships from Las Vegas"}</div></div>' for r in items)
             head = "In stock<br><span class='holo'>now</span>" if k == 0 else f"More in<br><span class='holo'>stock</span>"
             html = f"<html><head><meta charset=utf-8><style>{FONT_CSS}{CSS}</style></head><body><img class='logo' src='file://{LOGO}'><h1>{head}</h1><div class='grid'>{cards}</div><div class='box'>Shop: driveyourstyle.net</div></body></html>"
             f = os.path.abspath(f"{out}/_s.html"); open(f, "w").write(html)
