@@ -229,8 +229,9 @@
       for (let b = 0; b < 32; b++) dist += POP[P.h[o + b] ^ fp[b]];
       if (top.length < 8 || dist < top[top.length - 1][1]) { top.push([P.ids[i], dist]); top.sort((a, b) => a[1] - b[1]); if (top.length > 8) top.pop(); }
     }
-    const list = top.map(([id, dist]) => ({ r: rowById.get(id), s: 2 - dist / 128, d: dist })).filter((x) => x.r);
-    const d1 = list[0]?.d ?? 256, d2 = list[1]?.d ?? 256;
+    // keep the best match and only real look-alikes of it (stamped promos, reprints with the same art)
+    const list = top.map(([id, dist]) => ({ r: rowById.get(id), s: 2 - dist / 128, d: dist })).filter((x, i, a) => x.r && x.d <= a[0].d + 22);
+    const d1 = top[0]?.[1] ?? 256, d2 = top[1]?.[1] ?? 256;
     return { list, d1, d2, sure: d1 <= SURE_D && d2 - d1 >= SURE_GAP };
   }
   const SURE_D = 78, SURE_GAP = 14;
@@ -303,15 +304,17 @@
     // live: keep matching what's in the frame and stop by itself once the same card shows up twice in a row
     const hint = (t) => { const el = box.querySelector(".scan-frame span"); if (el) el.textContent = t; };
     async function auto() {
-      let last = null, tries = 0;
+      let last = null, tries = 0, same = 0;
       while (cam.live()) {
         await new Promise((r) => setTimeout(r, 300));
         const c = cam.live() && cam.grab();
         if (!c) continue;
         const res = await scanFile(c, { status: () => {} }, true).catch(() => null);
         if (!cam.live() || !res) continue;
-        const id = res.sure ? res.list[0].r[0] : null;
-        if (id && id === last) { const url = c.toDataURL("image/jpeg", 0.7); cam.stop(); return show0(res, url); }
+        // same card twice in a row = done; a close look-alike pair (stamped promos, reprints) settles after a few frames
+        const top = res.list[0], id = top && top.d <= SURE_D ? top.r[0] : null;
+        same = id && id === last ? same + 1 : 1;
+        if (id && ((res.sure && same >= 2) || same >= 4)) { const url = c.toDataURL("image/jpeg", 0.7); cam.stop(); return show0(res, url); }
         last = id; tries++;
         hint(id ? "Got it… hold still" : tries < 8 ? "Hold the card flat inside the frame" : tries < 20 ? "Move a little closer, avoid glare" : "Tap Scan to read the text instead");
       }
