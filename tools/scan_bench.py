@@ -142,7 +142,7 @@ def main(argv):
                 }""", b64)
                 dt = time.time() - t0
                 times.append(dt)
-            dists.append([r[0], bool(res["ids"]) and res["ids"][0] == r[0], res["d"], res["sure"]])
+                dists.append([r[0], bool(res["ids"]) and res["ids"][0] == r[0], res["d"], res["sure"]])
                 hit = bool(res["ids"]) and res["ids"][0] == r[0]
                 ok += hit
                 top3 += r[0] in res["ids"]
