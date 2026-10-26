@@ -77,7 +77,7 @@ def main(spec_path, src, endcard, out):
         chain += f"[{last}][{k + 1}:v]overlay=0:0:enable='between(t,{t['at']},{until})'[v{k}];"
         last = f"v{k}"
     wav = f"{tmp}/m.wav"
-    music.write(wav, total + 0.5, spec.get("seed", 11))
+    music.write(wav, total + 0.5, str(spec.get("seed", "pack")))
     inputs += ["-i", wav]
     ai = len(spec.get("texts", [])) + 1
     afilter = f"[{ai}:a]volume='if(lt(t,{t_out}),1,0.4)':eval=frame,afade=t=out:st={total - 1.2}:d=1.2,atrim=0:{total}[a]"
