@@ -1,0 +1,28 @@
+name: Card scanner fingerprints (one-off)
+on: workflow_dispatch
+permissions:
+  contents: write
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+jobs:
+  prints:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Build and publish
+        run: |
+          set -e
+          pip install -q numpy pillow
+          R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git clone -q --depth 1 --branch gh-pages "$R" /tmp/pages
+          git clone -q --depth 1 --branch data "$R" /tmp/db
+          python tools/card_prints.py /tmp/pages /tmp/db/data/prints | tee /tmp/p.log
+          for d in /tmp/db /tmp/pages; do git -C $d config user.name "dys-market-bot"; git -C $d config user.email "dys-market-bot@users.noreply.github.com"; done
+          git -C /tmp/db add data/prints && git -C /tmp/db commit -q -m "Scanner fingerprints" && git -C /tmp/db push -q origin data
+          git -C /tmp/pages add data/prints.bin && git -C /tmp/pages commit -q -m "Scanner fingerprints" && git -C /tmp/pages push -q origin gh-pages
+          echo "::notice title=Scanner::$(tail -n 1 /tmp/p.log)"

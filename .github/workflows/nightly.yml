@@ -240,6 +240,13 @@ jobs:
           if [ $rc -ne 0 ]; then echo "::error title=Market report::$(tail -c 600 /tmp/blog.log | tr '\n' ' ')"; exit 1; fi
           echo "::notice title=Market report::$(tr '\n' ' ' < /tmp/blog.log)"
 
+      - name: Card scanner fingerprints (new cards only)
+        continue-on-error: true
+        run: |
+          pip install -q numpy pillow > /dev/null 2>&1
+          python tools/card_prints.py site data/prints 2>&1 | tee /tmp/prints.log
+          echo "::notice title=Scanner::$(tail -n 1 /tmp/prints.log)"
+
       - name: Copy social images into the site
         run: |
           if [ -d data/blog ]; then mkdir -p site/blog && cp -r data/blog/. site/blog/; fi
