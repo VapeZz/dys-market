@@ -14,7 +14,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: |
-          pip install -q pillow numpy
+          pip install -q pillow numpy playwright==1.56.0
           git clone -q --depth 1 --branch gh-pages "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" /tmp/pages
           git clone -q --depth 1 --branch scan-bench "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" /tmp/photos
-          python tools/scan_hash_exp.py /tmp/pages /tmp/photos --pool "${{ inputs.pool }}"
+          python tools/scan_hash_exp.py /tmp/pages /tmp/photos --pool "${{ inputs.pool }}" --hard
+          mkdir -p /tmp/out && cp /tmp/hard/*.jpg /tmp/out/ 2>/dev/null; ls /tmp/out | wc -l

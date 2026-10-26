@@ -41,7 +41,7 @@ def pick(pages, n, seed=7):
     return out[:n], groups
 
 
-def photo(card, rnd):
+def photo(card, rnd, hard=False):
     """A phone-ish photo of the card, framed like the scanner's capture box (card ~88% of the frame)."""
     card = card.convert("RGB")
     # TCGplayer images are padded squares: trim the white border to the card
@@ -58,10 +58,22 @@ def photo(card, rnd):
         v = shade + rnd.randint(-10, 10)
         d.point((x, y), fill=(v, v, v))
     canvas.paste(card, (200 + (W - 630) // 2 + rnd.randint(-25, 25), 200 + (H - 880) // 2 + rnd.randint(-25, 25)))
-    canvas = canvas.rotate(rnd.uniform(-4, 4), resample=Image.BICUBIC, fillcolor=(shade, shade, shade))
+    if hard:                                                      # glare and a sleeve's haze
+        ov = Image.new("L", canvas.size, 0)
+        od = ImageDraw.Draw(ov)
+        for _ in range(rnd.randint(1, 2)):
+            cx, cy, rx, ry = rnd.randint(250, W + 150), rnd.randint(250, H + 150), rnd.randint(60, 200), rnd.randint(40, 140)
+            od.ellipse((cx - rx, cy - ry, cx + rx, cy + ry), fill=rnd.randint(120, 220))
+        ov = ov.filter(ImageFilter.GaussianBlur(40))
+        canvas = Image.composite(Image.new("RGB", canvas.size, (255, 255, 250)), canvas, ov)
+        if rnd.random() < 0.5:
+            canvas = Image.blend(canvas, Image.new("RGB", canvas.size, (200, 200, 205)), 0.12)
+        tint = Image.new("RGB", canvas.size, rnd.choice([(255, 220, 170), (190, 210, 255), (255, 255, 255)]))
+        canvas = Image.blend(canvas, tint, 0.12)
+    canvas = canvas.rotate(rnd.uniform(-9, 9) if hard else rnd.uniform(-4, 4), resample=Image.BICUBIC, fillcolor=(shade, shade, shade))
     # mild keystone (phone not perfectly flat)
     w, h = canvas.size
-    dx = rnd.uniform(-0.035, 0.035) * w
+    dx = rnd.uniform(-0.08, 0.08) * w if hard else rnd.uniform(-0.035, 0.035) * w
     canvas = canvas.transform((w, h), Image.QUAD, (dx, 0, -dx * .3, h, w + dx * .3, h, w - dx, 0), resample=Image.BICUBIC)
     canvas = canvas.crop((200, 200, 200 + W, 200 + H))
     # light: brightness/contrast, a soft gradient, blur, noise, jpeg

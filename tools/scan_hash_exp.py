@@ -80,6 +80,22 @@ def main(argv):
     rows = json.load(open(os.path.join(pages, "data", "search-all.json")))["rows"]
     groups = json.load(open(os.path.join(pages, "data", "meta.json")))["groups"]
     shots = {int(os.path.basename(f)[:-4]): f for f in glob.glob(os.path.join(photos, "*.jpg"))}
+    if "--hard" in argv:                          # tougher photos: glare, sleeve haze, colour cast, more tilt
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import scan_bench
+        cards, _ = scan_bench.pick(pages, 80, seed=21)
+        rnd, hard_dir = random.Random(5), "/tmp/hard"
+        os.makedirs(hard_dir, exist_ok=True)
+        shots = {}
+        for r in cards:
+            try:
+                req = urllib.request.Request(f"https://tcgplayer-cdn.tcgplayer.com/product/{r[0]}_in_1000x1000.jpg", headers={"User-Agent": "Mozilla/5.0"})
+                im = Image.open(io.BytesIO(urllib.request.urlopen(req, timeout=30).read()))
+            except Exception:
+                continue
+            f = os.path.join(hard_dir, f"{r[0]}.jpg")
+            open(f, "wb").write(scan_bench.photo(im, rnd, hard=True))
+            shots[r[0]] = f
     pool = [r[0] for r in rows if r[3] == "c" and r[4] and r[4] >= 100 and groups.get(str(r[2]), ["", ""])[1] in ("pokemon", "one-piece")]
     random.Random(3).shuffle(pool)
     ids = list(dict.fromkeys(list(shots) + pool[:n]))
@@ -108,6 +124,8 @@ def main(argv):
             rank = [keys[i] for i in order[:5]]
             top1 += rank[0] == pid
             top5 += pid in rank
+            if rank[0] != pid and var == "both":
+                print(f"miss {pid} -> {rank[:3]} d={d[order[0]]:.3f} vs own {d[keys.index(pid)]:.3f}")
         print(f"::notice title=fingerprint {var}::top1 {top1}/{len(shots)}  top5 {top5}/{len(shots)}  (pool {len(ref)})")
 
 
