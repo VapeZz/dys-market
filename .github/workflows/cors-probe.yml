@@ -1,0 +1,11 @@
+name: CORS probe
+on: workflow_dispatch
+jobs:
+  p:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for u in "https://tcgplayer-cdn.tcgplayer.com/product/509980_200w.jpg" "https://tcgplayer-cdn.tcgplayer.com/product/509980_in_1000x1000.jpg" "https://product-images.tcgplayer.com/fit-in/200x279/509980.jpg"; do
+            h=$(curl -sI -H "Origin: https://market.driveyourstyle.net" "$u" | tr -d '\r' | grep -i "^\(HTTP\|access-control\|content-type\|content-length\)" | tr '\n' ' ')
+            echo "::notice title=$u::$h"
+          done
