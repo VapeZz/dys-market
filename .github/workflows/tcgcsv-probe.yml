@@ -1,0 +1,20 @@
+name: TCGCSV category probe
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -s https://tcgcsv.com/tcgplayer/categories > c.json
+          python3 - <<'PY'
+          import json
+          d = json.load(open("c.json"))["results"]
+          hits = [c for c in d if any(w in (c.get("name","")+" "+c.get("displayName","")).lower() for w in ("pok", "chin", "china"))]
+          for c in hits:
+              print(f"::notice title=cat {c['categoryId']}::{c['name']} | {c.get('displayName')}")
+          print(f"::notice title=total::{len(d)} categories")
+          PY
+          for id in $(python3 -c "import json;print(' '.join(str(c['categoryId']) for c in json.load(open('c.json'))['results'] if 'chin' in (c['name']+c.get('displayName','')).lower()))"); do
+            n=$(curl -s https://tcgcsv.com/tcgplayer/$id/groups | python3 -c "import json,sys;g=json.load(sys.stdin)['results'];print(len(g), '|', '; '.join(x['name'] for x in g[:12]))")
+            echo "::notice title=groups $id::$n"
+          done
