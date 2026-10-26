@@ -1,0 +1,19 @@
+name: Fetch card images (debug)
+on:
+  workflow_dispatch:
+    inputs:
+      ids:
+        description: "space separated product ids"
+        required: true
+permissions:
+  contents: write
+jobs:
+  f:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          mkdir out && cd out
+          for id in ${{ inputs.ids }}; do curl -s -A "Mozilla/5.0" -o "$id.jpg" "https://tcgplayer-cdn.tcgplayer.com/product/${id}_in_1000x1000.jpg"; curl -s -A "Mozilla/5.0" -o "${id}_200w.jpg" "https://tcgplayer-cdn.tcgplayer.com/product/${id}_200w.jpg"; done
+          ls -la
+          git init -q -b card-images && git config user.name bot && git config user.email bot@users.noreply.github.com && git add -A && git commit -qm imgs
+          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" card-images
