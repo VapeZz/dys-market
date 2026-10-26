@@ -20,8 +20,8 @@ jobs:
           set +e
           pip install -q gdown imageio-ffmpeg numpy pillow fonttools brotli > /dev/null
           mkdir -p /tmp/fonts && python -c "from fontTools.ttLib import TTFont; f=TTFont('tools/social-fonts/barlow-condensed-latin-800-normal.woff2'); f.flavor=None; f.save('/tmp/fonts/BarlowCondensed-ExtraBold.ttf')"
-          gdown -q --id "${{ inputs.source }}" -O /tmp/src.mp4 || { echo "::error title=Download::source failed"; exit 1; }
-          gdown -q --id "${{ inputs.endcard }}" -O /tmp/end.mp4 || { echo "::error title=Download::endcard failed"; exit 1; }
+          curl -sL -o /tmp/src.mp4 "https://drive.usercontent.google.com/download?id=${{ inputs.source }}&export=download&confirm=t"; echo "::notice title=src::$(ls -la /tmp/src.mp4) $(file /tmp/src.mp4 | cut -c1-80)"; file /tmp/src.mp4 | grep -qi "mp4\|iso media" || { echo "::error title=Download::source failed $(head -c 200 /tmp/src.mp4 | tr -d '\n')"; exit 1; }
+          curl -sL -o /tmp/end.mp4 "https://drive.usercontent.google.com/download?id=${{ inputs.endcard }}&export=download&confirm=t"; file /tmp/end.mp4 | grep -qi "mp4\|iso media" || { echo "::error title=Download::endcard failed $(head -c 200 /tmp/end.mp4 | tr -d '\n')"; exit 1; }
           python tools/pack_edit.py "${{ inputs.spec }}" /tmp/src.mp4 /tmp/end.mp4 /tmp/out.mp4 > /tmp/log 2>&1 || { echo "::error title=Edit::$(tail -c 900 /tmp/log | tr '\n' ' ')"; exit 1; }
           echo "::notice title=Edit::$(tail -n1 /tmp/log)"
           FF=$(python -c "import imageio_ffmpeg;print(imageio_ffmpeg.get_ffmpeg_exe())")
