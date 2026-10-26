@@ -1,0 +1,31 @@
+name: Pack opening edit
+on:
+  workflow_dispatch:
+    inputs:
+      spec: {description: "tools/edits/<name>.json", required: true}
+      source: {description: "Google Drive file id of the clip", required: true}
+      endcard: {description: "Google Drive file id of the end card", default: "1uuHDDjX2rOUBnnCJZRlva4zBUsw3miWb"}
+      name: {description: "output name", required: true}
+permissions:
+  contents: write
+jobs:
+  edit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: {python-version: "3.12"}
+      - name: Edit
+        run: |
+          set +e
+          pip install -q gdown imageio-ffmpeg numpy pillow fonttools brotli > /dev/null
+          mkdir -p /tmp/fonts && python -c "from fontTools.ttLib import TTFont; f=TTFont('tools/social-fonts/barlow-condensed-latin-800-normal.woff2'); f.flavor=None; f.save('/tmp/fonts/BarlowCondensed-ExtraBold.ttf')"
+          gdown -q --id "${{ inputs.source }}" -O /tmp/src.mp4 || { echo "::error title=Download::source failed"; exit 1; }
+          gdown -q --id "${{ inputs.endcard }}" -O /tmp/end.mp4 || { echo "::error title=Download::endcard failed"; exit 1; }
+          python tools/pack_edit.py "${{ inputs.spec }}" /tmp/src.mp4 /tmp/end.mp4 /tmp/out.mp4 > /tmp/log 2>&1 || { echo "::error title=Edit::$(tail -c 900 /tmp/log | tr '\n' ' ')"; exit 1; }
+          echo "::notice title=Edit::$(tail -n1 /tmp/log)"
+          FF=$(python -c "import imageio_ffmpeg;print(imageio_ffmpeg.get_ffmpeg_exe())")
+          mkdir /tmp/f && $FF -loglevel error -i /tmp/out.mp4 -vf "fps=1,scale=200:-2,tile=8x4" -frames:v 1 /tmp/f/sheet.jpg
+          git clone -q --depth 1 --branch gh-pages "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" /tmp/pages
+          mkdir -p /tmp/pages/social-video && cp /tmp/out.mp4 "/tmp/pages/social-video/${{ inputs.name }}.mp4" && cp /tmp/f/sheet.jpg "/tmp/pages/social-video/${{ inputs.name }}-sheet.jpg"
+          cd /tmp/pages && git config user.name bot && git config user.email bot@users.noreply.github.com && git add social-video && git commit -qm "Video ${{ inputs.name }}" && git push -q origin gh-pages

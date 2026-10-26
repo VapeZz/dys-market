@@ -1,0 +1,6 @@
+{"seed": 23,
+ "segments": [[0,1.0,1,1],[1.0,2.5,2,1],[15.5,22.5,2.5,1],[22.5,27.5,3,1],[27.5,68.0,2.5,1],[68.0,68.5,1.5,1],[68.5,71.6,1,1.1]],
+ "texts": [
+  {"at":0,"until":1.75,"y":0.07,"lines":[["Hyperia City pack...",84,"#ffffff"],["what did we pull?",84,"#ffffff"]]},
+  {"at":22.75,"until":null,"y":0.08,"lines":[["THE PULL",150,"#ffd84a"],["Foil Priya Mangal",72,"#ffffff"]]}
+ ]}
