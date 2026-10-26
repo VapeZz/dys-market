@@ -1,0 +1,69 @@
+prints: 19771 new, 19771 cards in the scanner (458 still to fetch)
+127.0.0.1 - - [26/Oct/2026 04:08:12] "GET /index.html HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:12] "GET /assets/app.css?v=1792985207 HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:12] "GET /assets/app.js?v=1792985207 HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:12] "GET /data/meta.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:12] "GET /blog/latest.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:12] "GET /data/intel.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:12] "GET /data/stock.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:12] "GET /assets/logo-light.png HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:12] "GET /assets/logo-dark.png HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:12] "GET /data/sets.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:12] "GET /data/movers/cards-pokemon.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:12] "GET /data/movers/cards-all.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:12] "GET /data/movers/sealed-all.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:12] "GET /data/wanted.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:12] "GET /data/prints.bin HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:12] "GET /data/search-all.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:12] "GET /social/latest.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:12] "GET /sw.js HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:28] "GET /index.html HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:28] "GET /assets/app.js?v=1792985207 HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:28] "GET /assets/app.css?v=1792985207 HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:28] "GET /blog/latest.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:28] "GET /data/meta.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:28] "GET /data/intel.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:28] "GET /assets/logo-dark.png HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:28] "GET /assets/logo-light.png HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:28] "GET /data/stock.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:28] "GET /data/sets.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:28] "GET /data/movers/cards-pokemon.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:28] "GET /data/movers/cards-all.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:28] "GET /data/movers/sealed-all.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:28] "GET /data/wanted.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:28] "GET /sw.js HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:28] "GET /data/prints.bin HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:28] "GET /data/search-all.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:08:28] "GET /social/latest.json HTTP/1.1" 200 -
+skip 642303: HTTP Error 403: Forbidden
+skip 642350: HTTP Error 403: Forbidden
+skip 642636: HTTP Error 403: Forbidden
+skip 642332: HTTP Error 403: Forbidden
+skip 659592: HTTP Error 403: Forbidden
+bench: 55 photos
+::notice title=Scan bench v/live.js::right first 53/55, in top 3 54, sure+right 53, sure+WRONG 1, avg 0.28s/scan (first 0.3s)
+::notice title=Scan bench v/new.js::right first 53/55, in top 3 54, sure+right 53, sure+WRONG 1, avg 0.49s/scan (first 0.5s)
+127.0.0.1 - - [26/Oct/2026 04:09:23] "GET /index.html HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:09:23] "GET /assets/app.css?v=1792985207 HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:09:23] "GET /assets/app.js?v=1792985207 HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:09:23] "GET /data/meta.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:09:23] "GET /blog/latest.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:09:23] "GET /data/intel.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:09:23] "GET /assets/logo-dark.png HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:09:23] "GET /assets/logo-light.png HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:09:23] "GET /data/stock.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:09:23] "GET /data/sets.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:09:23] "GET /data/movers/cards-pokemon.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:09:23] "GET /data/wanted.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:09:23] "GET /data/movers/cards-all.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:09:23] "GET /data/movers/sealed-all.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:09:23] "GET /sw.js HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:09:23] "GET /data/search-all.json HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:09:23] "GET /data/prints.bin HTTP/1.1" 200 -
+127.0.0.1 - - [26/Oct/2026 04:09:23] "GET /social/latest.json HTTP/1.1" 200 -
+skip 642628: HTTP Error 403: Forbidden
+skip 642664: HTTP Error 403: Forbidden
+skip 642357: HTTP Error 403: Forbidden
+skip 642659: HTTP Error 403: Forbidden
+bench: 56 photos
+::notice title=Scan bench v/new.js::right first 54/56, in top 3 54, sure+right 47, sure+WRONG 1, avg 0.59s/scan (first 3.4s)
