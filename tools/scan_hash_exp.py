@@ -15,6 +15,8 @@ import sys
 import urllib.request
 
 import numpy as np
+
+WARP = False
 from PIL import Image, ImageChops, ImageFilter
 
 
@@ -45,6 +47,41 @@ def card_box(img):
     if bw * bh < W * H * 0.3 or not (0.55 < bw / bh < 0.9):
         return img
     return img.crop((int(c0 / s), int(r0 / s), int(c0 / s + bw), int(r0 / s + bh)))
+
+
+def card_quad(img):
+    """the card's four corners (for tilted / rotated photos), or None"""
+    W, H = img.size
+    s = 300 / max(W, H)
+    a = np.asarray(img.convert("RGB").resize((max(20, round(W * s)), max(20, round(H * s)))), dtype=np.int32)
+    h, w, _ = a.shape
+    m = max(2, round(min(w, h) * 0.03))
+    edge = np.concatenate([a[:m].reshape(-1, 3), a[-m:].reshape(-1, 3), a[:, :m].reshape(-1, 3), a[:, -m:].reshape(-1, 3)])
+    on = np.abs(a - np.median(edge, axis=0)).sum(axis=2) > 60
+    # keep the big blob: rows/cols that are mostly card
+    rows, cols = on.sum(axis=1) > w * 0.15, on.sum(axis=0) > h * 0.15
+    on &= rows[:, None] & cols[None, :]
+    ys, xs = np.nonzero(on)
+    if len(xs) < w * h * 0.25:
+        return None
+    sm, df = xs + ys, xs - ys
+    q = [(xs[sm.argmin()], ys[sm.argmin()]), (xs[df.argmax()], ys[df.argmax()]), (xs[sm.argmax()], ys[sm.argmax()]), (xs[df.argmin()], ys[df.argmin()])]
+    q = [(x / s, y / s) for x, y in q]
+    wt = np.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1]); ht = np.hypot(q[3][0] - q[0][0], q[3][1] - q[0][1])
+    if ht == 0 or not (0.5 < wt / ht < 0.95):
+        return None
+    return q
+
+
+def warp(img, q, ow=250, oh=350):
+    """perspective-correct the card to ow x oh (q = TL, TR, BR, BL)"""
+    dst = [(0, 0), (ow, 0), (ow, oh), (0, oh)]
+    A, B = [], []
+    for (x, y), (u, v) in zip(dst, q):
+        A += [[x, y, 1, 0, 0, 0, -u * x, -u * y], [0, 0, 0, x, y, 1, -v * x, -v * y]]
+        B += [u, v]
+    coef = np.linalg.solve(np.array(A, float), np.array(B, float))
+    return img.transform((ow, oh), Image.PERSPECTIVE, tuple(coef), Image.BILINEAR)
 
 
 def norm_card(img):
@@ -106,12 +143,15 @@ def main(argv):
                 ref[pid] = feats(trim(img))
     print(f"pool: {len(ref)} cards")
     keys = list(ref)
-    for var in ["whole8", "whole16", "art16", "both", "both+col"]:
+    global WARP
+    for WARP, var in [(False, "both+col"), (True, "whole16"), (True, "both"), (True, "both+col")]:
         top1 = top5 = 0
         for pid, f in shots.items():
             if pid not in ref:
                 continue
-            q = feats(card_box(Image.open(f)))
+            im = Image.open(f).convert("RGB")
+            quad = card_quad(im) if WARP else None
+            q = feats(warp(im, quad) if quad else card_box(im))
             if var == "both+col":
                 M = np.stack([ref[k]["both"] for k in keys])
                 d = (M != q["both"]).mean(axis=1)
@@ -124,9 +164,9 @@ def main(argv):
             rank = [keys[i] for i in order[:5]]
             top1 += rank[0] == pid
             top5 += pid in rank
-            if rank[0] != pid and var == "both":
+            if rank[0] != pid and var == "both+col" and WARP:
                 print(f"miss {pid} -> {rank[:3]} d={d[order[0]]:.3f} vs own {d[keys.index(pid)]:.3f}")
-        print(f"::notice title=fingerprint {var}::top1 {top1}/{len(shots)}  top5 {top5}/{len(shots)}  (pool {len(ref)})")
+        print(f"::notice title=fingerprint {var}{' warp' if WARP else ''}::top1 {top1}/{len(shots)}  top5 {top5}/{len(shots)}  (pool {len(ref)})")
 
 
 if __name__ == "__main__":
