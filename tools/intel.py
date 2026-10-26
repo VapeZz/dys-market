@@ -9,6 +9,7 @@ is a price trend that has been consistent over the last week.
 """
 import glob
 import json
+import math
 import os
 import re
 import sys
@@ -213,6 +214,13 @@ def main(argv):
     sig_up, sig_down = spread(sig_up, 80), spread(sig_down, 80)
     gainers = sorted((m for m in movers if m["d1"] > 0), key=lambda m: -m["d1"])[:10]
     losers = sorted((m for m in movers if m["d1"] < 0), key=lambda m: m["d1"])[:10]
+    # top-of-page ticker: mostly Pokémon (what most visitors collect), a few from other games; $5+ cards, sane daily moves
+    quota = {"pokemon": 10, "pokemon-jp": 3, "one-piece": 4}
+    tick, seen_k = [], {}
+    for m in sorted((m for m in movers if m["p"] >= 500 and 2 <= abs(m["d1"]) <= 80), key=lambda m: -abs(m["d1"]) * math.log10(m["p"])):
+        if seen_k.get(m["k"], 0) < quota.get(m["k"], 1):
+            seen_k[m["k"]] = seen_k.get(m["k"], 0) + 1
+            tick.append(m)
 
     # market pulse: how each game's cards ($5+) moved over the last 7 days (falls back to all recorded days)
     labels = {g["slug"]: g["label"] for g in meta.get("games", [])}
@@ -283,7 +291,7 @@ def main(argv):
         p0 = graded["picks"][0]
         body += f" Best grading pick: {clean_n(p0['n'])} ({p0['sn']}), PSA 10 sells for {p0['g10'] / p0['p']:.1f}x raw."
     out = {"date": today, "brief": {"head": head, "body": body.strip()}, "indices": indices, "graded": graded,
-           "signals": {"up": sig_up, "down": sig_down, "n_up": n_up, "n_down": n_down}, "movers": {"up": gainers, "down": losers}, "deals": deals,
+           "signals": {"up": sig_up, "down": sig_down, "n_up": n_up, "n_down": n_down}, "movers": {"up": gainers, "down": losers}, "ticker": tick, "deals": deals,
            "pulse": {"games": pulse, "breadth": breadth, "mood": mood},
            "history_days": len(indices[0]["dates"]) if indices else 0}
     with open(os.path.join(sd, "intel.json"), "w", encoding="utf-8") as fh:

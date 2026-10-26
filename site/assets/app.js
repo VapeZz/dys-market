@@ -185,9 +185,9 @@ function shell() {
     </div></div></footer>`;
   const I = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
   const tb = [["index", "Home", I('<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>')],
+    ["search", "Search", I('<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>')],
     ["sets", "Sets", I('<rect x="7" y="3" width="13" height="17" rx="2"/><path d="M4 7v12a2 2 0 0 0 2 2h10"/>')],
     ["collection", "Collection", I('<path d="M4 6h16v12H4z"/><path d="M4 10h16"/>')],
-    ["centering", "Centering", I('<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M12 8v8M8 12h8"/>')],
     ["intel", "Intel", I('<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>')],
     ["shop", "Shop", I('<path d="M6 7h12l-1 13H7z"/><path d="M9 7a3 3 0 0 1 6 0"/>')]];
   const bar = document.createElement("nav"); bar.className = "tabbar"; bar.setAttribute("aria-label", "Main");
@@ -728,9 +728,9 @@ async function pageProduct() {
         ${variants.length > 1 ? `<div id="var" style="margin-top:12px"></div>` : ""}
         <div class="muted" style="margin-top:14px">Market price</div><div class="price-big">${v.p == null ? `<span class="muted" style="font-size:.6em">No market price yet</span>` : money(v.p)}</div>
         ${v.dys && below(v.dys.p, v.p) ? `<p style="margin:6px 0 0">${BELOW} <span class="muted">Our price ${money(v.dys.p)} is ${Math.round((1 - v.dys.p / v.p) * 100)}% under market</span></p>` : ""}
+        ${v.dys ? dysBuyBox(v, ebc) : ""}
         <div class="kpis">${[["7", "7 days"], ["30", "30 days"], ["90", "90 days"], ["a", `Since ${fmtShort(meta.first)}`]].map(([k, l]) => `<div class="kpi"><div class="l">${l}</div>${chg(v.ch?.[k])}</div>`).join("")}</div>
         ${priceBreak(v, base)}${ebayRow(ebc, v.p)}
-        ${v.dys ? dysBuyBox(v, ebc) : ""}
         <div class="btns">${v.dys ? ""
           : `<a class="btn primary" href="mailto:customerservice@driveyourstyle.net?subject=${encodeURIComponent("Request: " + v.n)}&body=${encodeURIComponent(`Hi Drive Your Style,\n\nI'm interested in: ${v.n} (${set.n}).\nMarket price today: ${money(v.p)}\nQuantity: 1\n\nPlease let me know if you can get it.\n\nThanks!`)}">Request from Drive Your Style</a>`}
           <button class="btn" id="addcol" type="button"></button>
@@ -1927,7 +1927,7 @@ async function pageGrading() {
         <div class="gr-stats"><div><span class="pb-lab">MARKET</span><b>${money(x.p)}</b></div>
           <div><span class="pb-lab">BUY RAW NOW</span><b>${money(x.buy)}</b><small class="muted">lowest listing</small></div>
           <div><span class="pb-lab">ALL-IN COST</span><b>${money(x.total)}</b></div>
-          <div><span class="pb-lab">BREAK-EVEN ${esc(st.co)} 10</span><b>${isFinite(x.be10) ? money(Math.round(x.be10)) : "—"}</b><small class="muted">${isFinite(x.mult) ? `${x.mult.toFixed(1)}× market` : ""}</small></div>
+          <div><span class="pb-lab">BREAK-EVEN ${esc(st.co)} 10</span>${!isFinite(x.be10) ? "<b>—</b>" : x.be10 < 1 ? `<b class="up">Any grade</b><small class="muted">a 9 or lower still covers your cost</small>` : `<b>${money(Math.round(x.be10))}</b><small class="muted">${x.mult.toFixed(1)}× market</small>`}</div>
           ${x.g9 ? `<div><span class="pb-lab">${esc(st.co)} ${l9} SOLD</span><b>${money(x.g9)}</b></div>` : ""}
           ${x.g10 ? `<div><span class="pb-lab">${esc(st.co)} ${l10} SOLD</span><b>${money(x.g10)}</b><small class="muted">${(x.g10 / x.p).toFixed(1)}× raw · ${x.vol >= 1 ? `${x.vol.toFixed(1)}/day` : `${x.sales} sales`}${x.trend === "up" ? " · ▲" : x.trend === "down" ? " · ▼" : ""}</small></div>
           <div><span class="pb-lab">EXP. PROFIT</span><b class="${x.profit >= 0 ? "up" : "down"}">${x.profit >= 0 ? "+" : "−"}${money(Math.abs(Math.round(x.profit)))}</b><small class="muted">${x.roi >= 0 ? "+" : ""}${Math.round(x.roi * 100)}% return</small></div>` : ""}</div>
@@ -2345,9 +2345,11 @@ if ($("#intel-block")) getJSON("intel.json").then((d) => {
 }).catch(() => {});
 /* movers ticker across the top of every page (from the nightly Intel data) */
 if (PAGE !== "links") getJSON("intel.json").then((d) => {
-  const ms = [...(d.movers?.up || []), ...(d.movers?.down || [])].sort(() => 0.5 - Math.random()).slice(0, 14);
+  const pk = (m) => m.k === "pokemon" || m.k === "pokemon-jp";
+  const ms = d.ticker?.length ? d.ticker.slice().sort((a, b) => (pk(b) - pk(a)) || Math.random() - 0.5)   // Pokémon first, then other games
+    : [...(d.movers?.up || []), ...(d.movers?.down || [])].sort(() => 0.5 - Math.random()).slice(0, 14);
   if (!ms.length || $(".ticker")) return;
-  const row = ms.map((m) => `<a href="${prodUrl(m.id, m.g)}"><b>${esc(cleanN(m.n))}</b> <span class="muted">${esc(m.sn)}</span> <span class="${m.d1 >= 0 ? "up" : "down"}">${m.d1 >= 0 ? "▲" : "▼"} ${Math.abs(m.d1).toFixed(1)}%</span></a>`).join("");
+  const row = ms.map((m) => `<a href="${prodUrl(m.id, m.g)}"><b>${esc(cleanN(m.n))}</b> <span class="muted">${esc(m.sn)}</span> <span class="tk-p">${money(m.p)}</span> <span class="${m.d1 >= 0 ? "up" : "down"}">${m.d1 >= 0 ? "▲" : "▼"} ${Math.abs(m.d1).toFixed(1)}%</span></a>`).join("");
   const t = document.createElement("div"); t.className = "ticker"; t.setAttribute("aria-label", "Today's biggest card price moves");
   t.innerHTML = `<div class="ticker-in">${row}${row.replace(/<a /g, '<a tabindex="-1" aria-hidden="true" ')}</div>`;
   const top = $("header.top"); top ? top.before(t) : document.body.prepend(t);
