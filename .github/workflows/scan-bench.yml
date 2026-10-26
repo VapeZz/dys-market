@@ -22,7 +22,9 @@ jobs:
           python -m playwright install --with-deps chromium > /dev/null
           git clone -q --depth 1 --branch gh-pages "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" /tmp/pages
           mkdir -p /tmp/v && cp /tmp/pages/assets/scan.js /tmp/v/live.js && cp site/assets/scan.js /tmp/v/new.js
-          python tools/scan_bench.py /tmp/pages /tmp/v/live.js /tmp/v/new.js --n "${{ inputs.n }}" --out out
+          sed 's/{ bin: true, find: true }/{ bin: false, find: true }/' site/assets/scan.js > /tmp/v/new-nobin.js
+          sed 's/{ bin: true, find: true }/{ bin: true, find: false }/' site/assets/scan.js > /tmp/v/new-nofind.js
+          python tools/scan_bench.py /tmp/pages /tmp/v/live.js /tmp/v/new.js /tmp/v/new-nobin.js /tmp/v/new-nofind.js --n "${{ inputs.n }}" --out out
       - name: Save results (scan-bench branch)
         if: always()
         run: |
