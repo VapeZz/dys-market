@@ -338,6 +338,8 @@
     const short = new Set(), stage = roughRects(img, quick).map((r) => {
       const t = nearest(P, (r.slide ? [r] : around(r, 0.02)).map(fpOf), r.slide ? 12 : 40); t.forEach(([i]) => short.add(i)); return { r, d: lead(t) };
     }).sort((a, b) => a.d - b.d);
+    const q = quad(img), qfp = q ? fingerprint(warpQuad(img, q)) : null;   // tilted / rotated cards: perspective-corrected view
+    if (qfp) nearest(P, [qfp], 40).forEach(([i]) => short.add(i));
     const S = { n: short.size, ids: new Uint32Array(short.size), h32: new Uint32Array(short.size * 8), from: [...short] };
     S.from.forEach((i, j) => { S.ids[j] = P.ids[i]; S.h32.set(P.h32.subarray(i * 8, i * 8 + 8), j * 8); });
     const best = (r) => lead(nearest(S, [fpOf(r)], 2));
@@ -345,7 +347,7 @@
     cand = cand.flatMap((c) => around(c.r, 0.01, 3, [0.97, 0.985, 1, 1.015, 1.03])).map((r) => ({ r, d: best(r) })).sort((a, b) => a.d - b.d).slice(0, 5);
     cand = cand.flatMap((c) => around(c.r, 0.004, 1, [0.994, 1, 1.006])).map((r) => ({ r, d: best(r) })).sort((a, b) => a.d - b.d).slice(0, 6);
     const fps = cand.map((c) => fpOf(c.r));
-    const q = quad(img); if (q) fps.push(fingerprint(warpQuad(img, q)));
+    if (qfp) fps.push(qfp);
     const top = nearest(S, fps).map(([j, d]) => [S.from[j], d]);
     // keep the best match and only real look-alikes of it (stamped promos, reprints with the same art)
     const list = top.map(([i, dist]) => ({ r: rowById.get(P.ids[i]), s: 2 - dist / 128, d: dist })).filter((x, i, a) => x.r && x.d <= a[0].d + 18);
