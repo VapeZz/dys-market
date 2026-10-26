@@ -23,7 +23,8 @@ jobs:
           git clone -q --depth 1 --branch gh-pages "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" /tmp/pages
           mkdir -p /tmp/v && cp /tmp/pages/assets/scan.js /tmp/v/live.js && cp site/assets/scan.js /tmp/v/new.js
           pip install -q numpy
-          run() { "$@" > /tmp/log 2>&1; rc=$?; cat /tmp/log; if [ $rc -ne 0 ]; then echo "::error title=$2::$(tail -c 900 /tmp/log | tr '\n' ' ')"; exit 1; fi; echo "::notice title=$2::$(tail -n 1 /tmp/log)"; }
+          mkdir -p out
+          run() { "$@" > /tmp/log 2>&1; rc=$?; cat /tmp/log >> out/log.txt; if [ $rc -ne 0 ]; then echo "::error title=$2::$(tail -c 900 /tmp/log | tr '\n' ' ')"; exit 1; fi; echo "::notice title=$2::$(tail -n 1 /tmp/log)"; }
           run python tools/card_prints.py /tmp/pages /tmp/store
           run python tools/scan_bench.py /tmp/pages /tmp/v/live.js /tmp/v/new.js --n "${{ inputs.n }}" --out out --seed 7
           run python tools/scan_bench.py /tmp/pages /tmp/v/new.js --n "${{ inputs.n }}" --out out/hard --hard --seed 33
