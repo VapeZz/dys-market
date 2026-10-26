@@ -136,13 +136,119 @@
     return { nums: [...nums.strong, ...nums.weak], list, sure: list.length > 0 && sureSet.has(list[0].r) && (list.length === 1 || list[1].s < list[0].s) };
   }
 
-  async function scanFile(file, ui) {
+  const canvasOf = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; };
+  /* where the card sits in the photo (axis-aligned), or the whole photo when it already fills it */
+  function cardBox(img) {
+    const W = img.width, H = img.height, { w, h, d, s } = pixels(img, 200), m = Math.max(2, Math.round(Math.min(w, h) * 0.03)), edge = [[], [], []];
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (i < m || j < m || i >= w - m || j >= h - m) { const p = (j * w + i) * 4; edge[0].push(d[p]); edge[1].push(d[p + 1]); edge[2].push(d[p + 2]); }
+    const med = edge.map((a) => a.sort((x, y) => x - y)[a.length >> 1]), rows = new Uint32Array(h), cols = new Uint32Array(w);
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const p = (j * w + i) * 4; if (Math.abs(d[p] - med[0]) + Math.abs(d[p + 1] - med[1]) + Math.abs(d[p + 2] - med[2]) > 60) { rows[j]++; cols[i]++; } }
+    const r0 = rows.findIndex((n) => n > w * 0.3), r1 = h - 1 - [...rows].reverse().findIndex((n) => n > w * 0.3);
+    const c0 = cols.findIndex((n) => n > h * 0.3), c1 = w - 1 - [...cols].reverse().findIndex((n) => n > h * 0.3);
+    if (r0 < 0 || c0 < 0 || r1 <= r0 || c1 <= c0) return { x: 0, y: 0, w: W, h: H };
+    const bw = (c1 - c0 + 1) / s, bh = (r1 - r0 + 1) / s;
+    if (bw * bh < W * H * 0.3 || bw / bh < 0.55 || bw / bh > 0.9) return { x: 0, y: 0, w: W, h: H };
+    return { x: c0 / s, y: r0 / s, w: bw, h: bh };
+  }
+  /* ---------- picture match: compare the photo with a fingerprint of every card (data/prints.bin) ----------
+     Fast and works without reading any text. The text reader (above) only runs when the picture isn't clear-cut. */
+  let printsP = null, rowById = null;
+  const getPrints = () => (printsP ||= fetch("data/prints.bin").then((r) => (r.ok ? r.arrayBuffer() : null)).then((buf) => {
+    if (!buf || buf.byteLength % 36) return null;
+    const n = buf.byteLength / 36, dv = new DataView(buf), ids = new Uint32Array(n);
+    for (let i = 0; i < n; i++) ids[i] = dv.getUint32(i * 36, true);
+    return { n, ids, h: new Uint8Array(buf) };
+  }).catch(() => null));
+  const POP = new Uint8Array(256).map((_, i) => { let c = 0; for (let x = i; x; x >>= 1) c += x & 1; return c; });
+  const pixels = (img, maxSide) => {
+    const s = Math.min(1, maxSide / Math.max(img.width, img.height)), w = Math.max(8, Math.round(img.width * s)), h = Math.max(8, Math.round(img.height * s));
+    const c = canvasOf(w, h), x = c.getContext("2d", { willReadFrequently: true });
+    x.imageSmoothingQuality = "high"; x.drawImage(img, 0, 0, w, h);
+    return { w, h, d: x.getImageData(0, 0, w, h).data, s };
+  };
+  /* the card's four corners (TL, TR, BR, BL) in the photo, found against the surface around it */
+  function quad(img) {
+    const { w, h, d, s } = pixels(img, 300), m = Math.max(2, Math.round(Math.min(w, h) * 0.03)), edge = [[], [], []];
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (i < m || j < m || i >= w - m || j >= h - m) { const p = (j * w + i) * 4; edge[0].push(d[p]); edge[1].push(d[p + 1]); edge[2].push(d[p + 2]); }
+    const med = edge.map((a) => a.sort((x, y) => x - y)[a.length >> 1]);
+    const on = new Uint8Array(w * h), rc = new Uint32Array(h), cc = new Uint32Array(w);
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const p = (j * w + i) * 4; if (Math.abs(d[p] - med[0]) + Math.abs(d[p + 1] - med[1]) + Math.abs(d[p + 2] - med[2]) > 60) { on[j * w + i] = 1; rc[j]++; cc[i]++; } }
+    let n = 0, tl = [0, 0, 1e9], br = [0, 0, -1e9], tr = [0, 0, -1e9], bl = [0, 0, 1e9];
+    for (let j = 0; j < h; j++) { if (rc[j] <= w * 0.15) continue; for (let i = 0; i < w; i++) {
+      if (!on[j * w + i] || cc[i] <= h * 0.15) continue; n++;
+      const a = i + j, b = i - j;
+      if (a < tl[2]) tl = [i, j, a]; if (a > br[2]) br = [i, j, a]; if (b > tr[2]) tr = [i, j, b]; if (b < bl[2]) bl = [i, j, b];
+    } }
+    if (n < w * h * 0.25) return null;
+    const q = [tl, tr, br, bl].map(([x, y]) => [x / s, y / s]);
+    const wt = Math.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1]), ht = Math.hypot(q[3][0] - q[0][0], q[3][1] - q[0][1]);
+    return ht && wt / ht > 0.5 && wt / ht < 0.95 ? q : null;
+  }
+  /* straighten the card to 250x350 (perspective), or just scale the card's box / the whole photo */
+  function flatten(img) {
+    const out = canvasOf(250, 350), ox = out.getContext("2d", { willReadFrequently: true }), q = quad(img);
+    if (!q) { const b = cardBox(img); ox.imageSmoothingQuality = "high"; ox.drawImage(img, b.x, b.y, b.w, b.h, 0, 0, 250, 350); return ox.getImageData(0, 0, 250, 350).data; }
+    const src = pixels(img, 1000), k = src.s;
+    // homography from the 250x350 output to the photo (solve the 8 unknowns)
+    const dst = [[0, 0], [250, 0], [250, 350], [0, 350]], A = [], B = [];
+    dst.forEach(([x, y], i) => { const [u, v] = [q[i][0] * k, q[i][1] * k]; A.push([x, y, 1, 0, 0, 0, -u * x, -u * y]); B.push(u); A.push([0, 0, 0, x, y, 1, -v * x, -v * y]); B.push(v); });
+    for (let c = 0; c < 8; c++) {
+      let piv = c; for (let r = c + 1; r < 8; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+      [A[c], A[piv]] = [A[piv], A[c]]; [B[c], B[piv]] = [B[piv], B[c]];
+      for (let r = 0; r < 8; r++) { if (r === c) continue; const f = A[r][c] / A[c][c]; for (let cc = c; cc < 8; cc++) A[r][cc] -= f * A[c][cc]; B[r] -= f * B[c]; }
+    }
+    const H = B.map((b, i) => b / A[i][i]), od = ox.createImageData(250, 350), o = od.data, sd = src.d, SW = src.w, SH = src.h;
+    for (let y = 0; y < 350; y++) for (let x = 0; x < 250; x++) {
+      const z = H[6] * x + H[7] * y + 1, u = (H[0] * x + H[1] * y + H[2]) / z, v = (H[3] * x + H[4] * y + H[5]) / z;
+      const x0 = Math.max(0, Math.min(SW - 2, Math.floor(u))), y0 = Math.max(0, Math.min(SH - 2, Math.floor(v))), fx = Math.min(1, Math.max(0, u - x0)), fy = Math.min(1, Math.max(0, v - y0));
+      const p = (y * 250 + x) * 4, a = (y0 * SW + x0) * 4, b = a + 4, c2 = a + SW * 4, e = c2 + 4;
+      for (let ch = 0; ch < 3; ch++) o[p + ch] = (sd[a + ch] * (1 - fx) + sd[b + ch] * fx) * (1 - fy) + (sd[c2 + ch] * (1 - fx) + sd[e + ch] * fx) * fy;
+      o[p + 3] = 255;
+    }
+    return o;
+  }
+  /* 256-bit difference hash, identical to tools/card_prints.py */
+  function fingerprint(img) {
+    const d = flatten(img), W = 226, H = 326, I = new Float64Array((W + 1) * (H + 1));
+    for (let y = 0; y < H; y++) { let row = 0; for (let x = 0; x < W; x++) { const p = ((y + 12) * 250 + x + 12) * 4; row += d[p] * 0.299 + d[p + 1] * 0.587 + d[p + 2] * 0.114; I[(y + 1) * (W + 1) + x + 1] = I[y * (W + 1) + x + 1] + row; } }
+    const at = (y, x) => { const y0 = Math.floor(y), x0 = Math.floor(x), y1 = Math.min(y0 + 1, H), x1 = Math.min(x0 + 1, W), fy = y - y0, fx = x - x0, R = W + 1;
+      return I[y0 * R + x0] * (1 - fy) * (1 - fx) + I[y0 * R + x1] * (1 - fy) * fx + I[y1 * R + x0] * fy * (1 - fx) + I[y1 * R + x1] * fy * fx; };
+    const g = new Float64Array(17 * 16), xs = Array.from({ length: 18 }, (_, i) => (i * W) / 17), ys = Array.from({ length: 17 }, (_, i) => (i * H) / 16);
+    for (let j = 0; j < 16; j++) for (let i = 0; i < 17; i++) g[j * 17 + i] = (at(ys[j + 1], xs[i + 1]) - at(ys[j], xs[i + 1]) - at(ys[j + 1], xs[i]) + at(ys[j], xs[i])) / ((ys[j + 1] - ys[j]) * (xs[i + 1] - xs[i]));
+    const out = new Uint8Array(32);
+    for (let j = 0, k = 0; j < 16; j++) for (let i = 0; i < 16; i++, k++) if (g[j * 17 + i + 1] > g[j * 17 + i]) out[k >> 3] |= 128 >> (k & 7);
+    return out;
+  }
+  async function visual(file) {
+    const [P, data] = await Promise.all([getPrints(), getRows()]);
+    if (!P) return null;
+    if (!rowById) { rowById = new Map(); for (const r of data.rows) if (r[3] === "c" && !rowById.has(r[0])) rowById.set(r[0], r); }
+    const img = file instanceof HTMLCanvasElement ? file : await createImageBitmap(file), fp = fingerprint(img), top = [];
+    for (let i = 0; i < P.n; i++) {
+      let dist = 0; const o = i * 36 + 4;
+      for (let b = 0; b < 32; b++) dist += POP[P.h[o + b] ^ fp[b]];
+      if (top.length < 8 || dist < top[top.length - 1][1]) { top.push([P.ids[i], dist]); top.sort((a, b) => a[1] - b[1]); if (top.length > 8) top.pop(); }
+    }
+    const list = top.map(([id, dist]) => ({ r: rowById.get(id), s: 2 - dist / 128, d: dist })).filter((x) => x.r);
+    const d1 = list[0]?.d ?? 256, d2 = list[1]?.d ?? 256;
+    return { list, d1, d2, sure: d1 <= SURE_D && d2 - d1 >= SURE_GAP };
+  }
+  const SURE_D = 78, SURE_GAP = 14;
+
+  async function scanFile(file, ui, quick = false) {
+    const v = await visual(file).catch(() => null);
+    if (v && (v.sure || quick)) return { text: "", nums: [], list: v.list.slice(0, 6), sure: v.sure, d: [v.d1, v.d2] };
     const [w, data, c, meta, years] = await Promise.all([getWorker(ui.status), getRows(), crops(file), getMeta(), getYears()]);
     ui.status("Reading the card…");
     const txt = {};
     for (const [k, cv] of Object.entries(c)) { const r = await w.recognize(cv); txt[k] = r.data.text; ui.status(k === "top" ? "Matching…" : "Reading the card…"); }
     const text = [txt.bottom, txt.corner, txt.full, txt.top].join("\n");
-    return { text, ...match(data, meta, text, txt.top, txt.corner + "\n" + txt.bottom, years) };
+    const res = match(data, meta, text, txt.top, txt.corner + "\n" + txt.bottom, years);
+    if (!v || res.sure) return { text, ...res };
+    // picture and text together: a card that both point to wins; otherwise the closest pictures first
+    const ocrIds = new Set(res.list.map((x) => x.r[0])), both = v.list.filter((x) => ocrIds.has(x.r[0]));
+    const list = [...both, ...(v.d1 <= 100 ? v.list : []), ...res.list].filter((x, i, a) => a.findIndex((y) => y.r[0] === x.r[0]) === i).slice(0, 9);
+    return { text, nums: res.nums, list, sure: both.length > 0 && both[0] === v.list[0] && v.d1 <= 95, d: [v.d1, v.d2] };
   }
 
   /* ---------- UI: full-screen sheet ---------- */
@@ -159,25 +265,29 @@
       video.srcObject = stream; view.hidden = false; await video.play().catch(() => {});
       return true;
     };
-    view.querySelector(".scan-shoot").addEventListener("click", () => {
+    // the part of the video inside the on-screen frame, with a margin so the card's edges and corners are in
+    const grab = () => {
       const fr = view.querySelector(".scan-frame").getBoundingClientRect(), vr = video.getBoundingClientRect();
-      const vw = video.videoWidth, vh = video.videoHeight; if (!vw) return;
+      const vw = video.videoWidth, vh = video.videoHeight; if (!vw) return null;
       const k = Math.max(vr.width / vw, vr.height / vh), ox = (vr.width - vw * k) / 2, oy = (vr.height - vh * k) / 2;
-      const sx = (fr.left - vr.left - ox) / k, sy = (fr.top - vr.top - oy) / k, sw = fr.width / k, sh = fr.height / k;
+      const mx = fr.width * 0.08, my = fr.height * 0.06;
+      const sx = Math.max(0, (fr.left - mx - vr.left - ox) / k), sy = Math.max(0, (fr.top - my - vr.top - oy) / k);
+      const sw = Math.min(vw - sx, (fr.width + 2 * mx) / k), sh = Math.min(vh - sy, (fr.height + 2 * my) / k);
       const c = document.createElement("canvas"); c.width = Math.round(sw); c.height = Math.round(sh);
       c.getContext("2d").drawImage(video, sx, sy, sw, sh, 0, 0, c.width, c.height);
-      stop(); onShot(c);
-    });
+      return c;
+    };
+    view.querySelector(".scan-shoot").addEventListener("click", () => { const c = grab(); if (!c) return; stop(); onShot(c); });
     view.querySelector(".scan-cancel").addEventListener("click", stop);
-    return { start, stop };
+    return { start, stop, grab, live: () => !!stream };
   }
 
-  window.dysScanMatch = match;   // for tests
+  window.dysScanMatch = match; window.dysScanFile = scanFile;   // for tests
   window.dysScan = function open() {
     const box = document.createElement("div");
     box.className = "scan-sheet";
     box.innerHTML = `<div class="scan-in"><button class="scan-x" type="button" aria-label="Close">✕</button>
-      <h2>Scan a card</h2><p class="muted">Take it out of the sleeve if you can, use good light, and line the card up inside the frame.</p>
+      <h2>Scan a card</h2><p class="muted">Lay the card flat in good light and fit it inside the frame. It recognises the card by its picture, so it works on sleeved cards too.</p>
       <button type="button" class="btn primary scan-open">📷 Open camera</button>
       <label class="scan-alt">or <u>use a photo</u><input type="file" accept="image/*" hidden></label>
       <div class="scan-live" hidden><video playsinline muted autoplay></video><div class="scan-frame"><span>Card inside the frame</span></div>
@@ -190,7 +300,26 @@
     box.addEventListener("click", (e) => { if (e.target === box || e.target.closest(".scan-x")) close(); });
     const status = (t) => { box.querySelector(".scan-status").textContent = t; };
     const fileIn = box.querySelector(".scan-alt input");
-    box.querySelector(".scan-open").addEventListener("click", async () => { if (!(await cam.start())) { status("Camera not available here, so pick or take a photo instead."); fileIn.click(); } });
+    // live: keep matching what's in the frame and stop by itself once the same card shows up twice in a row
+    const hint = (t) => { const el = box.querySelector(".scan-frame span"); if (el) el.textContent = t; };
+    async function auto() {
+      let last = null, tries = 0;
+      while (cam.live()) {
+        await new Promise((r) => setTimeout(r, 300));
+        const c = cam.live() && cam.grab();
+        if (!c) continue;
+        const res = await scanFile(c, { status: () => {} }, true).catch(() => null);
+        if (!cam.live() || !res) continue;
+        const id = res.sure ? res.list[0].r[0] : null;
+        if (id && id === last) { const url = c.toDataURL("image/jpeg", 0.7); cam.stop(); return show0(res, url); }
+        last = id; tries++;
+        hint(id ? "Got it… hold still" : tries < 8 ? "Hold the card flat inside the frame" : tries < 20 ? "Move a little closer, avoid glare" : "Tap Scan to read the text instead");
+      }
+    }
+    box.querySelector(".scan-open").addEventListener("click", async () => {
+      if (!(await cam.start())) { status("Camera not available here, so pick or take a photo instead."); fileIn.click(); return; }
+      status("Point at the card. It finds it by itself, or tap Scan."); hint("Hold the card flat inside the frame"); auto();
+    });
     fileIn.addEventListener("change", () => { const f = fileIn.files && fileIn.files[0]; fileIn.value = ""; if (f) run(f, URL.createObjectURL(f)); });
 
     let meta = { groups: {} }, rows = null;
@@ -215,9 +344,19 @@
     async function run(input, previewUrl) {
       box.querySelector(".scan-prev").innerHTML = `<img src="${previewUrl}" alt="">`;
       box.querySelector(".scan-res").innerHTML = ""; box.querySelector(".scan-refine").hidden = true;
-      status("Getting ready…");
+      status("Matching…");
       try {
-        const res = await scanFile(input, { status });
+        await present(await scanFile(input, { status }));
+      } catch (err) {
+        status("The card reader couldn't load. Check your connection and try again.");
+      }
+    }
+    async function show0(res, url) {
+      box.querySelector(".scan-prev").innerHTML = `<img src="${url}" alt="">`;
+      await present(res);
+    }
+    async function present(res) {
+      {
         meta = await getMeta(); rows = (await getRows()).rows;
         const best = res.list[0]?.s || 0, good = res.list.filter((x) => x.s >= Math.max(0.6, best * 0.5));
         box.querySelector(".scan-refine").hidden = false;
@@ -225,8 +364,6 @@
         const sure = res.sure;
         status(sure ? "Found it. Tap to open, add, or ♡." : `${good.length} possible match${good.length > 1 ? "es" : ""}. Pick yours, or narrow it below:`);
         show(good.map((x) => x.r), sure);
-      } catch (err) {
-        status("The card reader couldn't load. Check your connection and try again.");
       }
     }
   };

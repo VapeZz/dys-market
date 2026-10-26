@@ -104,7 +104,7 @@ def main(argv):
     out = argv[argv.index("--out") + 1] if "--out" in argv else "bench-out"
     scripts = [a for a in argv[1:] if a.endswith(".js")]
     os.makedirs(out, exist_ok=True)
-    cards, groups = pick(pages, n)
+    cards, groups = pick(pages, n, seed=int(argv[argv.index("--seed") + 1]) if "--seed" in argv else 7)
     rnd = random.Random(11)
     shots = []
     for r in cards:
@@ -114,7 +114,7 @@ def main(argv):
         except Exception as e:
             print(f"skip {r[0]}: {e}")
             continue
-        jpg = photo(img, rnd)
+        jpg = photo(img, rnd, hard="--hard" in argv)
         open(os.path.join(out, f"{r[0]}.jpg"), "wb").write(jpg)
         shots.append((r, base64.b64encode(jpg).decode()))
     print(f"bench: {len(shots)} photos")
@@ -131,17 +131,18 @@ def main(argv):
             pg.goto(root + "index.html", wait_until="domcontentloaded")
             pg.add_script_tag(content=src)
             ok = sure_ok = sure_bad = top3 = 0
-            times, misses = [], []
+            times, misses, dists = [], [], []
             for r, b64 in shots:
                 t0 = time.time()
                 res = pg.evaluate("""async (b64) => {
                     const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
                     const f = new File([bin], "card.jpg", {type: "image/jpeg"});
                     const out = await window.dysScanFile(f, {status() {}});
-                    return {ids: out.list.slice(0, 3).map(x => x.r[0]), sure: out.sure, nums: out.nums, text: out.text.slice(0, 300)};
+                    return {ids: out.list.slice(0, 3).map(x => x.r[0]), sure: out.sure, nums: out.nums, text: out.text.slice(0, 300), d: out.d || null};
                 }""", b64)
                 dt = time.time() - t0
                 times.append(dt)
+            dists.append([r[0], bool(res["ids"]) and res["ids"][0] == r[0], res["d"], res["sure"]])
                 hit = bool(res["ids"]) and res["ids"][0] == r[0]
                 ok += hit
                 top3 += r[0] in res["ids"]
@@ -155,6 +156,7 @@ def main(argv):
                                  avg_s=round(sum(times) / max(1, len(times)), 2), first_s=round(times[0], 1) if times else None)
             print(f"::notice title=Scan bench {name}::right first {ok}/{len(shots)}, in top 3 {top3}, sure+right {sure_ok}, sure+WRONG {sure_bad}, avg {results[name]['avg_s']}s/scan (first {results[name]['first_s']}s)")
             results[name]["misses"] = misses
+            results[name]["dists"] = dists
             pg.close()
         b.close()
     srv.shutdown()
