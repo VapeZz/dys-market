@@ -155,9 +155,9 @@
   let printsP = null, rowById = null;
   const getPrints = () => (printsP ||= fetch("data/prints.bin").then((r) => (r.ok ? r.arrayBuffer() : null)).then((buf) => {
     if (!buf || buf.byteLength % 36) return null;
-    const n = buf.byteLength / 36, dv = new DataView(buf), ids = new Uint32Array(n);
-    for (let i = 0; i < n; i++) ids[i] = dv.getUint32(i * 36, true);
-    return { n, ids, h: new Uint8Array(buf) };
+    const n = buf.byteLength / 36, dv = new DataView(buf), ids = new Uint32Array(n), h32 = new Uint32Array(n * 8);
+    for (let i = 0; i < n; i++) { ids[i] = dv.getUint32(i * 36, true); for (let k = 0; k < 8; k++) h32[i * 8 + k] = dv.getUint32(i * 36 + 4 + k * 4, false); }
+    return { n, ids, h32 };
   }).catch(() => null));
   const POP = new Uint8Array(256).map((_, i) => { let c = 0; for (let x = i; x; x >>= 1) c += x & 1; return c; });
   const pixels = (img, maxSide) => {
@@ -185,9 +185,114 @@
     return ht && wt / ht > 0.5 && wt / ht < 0.95 ? q : null;
   }
   /* straighten the card to 250x350 (perspective), or just scale the card's box / the whole photo */
-  function flatten(img) {
-    const out = canvasOf(250, 350), ox = out.getContext("2d", { willReadFrequently: true }), q = quad(img);
-    if (!q) { const b = cardBox(img); ox.imageSmoothingQuality = "high"; ox.drawImage(img, b.x, b.y, b.w, b.h, 0, 0, 250, 350); return ox.getImageData(0, 0, 250, 350).data; }
+  /* the card's straight edges: strong vertical edges (left/right) and horizontal edges (top/bottom) that frame a
+     card-shaped (5:7) box. Works on busy backgrounds (a hand, a table, a sleeve) where the colour test can't. */
+  function rects(img) {
+    const { w, h, d, s } = pixels(img, 360), ex = new Uint8Array(w * h), ey = new Uint8Array(w * h), T = 18;
+    const ch = (i, j) => Math.max(Math.abs(d[i] - d[j]), Math.abs(d[i + 1] - d[j + 1]), Math.abs(d[i + 2] - d[j + 2]));
+    for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x, gx = ch((i + 1) * 4, (i - 1) * 4), gy = ch((i + w) * 4, (i - w) * 4);
+      if (gx > T && gx >= gy) ex[i] = 1; if (gy > T && gy >= gx) ey[i] = 1;
+    }
+    // longest nearly-unbroken line in each row / column (a card edge is one long line, text is many short ones)
+    const run = (get, n) => { let best = 0, cur = 0, gap = 0; for (let k = 0; k < n; k++) { if (get(k)) { cur += 1 + gap; gap = 0; if (cur > best) best = cur; } else if (++gap > 3) { cur = 0; gap = 0; } } return best; };
+    const rr = Array.from({ length: h }, (_, y) => run((x) => ey[y * w + x] || (y > 0 && ey[(y - 1) * w + x]) || (y < h - 1 && ey[(y + 1) * w + x]), w));
+    const cc = Array.from({ length: w }, (_, x) => run((y) => ex[y * w + x] || (x > 0 && ex[y * w + x - 1]) || (x < w - 1 && ex[y * w + x + 1]), h));
+    const peaks = (a, n, min) => { const out = []; for (const i of [...a.keys()].sort((p, q) => a[q] - a[p])) { if (a[i] < min) break; if (out.every((j) => Math.abs(j - i) > 3)) out.push(i); if (out.length >= n) break; } return out; };
+    const cols = peaks(cc, 8, h * 0.2), rows = peaks(rr, 8, w * 0.2);
+    rects.lines = { cols, rows, cc, rr, s, w, h };
+    const band = (m, x0, y0, x1, y1, vert) => {   // share of the line with an edge within ±2px
+      let hit = 0, n = 0;
+      if (vert) for (let y = Math.max(0, y0); y <= Math.min(h - 1, y1); y += 2) { n++; for (let k = -2; k <= 2; k++) { const x = x0 + k; if (x >= 0 && x < w && m[y * w + x]) { hit++; break; } } }
+      else for (let x = Math.max(0, x0); x <= Math.min(w - 1, x1); x += 2) { n++; for (let k = -2; k <= 2; k++) { const y = y0 + k; if (y >= 0 && y < h && m[y * w + x]) { hit++; break; } } }
+      return n ? hit / n : 0; };
+    const found = [], R = 63 / 88;
+    for (const xa of cols) for (const xb of cols) {
+      if (xb - xa < w * 0.3) continue;
+      const x0 = xa, x1 = xb, H = (x1 - x0) / R, side = (band(ex, x0, 0, x0, h, 1) + band(ex, x1, 0, x1, h, 1)) / 2;
+      const add = (y0, y1, edges) => {
+        if (y1 - y0 < h * 0.2 || y0 < -0.06 * h || y1 > 1.06 * h) return;
+        const r = (x1 - x0) / (y1 - y0); if (r < 0.64 || r > 0.8) return;
+        const lr = (band(ex, x0, y0, x0, y1, 1) + band(ex, x1, y0, x1, y1, 1)) / 2;
+        const tb = edges.map((y) => band(ey, x0, y, x1, y, 0));
+        const sc = (lr * 2 + tb.reduce((p, q) => p + q, 0)) / (2 + tb.length) - (tb.length < 2 ? 0.08 : 0) + 0.15 * (x1 - x0) / w;
+        found.push({ x: x0 / s, y: y0 / s, w: (x1 - x0) / s, h: (y1 - y0) / s, sc });
+      };
+      for (const ya of rows) {
+        add(ya, ya + H, [ya]);          // top edge seen, bottom from the card's shape
+        add(ya - H, ya, [ya]);          // bottom edge seen
+        for (const yb of rows) if (yb > ya) add(ya, yb, [ya, yb]);
+      }
+      if (side > 0) {}
+    }
+    found.sort((p, q) => q.sc - p.sc);
+    const out = [];
+    for (const r of found) { if (r.sc < 0.42) break; if (out.every((o) => Math.abs(o.x - r.x) + Math.abs(o.y - r.y) > 0.04 * (o.w + o.h))) out.push(r); if (out.length >= 3) break; }
+    return out;
+  }
+  /* 250x350 views of the card to compare: straight-edge boxes (with small shifts, since the edge of a sleeve or a
+     shadow can be a few pixels off), the perspective-corrected card, and the plain colour box. */
+  /* grayscale integral image of the photo, so the fingerprint of any rectangle costs a few hundred lookups */
+  function grayOf(img) {
+    const { w, h, d, s } = pixels(img, 1000), I = new Float64Array((w + 1) * (h + 1));
+    for (let y = 0; y < h; y++) { let row = 0; for (let x = 0; x < w; x++) { const p = (y * w + x) * 4; row += d[p] * 0.299 + d[p + 1] * 0.587 + d[p + 2] * 0.114; I[(y + 1) * (w + 1) + x + 1] = I[y * (w + 1) + x + 1] + row; } }
+    return { I, w, h, s };
+  }
+  /* same 256-bit hash as fingerprint(viewOf(img, r)): the card's inner area (x 12..238, y 12..338 of 250x350) averaged into 17x16 cells */
+  function fpRect(G, r) {
+    const { I, w: W, h: H, s } = G, R = W + 1;
+    const at = (y, x) => { y = Math.min(H, Math.max(0, y)); x = Math.min(W, Math.max(0, x)); const y0 = Math.floor(y), x0 = Math.floor(x), y1 = Math.min(y0 + 1, H), x1 = Math.min(x0 + 1, W), fy = y - y0, fx = x - x0;
+      return I[y0 * R + x0] * (1 - fy) * (1 - fx) + I[y0 * R + x1] * (1 - fy) * fx + I[y1 * R + x0] * fy * (1 - fx) + I[y1 * R + x1] * fy * fx; };
+    const x0 = (r.x + r.w * 12 / 250) * s, y0 = (r.y + r.h * 12 / 350) * s, cw = (r.w * 226 / 250) * s / 17, chh = (r.h * 326 / 350) * s / 16, A = cw * chh;
+    const g = new Float64Array(17 * 16);
+    for (let j = 0; j < 16; j++) for (let i = 0; i < 17; i++) { const xa = x0 + i * cw, ya = y0 + j * chh; g[j * 17 + i] = (at(ya + chh, xa + cw) - at(ya, xa + cw) - at(ya + chh, xa) + at(ya, xa)) / A; }
+    const out = new Uint8Array(32);
+    for (let j = 0, k = 0; j < 16; j++) for (let i = 0; i < 16; i++, k++) if (g[j * 17 + i + 1] > g[j * 17 + i]) out[k >> 3] |= 128 >> (k & 7);
+    return out;
+  }
+  /* a 250x350 view of the photo inside rectangle r */
+  let vc = null;
+  function viewOf(img, r) {
+    vc ||= canvasOf(250, 350).getContext("2d", { willReadFrequently: true });
+    vc.imageSmoothingQuality = "high"; vc.fillStyle = "#000"; vc.fillRect(0, 0, 250, 350);
+    vc.drawImage(img, r.x, r.y, r.w, r.h, 0, 0, 250, 350);
+    return vc.getImageData(0, 0, 250, 350).data;
+  }
+  /* rough guesses where the card is: straight-edge boxes, the colour box, and (for a camera frame, which has a
+     margin around the card) the middle of the picture */
+  function roughRects(img, quick) {
+    const W = img.width, H = img.height, out = [...rects(img)], b = cardBox(img), L = rects.lines;
+    out.push(b);
+    // the card's long sides are the most reliable lines: for the strongest pairs of columns, slide a card-shaped
+    // box up and down (its top or bottom edge is often lost against a light background or a sleeve)
+    const pairs = [];
+    for (const a of L.cols) for (const c of L.cols) if (c - a >= L.w * 0.3) pairs.push([a, c, L.cc[a] + L.cc[c]]);
+    pairs.sort((p, q) => q[2] - p[2]);
+    for (const [a, c] of quick || !SLIDE ? [] : pairs.slice(0, 2)) {
+      const bw = (c - a) / L.s, bh = bw * 88 / 63;
+      for (let y = -0.04 * bh; y + bh <= H + 0.04 * bh; y += bh * 0.025) for (const dx of [-0.015, 0, 0.015]) out.push({ x: a / L.s + dx * bw, y, w: bw, h: bh, slide: true });
+    }
+    if (out[0]) out[0].fixed = true;
+    for (const k of [0.86, 0.92]) { const w = Math.min(W * k, H * k * 63 / 88), h = w * 88 / 63; out.push({ x: (W - w) / 2, y: (H - h) / 2, w, h, fixed: W / H > 0.6 && W / H < 0.85 }); }
+    if (W / H > 0.6 && W / H < 0.85) out.push({ x: 0, y: 0, w: W, h: H, fixed: true });
+    b.fixed = true;
+    return out.filter((r, i) => r.slide || out.findIndex((o) => Math.abs(o.x - r.x) + Math.abs(o.y - r.y) + Math.abs(o.w - r.w) < 0.01 * (r.w + r.h)) === i);
+  }
+  const pc = (x) => { x -= (x >>> 1) & 0x55555555; x = (x & 0x33333333) + ((x >>> 2) & 0x33333333); return (((x + (x >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24; };
+  const toWords = (fp) => { const dv = new DataView(fp.buffer); return Uint32Array.from({ length: 8 }, (_, k) => dv.getUint32(k * 4, false)); };
+  /* best distance per card over a set of fingerprints; returns the closest [index, distance] pairs */
+  function nearest(P, fps, keep = 8) {
+    const W = fps.map(toWords), H = P.h32, top = [];
+    let cut = 257;
+    for (let i = 0; i < P.n; i++) {
+      const o = i * 8; let dist = 256;
+      for (const f of W) { const t = pc(H[o] ^ f[0]) + pc(H[o + 1] ^ f[1]) + pc(H[o + 2] ^ f[2]) + pc(H[o + 3] ^ f[3]) + pc(H[o + 4] ^ f[4]) + pc(H[o + 5] ^ f[5]) + pc(H[o + 6] ^ f[6]) + pc(H[o + 7] ^ f[7]); if (t < dist) dist = t; }
+      if (dist < cut) { top.push([i, dist]); top.sort((a, b) => a[1] - b[1]); if (top.length > keep) top.pop(); if (top.length === keep) cut = top[keep - 1][1]; }
+    }
+    return top;
+  }
+  function warpQuad(img, q) {
+    const out = canvasOf(250, 350), ox = out.getContext("2d", { willReadFrequently: true });
     const src = pixels(img, 1000), k = src.s;
     // homography from the 250x350 output to the photo (solve the 8 unknowns)
     const dst = [[0, 0], [250, 0], [250, 350], [0, 350]], A = [], B = [];
@@ -208,8 +313,8 @@
     return o;
   }
   /* 256-bit difference hash, identical to tools/card_prints.py */
-  function fingerprint(img) {
-    const d = flatten(img), W = 226, H = 326, I = new Float64Array((W + 1) * (H + 1));
+  function fingerprint(d) {
+    const W = 226, H = 326, I = new Float64Array((W + 1) * (H + 1));
     for (let y = 0; y < H; y++) { let row = 0; for (let x = 0; x < W; x++) { const p = ((y + 12) * 250 + x + 12) * 4; row += d[p] * 0.299 + d[p + 1] * 0.587 + d[p + 2] * 0.114; I[(y + 1) * (W + 1) + x + 1] = I[y * (W + 1) + x + 1] + row; } }
     const at = (y, x) => { const y0 = Math.floor(y), x0 = Math.floor(x), y1 = Math.min(y0 + 1, H), x1 = Math.min(x0 + 1, W), fy = y - y0, fx = x - x0, R = W + 1;
       return I[y0 * R + x0] * (1 - fy) * (1 - fx) + I[y0 * R + x1] * (1 - fy) * fx + I[y1 * R + x0] * fy * (1 - fx) + I[y1 * R + x1] * fy * fx; };
@@ -219,25 +324,38 @@
     for (let j = 0, k = 0; j < 16; j++) for (let i = 0; i < 16; i++, k++) if (g[j * 17 + i + 1] > g[j * 17 + i]) out[k >> 3] |= 128 >> (k & 7);
     return out;
   }
-  async function visual(file) {
+  async function visual(file, quick = false) {
     const [P, data] = await Promise.all([getPrints(), getRows()]);
     if (!P) return null;
     if (!rowById) { rowById = new Map(); for (const r of data.rows) if (r[3] === "c" && !rowById.has(r[0])) rowById.set(r[0], r); }
-    const img = file instanceof HTMLCanvasElement ? file : await createImageBitmap(file), fp = fingerprint(img), top = [];
-    for (let i = 0; i < P.n; i++) {
-      let dist = 0; const o = i * 36 + 4;
-      for (let b = 0; b < 32; b++) dist += POP[P.h[o + b] ^ fp[b]];
-      if (top.length < 8 || dist < top[top.length - 1][1]) { top.push([P.ids[i], dist]); top.sort((a, b) => a[1] - b[1]); if (top.length > 8) top.pop(); }
-    }
+    const img = file instanceof HTMLCanvasElement ? file : await createImageBitmap(file);
+    // The match is sensitive to a 1-2% offset, so: 1) look around every rough guess and keep the cards that come
+    // close (a shortlist), 2) search finely around the most promising guesses against that shortlist only.
+    const G = grayOf(img), fpOf = (r) => fpRect(G, r);
+    const around = (r, st, n = 1, ks = [1]) => { const o = []; for (const k of ks) for (let a = -n; a <= n; a++) for (let b = -n; b <= n; b++) {
+      const w = r.w * k, h = r.h * k; o.push({ x: r.x + (r.w - w) / 2 + a * st * r.w, y: r.y + (r.h - h) / 2 + b * st * r.h, w, h }); } return o; };
+    const lead = (t) => t[0][1] - 0.5 * ((t[1] || t[0])[1] - t[0][1]);
+    const short = new Set(), stage = roughRects(img, quick).map((r) => {
+      const t = nearest(P, (r.slide ? [r] : around(r, 0.02)).map(fpOf), r.slide ? 12 : 40); t.forEach(([i]) => short.add(i)); return { r, d: lead(t) };
+    }).sort((a, b) => a.d - b.d);
+    const S = { n: short.size, ids: new Uint32Array(short.size), h32: new Uint32Array(short.size * 8), from: [...short] };
+    S.from.forEach((i, j) => { S.ids[j] = P.ids[i]; S.h32.set(P.h32.subarray(i * 8, i * 8 + 8), j * 8); });
+    const best = (r) => lead(nearest(S, [fpOf(r)], 2));
+    let cand = [...stage.slice(0, quick ? 3 : 6), ...stage.filter((x) => x.r.fixed)].filter((x, i, a) => a.indexOf(x) === i);
+    cand = cand.flatMap((c) => around(c.r, 0.01, 3, [0.97, 0.985, 1, 1.015, 1.03])).map((r) => ({ r, d: best(r) })).sort((a, b) => a.d - b.d).slice(0, 5);
+    cand = cand.flatMap((c) => around(c.r, 0.004, 1, [0.994, 1, 1.006])).map((r) => ({ r, d: best(r) })).sort((a, b) => a.d - b.d).slice(0, 6);
+    const fps = cand.map((c) => fpOf(c.r));
+    const q = quad(img); if (q) fps.push(fingerprint(warpQuad(img, q)));
+    const top = nearest(S, fps).map(([j, d]) => [S.from[j], d]);
     // keep the best match and only real look-alikes of it (stamped promos, reprints with the same art)
-    const list = top.map(([id, dist]) => ({ r: rowById.get(id), s: 2 - dist / 128, d: dist })).filter((x, i, a) => x.r && x.d <= a[0].d + 22);
+    const list = top.map(([i, dist]) => ({ r: rowById.get(P.ids[i]), s: 2 - dist / 128, d: dist })).filter((x, i, a) => x.r && x.d <= a[0].d + 18);
     const d1 = top[0]?.[1] ?? 256, d2 = top[1]?.[1] ?? 256;
     return { list, d1, d2, sure: d1 <= SURE_D && d2 - d1 >= SURE_GAP };
   }
-  const SURE_D = 78, SURE_GAP = 14;
+  const SURE_D = 72, SURE_GAP = 12, SLIDE = true;
 
   async function scanFile(file, ui, quick = false) {
-    const v = await visual(file).catch(() => null);
+    const v = await visual(file, quick).catch(() => null);
     if (v && (v.sure || quick)) return { text: "", nums: [], list: v.list.slice(0, 6), sure: v.sure, d: [v.d1, v.d2] };
     const [w, data, c, meta, years] = await Promise.all([getWorker(ui.status), getRows(), crops(file), getMeta(), getYears()]);
     ui.status("Reading the card…");
