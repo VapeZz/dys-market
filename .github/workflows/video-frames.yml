@@ -1,0 +1,45 @@
+name: Video frames (contact sheets)
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Video URL"
+        required: true
+      fps:
+        description: "Frames per second to sample"
+        default: "2"
+permissions:
+  contents: write
+jobs:
+  frames:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: |
+          set -e
+          pip install -q pillow imageio-ffmpeg
+          FF=$(python -c "import imageio_ffmpeg;print(imageio_ffmpeg.get_ffmpeg_exe())")
+          curl -sL -o v.mp4 "${{ inputs.url }}"
+          ls -la v.mp4
+          mkdir f out
+          $FF -loglevel error -i v.mp4 -vf "fps=${{ inputs.fps }},scale=240:-2" f/%04d.jpg
+          python - <<'PY'
+          import glob
+          from PIL import Image, ImageDraw
+          fs = sorted(glob.glob("f/*.jpg")); fps = float("${{ inputs.fps }}")
+          per = 24
+          for s in range(0, len(fs), per):
+              ims = [Image.open(f) for f in fs[s:s + per]]
+              w, h = ims[0].size
+              sheet = Image.new("RGB", (w * 8, (h + 22) * 3), "black")
+              d = ImageDraw.Draw(sheet)
+              for k, im in enumerate(ims):
+                  x, y = (k % 8) * w, (k // 8) * (h + 22)
+                  sheet.paste(im, (x, y + 22)); d.text((x + 4, y + 4), f"{(s + k) / fps:.1f}s", fill="yellow")
+              sheet.save(f"out/sheet-{s // per:02d}.jpg", quality=80)
+          print(len(fs), "frames")
+          PY
+          cd out && git init -q -b video-frames && git config user.name bot && git config user.email bot@users.noreply.github.com && git add -A && git commit -qm frames
+          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" video-frames
