@@ -323,6 +323,25 @@ def build(groups, products, stock, log=print):
     rows_all.sort(key=lambda r: -(r[4] or 0))
     write("search-all.json", {"r": list(rar_ix), "rows": rows_all})
 
+    # newest cards often have no TCGplayer photo yet (new variants like Signature / Alt Art): map each recent
+    # card to a sibling with the same name in the same set, so the site can show that photo until TCGplayer adds one
+    cards = [r for r in rows_all if r[3] == "c"]
+    if cards:
+        newest = max(r[0] for r in cards)
+        base = lambda n: n.split(" (")[0].strip()
+        sibs = {}
+        for r in cards:
+            sibs.setdefault((r[2], base(r[1])), []).append(r)
+        alt = {}
+        for r in cards:
+            if r[0] < newest - 90000:
+                continue
+            c = [x for x in sibs[(r[2], base(r[1]))] if x[0] != r[0]]
+            if c:
+                c.sort(key=lambda x: ("Overnumbered" not in x[1], x[0]))
+                alt[r[0]] = c[0][0]
+        write("img-alt.json", alt)
+
     # ---- in-stock list + meta --------------------------------------------
     stock_rows = []
     for pid, s in stock.items():
