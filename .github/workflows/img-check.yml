@@ -1,0 +1,37 @@
+name: Image check (debug)
+on:
+  workflow_dispatch:
+    inputs:
+      groups:
+        description: "cat:group pairs, space separated"
+        required: true
+jobs:
+  c:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          cat > c.py <<'PY'
+          import json, sys, urllib.request
+          def get(u, head=False):
+              r = urllib.request.Request(u, method="HEAD" if head else "GET", headers={"User-Agent": "Mozilla/5.0"})
+              try:
+                  x = urllib.request.urlopen(r, timeout=20); return x.status, (None if head else x.read())
+              except Exception as e: return getattr(e, "code", str(e)), None
+          for pair in sys.argv[1:]:
+              cat, grp = pair.split(":")
+              st, body = get(f"https://tcgcsv.com/tcgplayer/{cat}/{grp}/products")
+              prods = json.loads(body)["results"] if body else []
+              stats = {}
+              ex = []
+              for p in prods[:40]:
+                  pid = p["productId"]
+                  a = get(f"https://tcgplayer-cdn.tcgplayer.com/product/{pid}_200w.jpg", True)[0]
+                  b = get(f"https://tcgplayer-cdn.tcgplayer.com/product/{pid}_in_1000x1000.jpg", True)[0]
+                  iu = p.get("imageUrl") or ""
+                  c = get(iu, True)[0] if iu else "none"
+                  k = f"200w={a} 1000={b} imageUrl={c}"
+                  stats[k] = stats.get(k, 0) + 1
+                  if len(ex) < 3: ex.append(f"{pid} {p['name'][:30]} {iu}")
+              print(f"::notice title=img {pair} ({len(prods)} products)::{stats} | {ex}")
+          PY
+          python3 c.py ${{ inputs.groups }}
