@@ -1106,6 +1106,18 @@ body[data-page="cards"] .movers .thumb{width:96px;height:134px;border-radius:8px
 .gr-stats b.up{color:var(--up)}.gr-stats b.down{color:var(--down)}
 .gr-stats small{font-size:11.5px}
 .gr-links{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px;font-size:13px}
+.gr-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.gr-title .gp-liq{font-size:10.5px;padding:4px 8px}
+.gr-note{margin:6px 0 0;font-size:12.5px;line-height:1.45;color:var(--ink-2);padding:7px 10px;border-radius:8px;background:color-mix(in srgb,#f2b544 10%,transparent);border:1px solid color-mix(in srgb,#f2b544 35%,transparent)}
+.gr-toggles{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;grid-column:1/-1}
+.gr-f small{font-weight:400;font-size:11.5px}
+.gr-wide{grid-column:span 2}
+.gr-f[hidden],#gfee-wrap[hidden]{display:none}
+@media (max-width:640px){.gr-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.gr-wide{grid-column:1/-1}}
+.gcalc .gsel{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink-3);min-width:0}
+.gcalc .gsel .select{width:100%;min-width:0}
+.gp-liq.ok{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent)}
 .gr-links a{color:var(--accent)}
 .gr-how{margin-top:18px;font-size:13.5px;line-height:1.6}
 .gr-how summary{cursor:pointer}

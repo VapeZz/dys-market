@@ -365,7 +365,7 @@ PAGES = {
   <div class="in-row" id="in-movers"></div>
   <div id="in-graded" hidden>
     <span class="in-kicker" style="margin-top:28px">GRADED · REAL SOLD PRICES</span><h2 class="in-h2" style="margin-top:2px" id="s-grade">Grading picks</h2>
-    <p class="muted in-note">Modern Pokémon cards where a PSA 10 pays off best: raw at the lowest listing + $33 grading and shipping, 30% odds of a 10 and 50% of a 9. <a href="grading.html" style="color:var(--accent)">Set your own numbers →</a></p>
+    <p class="muted in-note"><span id="in-grade-basis">Modern Pokémon cards where a PSA 10 pays off best and sells at least weekly, after grading fees, shipping and eBay selling fees, at 30% odds of a 10 and 50% of a 9.</span> <a href="grading.html" style="color:var(--accent)">Set your own numbers →</a></p>
     <div class="in-row" id="in-picks"></div>
     <div id="in-gmoves-wrap" hidden><div class="in-head2"><h2 class="in-h2" id="s-psa">PSA 10 movers</h2><div id="in-gm-tabs"></div></div><p class="muted in-note">PSA 10 sold price this week vs its 90-day average, for cards that sell at least a couple of times a week.</p><div class="in-row" id="in-gmoves"></div></div>
   </div>
@@ -373,17 +373,19 @@ PAGES = {
   <div class="in-card in-cta"><div><b>Track your own cards</b><span class="muted">Add your collection and see its value move every day. Free.</span></div><a class="btn primary" href="collection.html">Start my collection →</a></div>
   <p class="muted in-foot">How this works: every index is a fixed basket of today's most valuable items, valued each day at its TCGplayer market price. A signal means a card's price moved the same way on most days this week and is at its weekly high (rising) or low (cooling); strength grows with the size and consistency of the move. Market mood is the share of cards worth $5+ that rose versus fell this week. Built from <span id="in-days">—</span> days of recorded prices and updated nightly. For research only, not financial advice.</p>
 </section></div>'''),
-"grading": ("Grading Insights: is your card worth grading? · Drive Your Style", "Free grading calculator for Pokémon, One Piece, Lorcana, Yu-Gi-Oh! and more. See the break-even PSA, CGC, BGS or TAG 10 price for every card, set your own grading cost and odds, and compare with real sold prices.", '''
+"grading": ("Grading Insights: is your card worth grading? · Drive Your Style", "Free grading calculator for Pokémon, One Piece, Lorcana, Yu-Gi-Oh! and more. See the expected profit and break-even PSA, CGC, BGS or TAG 10 price for every card after grading and selling fees, from real sold prices.", '''
 <div class="wrap"><section class="block">
   <span class="in-kicker">FREE · NO SIGN-IN</span><h1 class="in-h">Grading Insights</h1>
-  <p class="muted" style="max-width:760px;margin:-6px 0 16px">Find the cards worth sending to PSA, CGC, BGS or TAG. Set your real grading cost and your odds of a 10, and every card shows the graded price it needs to sell for before grading pays off.</p>
+  <p class="muted" style="max-width:760px;margin:-6px 0 16px">Find the cards worth sending to PSA, CGC, BGS or TAG. Pick a grading tier, where you'll sell the slab and your odds of a 10, and every card shows its expected profit after grading and selling fees.</p>
   <div class="in-card gr-controls" id="gr-controls"></div>
   <div class="gr-bar"><div id="gr-sort"></div></div>
   <p class="muted gr-status" id="gr-status"></p>
   <div class="gr-list" id="gr-list"><div class="skeleton" style="height:240px"></div></div>
   <details class="in-card gr-how"><summary><b>How the estimate works</b></summary>
-    <p>Only cards with a steady price and live listings near the market price are shown, so thin or spiking prices don't mislead the math. Promos, event and prize cards are left out. All-in cost = the lowest raw listing today + your grading cost + shipping and insurance. Break-even 10 price = the graded 10 price where the expected value of grading equals the all-in cost, using your odds: a 9 sells for the multiple of raw you set (1× by default) and anything lower for about 0.7× raw. The lower the break-even compared to raw (shown as ×), the easier grading pays off.</p>
-    <p>Graded prices are recent eBay and Fanatics sold prices for each grade (PokemonPriceTracker), currently for English Pokémon cards and growing daily. Cards are ranked by expected profit: (chance of 10 × 10 price) + (chance of 9 × 9 value) + (rest × lower value) − all-in cost. Selling fees and taxes are not included. Odds are your estimate, not a prediction; check centering and surfaces first. Estimates only, not financial advice.</p></details>
+    <p>Only cards with a steady price and live listings near the market price are shown, so thin or spiking prices don't mislead the math. Promos, event and prize cards are left out. All-in cost = the lowest raw listing today + the grading fee + shipping and insurance both ways.</p>
+    <p>Grading fees come from each company's current price list, open tiers only. PSA and CGC charge by the card's graded value: when a grade is worth more than your tier covers, it's upcharged to the tier that covers it, and the cost includes that risk at your odds. Sale prices are after the selling fees of the marketplace you pick.</p>
+    <p>Expected profit = (chance of 10 × 10 price) + (chance of 9 × 9 price) + (rest × about 0.7× raw), each after selling fees, − all-in cost. Break-even 10 is the 10 price where that profit is zero at your odds; the lower it is compared to raw (shown as ×), the easier grading pays off.</p>
+    <p>Graded prices are recent eBay and Fanatics sold prices for each grade (PokemonPriceTracker), currently for English and Japanese Pokémon cards. A 10 that sells less than about once a week is marked Slow seller and hidden by default: a high price that rarely sells is hard to cash in. Odds are your estimate, not a prediction; check centering and surfaces first. Fees change often, so confirm with the grader before you submit. Taxes aren't included. Estimates only, not financial advice.</p></details>
 </section></div>'''),
 "buyer": ("Buyer dashboard · Drive Your Style", "Owner's buyer dashboard.", '''
 <div class="wrap"><section class="block">

@@ -10,6 +10,7 @@ Reads site/data/grading.json (tools/grading.py) for candidates; writes site/data
 """
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -37,9 +38,11 @@ def summarize(card):
         price = (s.get("smartMarketPrice") or {}).get("price") or s.get("medianPrice")
         if price:
             avg, p7 = s.get("averagePrice"), s.get("marketPrice7Day")
-            # [price, sales (90d), sales/day (7d), trend, 90-day average, 7-day market]
+            last = str(s.get("lastSaleDate") or "")[:10]
+            last = last if re.fullmatch(r"\d{4}-\d{2}-\d{2}", last) else None
+            # [price, sales (90d), sales/day (7d), trend, 90-day average, 7-day market, last sale date]
             out[g] = [round(price * 100), int(s["count"]), round(s.get("dailyVolume7Day") or 0, 2), s.get("marketTrend") or "",
-                      round(avg * 100) if avg else None, round(p7 * 100) if p7 else None]
+                      round(avg * 100) if avg else None, round(p7 * 100) if p7 else None, last]
     return out
 
 

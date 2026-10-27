@@ -11,8 +11,6 @@ import build
 import logos
 import config  # noqa: F401  (loads settings / env overrides)
 import snapshots
-import slabs
-import slab_movers
 import store
 import tcgcsv
 
@@ -50,15 +48,6 @@ def main(argv):
     stock = store.match_in_stock(products, store_rows)
     build.build(groups, products, stock)
     build.write("sneakers-stock.json", store.sneaker_rows(store_rows))
-
-    # Slab comps (eBay sold data for graded cards — requires EBAY_APP_ID)
-    if os.environ.get("EBAY_APP_ID"):
-        try:
-            slabs.fetch_today()                                    # watchlist cards
-            slab_movers.fetch_movers_slabs(groups, products)       # today's top raw movers
-            slabs.build_slab_index(config.OUT_DIR)
-        except Exception as err:  # noqa: BLE001
-            print(f"slabs: skipped — {err}")
 
 
 if __name__ == "__main__":

@@ -469,12 +469,12 @@ async function setGradeRow(setId) {
   const [graded, gd] = await Promise.all([getJSON("graded.json"), getJSON("grading.json")]).catch(() => [null, null]);
   if (!graded || !gd) return;
   const cnt = {}; gd.rows.forEach((r) => { cnt[r[0]] = (cnt[r[0]] || 0) + 1; });
-  const rows = gd.rows.filter((r) => String(r[1]) === String(setId) && cnt[r[0]] === 1 && graded.cards?.[r[0]]?.g?.psa10)
+  const rows = gd.rows.filter((r) => String(r[1]) === String(setId) && cnt[r[0]] === 1 && graded.cards?.[r[0]]?.g?.psa10 && liqOf(graded.cards[r[0]].g.psa10)?.k !== "slow")
     .map((r) => { const g = graded.cards[r[0]].g; return { id: r[0], g: r[1], n: r[2], p: r[3], g10: g.psa10[0], g9: g.psa9?.[0], vol: g.psa10[2] }; })
     .sort((a, b) => (b.g10 - b.p) - (a.g10 - a.p)).slice(0, 8);
   if (!rows.length) return;
   el.hidden = false;
-  el.innerHTML = `<div class="block-head" style="margin-top:14px"><div><h2 style="font-size:20px">Best cards to grade in this set</h2><p>Biggest gap between the raw price and a PSA 10, from recent sold prices.</p></div><a class="more" href="grading.html">Grading Insights →</a></div>
+  el.innerHTML = `<div class="block-head" style="margin-top:14px"><div><h2 style="font-size:20px">Best cards to grade in this set</h2><p>Biggest gap between the raw price and a PSA 10, from recent sold prices, for PSA 10s that sell at least weekly.</p></div><a class="more" href="grading.html">Grading Insights →</a></div>
     <div class="in-row">${rows.map((x) => `<a class="in-mover" href="${prodUrl(x.id, x.g)}">${imgTag(x.id, "", 200)}<span class="in-name">${esc(cleanN(x.n))}</span>
       <span class="in-price up">PSA 10 ${money(x.g10)}</span><span class="in-set">Raw ${money(x.p)} · ${(x.g10 / x.p).toFixed(1)}×${x.g9 ? ` · PSA 9 ${money(x.g9)}` : ""}</span></a>`).join("")}</div>`;
 }
@@ -600,8 +600,8 @@ function gradedPanel(sec, gr, raw, at) {
     return `<tr><td><b>${co} ${l}</b></td><td class="num"><b>${money(p)}</b></td><td class="num">${raw ? `${(p / raw).toFixed(1)}×` : "—"}</td>
       <td class="num hide-sm">${chg(ch)}</td><td class="num">${vol >= 1 ? `${vol.toFixed(1)}/day` : vol > 0 ? `${Math.round(vol * 7)}/wk` : `${n} in 90d`}</td></tr>`; }));
   if (!rows.length) return;
-  const p10 = gr.psa10?.[0], lvl = gr.psa10 ? (gr.psa10[2] >= 1 ? ["hot", "Sells daily"] : gr.psa10[2] > 0.2 ? ["ok", "Sells weekly"] : ["slow", "Slow seller"]) : null;
-  sec.insertAdjacentHTML("afterbegin", `<div class="gp"><div class="gp-head"><h2 style="font-size:24px;margin:0">Graded sold prices</h2>${lvl ? `<span class="gp-liq ${lvl[0]}">${lvl[1]}</span>` : ""}</div>
+  const p10 = gr.psa10?.[0], lq = liqOf(gr.psa10);
+  sec.insertAdjacentHTML("afterbegin", `<div class="gp"><div class="gp-head"><h2 style="font-size:24px;margin:0">Graded sold prices</h2>${lq ? `<span class="gp-liq ${lq.cls}" title="PSA 10: ${esc(lq.sub)}">PSA 10 · ${lq.label}</span>` : ""}</div>
     ${p10 && raw ? `<p class="gp-sum">A <b>PSA 10</b> sells for about <b>${money(p10)}</b>, <b>${(p10 / raw).toFixed(1)}×</b> the raw price.</p>` : ""}
     <div class="table-wrap"><table><thead><tr><th>Grade</th><th class="num">Sold price</th><th class="num">× raw</th><th class="num hide-sm">7D vs 90D</th><th class="num">Sales</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>
     <p class="muted" style="font-size:12px;margin:6px 0 0">Recent eBay and Fanatics sold prices (PokemonPriceTracker), updated ${esc(at)}. Prices vary with centering and label.</p></div>`);
@@ -611,15 +611,18 @@ function gradedPanel(sec, gr, raw, at) {
 /* ---------- Grade It? calculator ---------- */
 const GKEY = "dys-grade";
 const ODDS = { fresh: [55, 35, "Pack fresh"], nm: [30, 50, "Near mint"], lp: [5, 35, "Light play"] };
-function gradeCalc(el, rawCents, id, gr) {
+async function gradeCalc(el, rawCents, id, gr) {
   if (!el) return;
+  const fees = await gradeFees(), psa = fees.graders.PSA;
   let all = {}; try { all = JSON.parse(localStorage.getItem(GKEY)) || {}; } catch {}
   const saved = all[id] || {};
+  if (saved.v !== 2) { delete saved.fee; delete saved.ship; }      // older saves used out-of-date grading fees
   const dollars = (c) => c == null ? "" : (c / 100).toFixed(2);
-  const s = { cond: saved.cond || "nm", o10: saved.o10 ?? ODDS[saved.cond || "nm"][0], o9: saved.o9 ?? ODDS[saved.cond || "nm"][1],
-    raw: saved.raw ?? dollars(rawCents), p10: saved.p10 || (gr?.psa10 ? dollars(gr.psa10[0]) : ""), p9: saved.p9 || (gr?.psa9 ? dollars(gr.psa9[0]) : ""), p8: saved.p8 || (gr?.psa8 ? dollars(gr.psa8[0]) : ""), fee: saved.fee ?? "25", ship: saved.ship ?? "20" };
+  const s = { v: 2, cond: saved.cond || "nm", o10: saved.o10 ?? ODDS[saved.cond || "nm"][0], o9: saved.o9 ?? ODDS[saved.cond || "nm"][1],
+    raw: saved.raw ?? dollars(rawCents), p10: saved.p10 || (gr?.psa10 ? dollars(gr.psa10[0]) : ""), p9: saved.p9 || (gr?.psa9 ? dollars(gr.psa9[0]) : ""), p8: saved.p8 || (gr?.psa8 ? dollars(gr.psa8[0]) : ""),
+    tier: saved.tier ?? "0", fee: saved.fee ?? "", ship: saved.ship ?? String(SHIP_DEFAULT), sell: fees.sell[saved.sell] ? saved.sell : "ebay" };
   const f = (k, l, extra = "") => `<label class="gfield"><span>${l}</span><input class="field" type="number" inputmode="decimal" min="0" step="0.01" data-g="${k}" value="${esc(s[k])}"${extra}></label>`;
-  el.innerHTML = `<div class="gcalc-head"><div><h2>Grade It?</h2><p class="muted">Should you grade this card raw, or buy it already graded? Paste PSA prices from the sold links above.</p></div></div>
+  el.innerHTML = `<div class="gcalc-head"><div><h2>Grade It?</h2><p class="muted">Should you grade this card raw, or buy it already graded? PSA sold prices fill in when we have them; paste your own from the sold links above.</p></div></div>
     <div class="gverdict" id="gv"><span class="gl">Verdict</span><b id="gv-t"></b><span id="gv-w" class="muted"></span></div>
     <div class="gbody">
       <div class="gcol">
@@ -629,34 +632,45 @@ function gradeCalc(el, rawCents, id, gr) {
         <div class="ggrid">${f("o10", "PSA 10 odds %", ' max="100" step="1"')}${f("o9", "PSA 9 odds %", ' max="100" step="1"')}</div>
       </div>
       <div class="gcol">
-        <div class="ggrid">${f("raw", "Raw price $")}${f("p10", "PSA 10 price $")}${f("p9", "PSA 9 price $")}${f("p8", "PSA 8 or lower $")}${f("fee", "Grading fee $")}${f("ship", "Ship + insure $")}</div>
+        <div class="ggrid">${f("raw", "Raw price $")}${f("p10", "PSA 10 price $")}${f("p9", "PSA 9 price $")}${f("p8", "PSA 8 or lower $")}</div>
+        <label class="gsel">PSA service<select class="select" data-g="tier">${psa.tiers.map((t, i) => `<option value="${i}"${String(s.tier) === String(i) ? " selected" : ""}>${esc(tierLabel(t))}</option>`).join("")}<option value="custom"${s.tier === "custom" ? " selected" : ""}>My own price</option></select></label>
+        <div class="ggrid"><span id="gfee-wrap">${f("fee", "Your grading fee $")}</span>${f("ship", "Ship + insure $")}</div>
+        <label class="gsel">Sell the slab on<select class="select" data-g="sell">${Object.entries(fees.sell).map(([k, p]) => `<option value="${k}"${k === s.sell ? " selected" : ""}>${esc(p.label)}</option>`).join("")}</select></label>
       </div>
     </div>
     <div class="gbreak" id="gb"></div>
-    <p class="muted" style="font-size:12px;margin:8px 0 0">Raw price starts at today's market price. Odds are rough starting guesses; use the card's gem rate if you know it. Estimates only, not financial advice. Your numbers save on this device.</p>`;
+    <p class="muted" style="font-size:12px;margin:8px 0 0">Raw price starts at today's market price. Odds are rough starting guesses; use the card's gem rate if you know it. PSA fees checked ${esc(fmtShort(fees.checked))}; confirm on PSA's site before you submit. Estimates only, not financial advice. Your numbers save on this device.</p>`;
   const n = (v) => { const x = parseFloat(v); return isNaN(x) ? 0 : x; };
   const save = () => { all[id] = s; try { localStorage.setItem(GKEY, JSON.stringify(all)); } catch {} };
   const calc = () => {
     const o10 = Math.min(100, Math.max(0, n(s.o10))) / 100, o9 = Math.min(1 - o10, Math.max(0, n(s.o9) / 100)), o8 = Math.max(0, 1 - o10 - o9);
     $("#godds", el).innerHTML = [["PSA 10", o10, "var(--up)"], ["PSA 9", o9, "var(--accent)"], ["PSA 8 or lower", o8, "var(--ink-3)"]]
       .map(([l, p, c]) => `<div class="godd"><span>${l}</span><i><b style="width:${Math.round(p * 100)}%;background:${c}"></b></i><span class="num">${Math.round(p * 100)}%</span></div>`).join("");
-    const raw = n(s.raw), p10 = n(s.p10), p9 = n(s.p9), p8 = s.p8 === "" ? raw : n(s.p8), cost = raw + n(s.fee) + n(s.ship);
+    const custom = s.tier === "custom", ti = custom ? 0 : Math.min(psa.tiers.length - 1, Number(s.tier) || 0);
+    $("#gfee-wrap", el).hidden = !custom;
+    const c = (d) => Math.round(n(d) * 100), raw = c(s.raw), p10 = c(s.p10), p9 = c(s.p9), p8 = s.p8 === "" ? raw : c(s.p8);
+    const fee = custom ? () => c(s.fee) : (v) => feeAt(psa, ti, v), pl = fees.sell[s.sell];
     const box = $("#gv", el);
     if (!p10) {
       box.dataset.v = "wait"; $("#gv-t", el).textContent = "Add the PSA 10 price";
       $("#gv-w", el).textContent = "Tap “PSA 10 sold” above, then enter a typical recent sale.";
       $("#gb", el).innerHTML = ""; return;
     }
-    const ev = o10 * p10 + o9 * (p9 || raw) + o8 * p8, profit = ev - cost, chase = o10 > 0 ? cost / o10 : Infinity;
+    const m = gradeMath({ buy: raw, v10: p10, v9: p9 || raw, low: p8, o10, o9, fee, ship: c(s.ship), pl });
+    const profit = m.profit / 100, chase = o10 > 0 ? m.total / o10 : Infinity, rawD = raw / 100;
     let v, w, k;
-    if (chase > p10 && profit <= raw * 0.15) { k = "slab"; v = "Buy the slab"; w = "Chasing a 10 costs more than buying one already graded."; }
-    else if (profit > raw * 0.15) { k = "grade"; v = "Grade it"; w = "Expected graded value beats your cost plus fees by a clear margin."; }
-    else if (profit > 0) { k = "hold"; v = "Marginal: keep it raw"; w = "Small expected gain. Probably not worth the wait and the grade risk."; }
-    else { k = "raw"; v = "Keep or sell raw"; w = "Fees and grade risk outweigh the graded premium."; }
+    if (chase > p10 && profit <= rawD * 0.15) { k = "slab"; v = "Buy the slab"; w = "Chasing a 10 costs more than buying one already graded."; }
+    else if (profit > rawD * 0.15) { k = "grade"; v = "Grade it"; w = "Expected graded value after fees beats your cost by a clear margin."; }
+    else if (profit > 0) { k = "hold"; v = "Marginal: keep it raw"; w = "Small expected gain after fees. Probably not worth the wait and the grade risk."; }
+    else { k = "raw"; v = "Keep or sell raw"; w = "Grading and selling fees outweigh the graded premium."; }
     box.dataset.v = k; $("#gv-t", el).textContent = v; $("#gv-w", el).textContent = w;
-    const d = (x) => isFinite(x) ? money(Math.round(x * 100)) : "—";
-    $("#gb", el).innerHTML = [["Expected value after grading", d(ev)], ["Total cost (card + fee + shipping)", d(cost)],
-      [`Expected profit`, `<b class="${profit >= 0 ? "up" : "down"}">${profit >= 0 ? "+" : "−"}${d(Math.abs(profit))}</b>`],
+    const d = (x) => isFinite(x) ? money(Math.round(x)) : "—";
+    const t = psa.tiers[ti], up = custom ? null : upTier(psa, ti, p10);
+    $("#gb", el).innerHTML = [[`Expected value after ${esc(pl.label)}${s.sell === "none" ? "" : " fees"}`, d(m.value)],
+      ["Total cost (card + grading + shipping)", d(m.total)],
+      [custom ? "Grading" : `Grading: PSA ${esc(t[0])}, about ${esc(t[3])} business days`, up ? `${d(m.grading)} avg` : d(m.grading)],
+      ...(up ? [[up.over ? `A 10 is worth more than PSA's top tier we track; the real fee is higher` : `A 10 is upcharged to ${esc(up.t[0])}`, d(up.t[1])]] : []),
+      ["Expected profit", `<b class="${profit >= 0 ? "up" : "down"}">${profit >= 0 ? "+" : "−"}${d(Math.abs(m.profit))}</b>`],
       ["Average cost to land one PSA 10", d(chase)], ["Buy a PSA 10 outright", d(p10)]]
       .map(([l, x]) => `<div><span>${l}</span><span class="num">${x}</span></div>`).join("");
   };
@@ -1862,7 +1876,8 @@ async function pageIntel() {
   $("#in-days").textContent = d.history_days;
   if (g.picks?.length) {
     $("#in-graded").hidden = false; $("#in-nav-grade").hidden = false;
-    $("#in-picks").innerHTML = g.picks.map((x) => `<a class="in-mover" href="${prodUrl(x.id, x.g)}">${imgTag(x.id, "", 200)}<span class="in-lab up">GRADING PICK · ${x.roi}% RETURN</span>
+    if (g.basis && $("#in-grade-basis")) $("#in-grade-basis").textContent = g.basis;
+    $("#in-picks").innerHTML = g.picks.map((x) => `<a class="in-mover" href="${prodUrl(x.id, x.g)}">${imgTag(x.id, "", 200)}<span class="in-lab up">GRADING PICK · ${x.roi}% AFTER FEES</span>
       <span class="in-name">${esc(cleanN(x.n))}</span><span class="in-set">${esc(x.sn)}</span>
       <span class="in-price up">+${money(x.profit)}</span><span class="in-set">Raw ${money(x.p)} · PSA 10 ${money(x.g10)} (${(x.g10 / x.p).toFixed(1)}×)</span></a>`).join("");
     if ((g.up || []).length || (g.down || []).length) {
@@ -1875,24 +1890,81 @@ async function pageIntel() {
   spy();
 }
 
+/* ---------- grading cost model (mirrors tools/gradecost.py) ----------
+   Grader tiers with upcharges and marketplace selling fees live in assets/grade-fees.json. Money is in cents. */
+const FEE_FALLBACK = { checked: "", graders: { PSA: { upcharge: false, tiers: [["Standard", 5999, null, "90–100"]] } }, sell: { ebay: { label: "eBay", flat: 40, parts: [[13.25, 0, null, null]] }, none: { label: "In person (no fees)", flat: 0, parts: [] } } };
+let feeBook;
+const gradeFees = () => (feeBook ||= fetch("assets/grade-fees.json", { cache: "no-cache" }).then((r) => r.ok ? r.json() : FEE_FALLBACK).catch(() => FEE_FALLBACK));
+const SHIP_DEFAULT = 15;
+// cheapest tier index whose value limit covers v (the top tier if none does)
+function tierFor(gr, v) { const t = gr.tiers; for (let i = 0; i < t.length; i++) if (t[i][2] == null || v <= t[i][2]) return i; return t.length - 1; }
+// grading fee for one outcome worth v, sent in at tier ti: graders that charge by value upcharge to the tier that covers it
+const feeAt = (gr, ti, v) => gr.upcharge ? Math.max(gr.tiers[ti][1], gr.tiers[tierFor(gr, v)][1]) : gr.tiers[ti][1];
+// what the seller keeps from a sale of v on a marketplace
+function netSale(pl, v) {
+  if (!pl || !v) return v || 0;
+  let fee = pl.flat || 0;
+  for (const [pct, lo, hi, cap] of pl.parts) { const part = Math.max(0, (hi == null ? v : Math.min(v, hi)) - lo) * pct / 100; fee += cap == null ? part : Math.min(part, cap); }
+  return Math.max(0, v - fee);
+}
+// how often a grade sells, from a graded entry [price, sales 90d, sales/day 7d, trend, 90d avg, 7d, last sale date]
+function liqOf(g, today = new Date().toISOString().slice(0, 10)) {
+  if (!g) return null;
+  const rate = Math.max(g[2] || 0, (g[1] || 0) / 90);
+  const stale = !!(g[6] && today && (Date.parse(today) - Date.parse(g[6])) / 864e5 > 45);
+  const k = stale ? "slow" : rate >= 1 ? "daily" : rate >= 1 / 7 ? "weekly" : "slow";
+  return { k, rate: stale ? 0 : rate, cls: { daily: "hot", weekly: "ok", slow: "slow" }[k], label: { daily: "Sells daily", weekly: "Sells weekly", slow: "Slow seller" }[k],
+    sub: stale ? `last sold ${fmtShort(g[6])}` : rate >= 1 ? `${rate.toFixed(1)} sales/day` : rate * 7 >= 1.5 ? `${Math.round(rate * 7)} sales/wk` : rate * 7 >= 1 ? "1 sale/wk" : `${g[1] || 0} sale${g[1] === 1 ? "" : "s"} in 90 days` };
+}
+/* One card's numbers. buy = raw cost today; v10/v9/low = what each outcome sells for; fee(v) = grading fee for an outcome
+   worth v; pl = marketplace. Returns expected profit after every fee, and the 10 price where grading breaks even. */
+function gradeMath({ buy, v10, v9, low, o10, o9, fee, ship, pl }) {
+  const o8 = Math.max(0, 1 - o10 - o9);
+  const k = buy + ship + o9 * (fee(v9) - netSale(pl, v9)) + o8 * (fee(low) - netSale(pl, low));   // what the 10s have to make up
+  let be10 = 0;
+  if (k > 0) {
+    const ok = (v) => o10 * (netSale(pl, v) - fee(v)) >= k;
+    if (!(o10 > 0) || !ok(1e9)) be10 = Infinity;
+    else { let lo = 0, hi = 1e9; for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (ok(m)) hi = m; else lo = m; } be10 = hi; }
+  }
+  if (v10 == null) return { be10, grading: fee(0), total: buy + ship + fee(0) };
+  const grading = o10 * fee(v10) + o9 * fee(v9) + o8 * fee(low), total = buy + ship + grading;
+  const value = o10 * netSale(pl, v10) + o9 * netSale(pl, v9) + o8 * netSale(pl, low);
+  return { be10, grading, total, value, profit: value - total, roi: (value - total) / total };
+}
+const tierLabel = (t) => `${t[0]} · ${money(t[1])}${t[2] ? ` · up to ${money(t[2])}` : ""} · ${t[3]} days`;
+// a grade worth more than the tier you sent it in at: the tier it's upcharged to, flagged when it's past every tier we track
+const upTier = (gr, ti, v) => { if (!gr.upcharge || !v || tierFor(gr, v) <= ti) return null; const t = gr.tiers[tierFor(gr, v)], top = gr.tiers[gr.tiers.length - 1]; return { t, over: top[2] != null && v > top[2] }; };
+const upNote = (co, grade, tier, u) => u.over ? `A ${co} ${grade} here is worth more than ${co}'s ${u.t[0]} tier covers (${money(u.t[2])}), so the real fee is higher than the ${money(u.t[1])} counted here. Check ${co}'s premium tiers before you submit.`
+  : `A ${co} ${grade} is worth more than ${tier} covers, so it's upcharged to ${u.t[0]} (${money(u.t[1])}). That's counted in the cost.`;
+
 /* ---------- Grading Insights: which cards are worth grading, with every assumption editable ----------
-   Works today from raw prices (break-even PSA 10 price per card). When eBay slab comps are connected
-   (data/slabs.json) it adds real graded prices and ranks by expected profit. */
+   Ranks cards by expected profit after grading fees (with upcharges), shipping and selling fees, from real graded sold prices. */
 const GCOS = { PSA: "PSA", CGC: "CGC", BGS: "BGS", TAG: "TAG" };
 async function pageGrading() {
-  const [meta, gd, graded] = await Promise.all([getJSON("meta.json"), getJSON("grading.json"), getJSON("graded.json").catch(() => ({ cards: {} }))]);
+  const [meta, gd, graded, fees] = await Promise.all([getJSON("meta.json"), getJSON("grading.json"), getJSON("graded.json").catch(() => ({ cards: {} })), gradeFees()]);
   const GK = { PSA: ["psa10", "psa9", "10", "9"], CGC: ["cgc10", "cgc9", "10", "9"], BGS: ["bgs9_5", "bgs9", "9.5", "9"], TAG: ["tag10", "tag9", "10", "9"] };
-  const KEY = "dys-grading4";
-  let st = { co: "PSA", fee: 25, ship: 8, o10: 30, o9: 50, x9: 1.0, game: "all", era: "all", min: 20, max: 5000, sort: "profit", q: "", only: true };
-  try { st = { ...st, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch {}
+  const KEY = "dys-grading5", today = meta.updated;
+  let st = { co: "PSA", tier: {}, fee: 25, ship: SHIP_DEFAULT, sell: "ebay", o10: 30, o9: 50, x9: 1.0, game: "all", era: "all", min: 20, max: 5000, sort: "profit", q: "", only: true, liq: true };
+  try {
+    const old = JSON.parse(localStorage.getItem("dys-grading4") || "{}");    // keep filters from the old version, not its out-of-date fees
+    for (const k of ["co", "o10", "o9", "x9", "game", "era", "min", "max", "sort", "q", "only"]) if (k in old) st[k] = old[k];
+    st = { ...st, ...JSON.parse(localStorage.getItem(KEY) || "{}") };
+  } catch {}
+  if (!fees.graders[st.co]) st.co = "PSA";
+  if (!fees.sell[st.sell]) st.sell = "ebay";
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch {} };
   const setOf = (g) => meta.groups[g]?.[0] || "";
   const games = meta.games.map((g) => [g.slug, g.label]).filter(([s]) => gd.rows.some((r) => r[7] === s));
+  const tierOpts = () => fees.graders[st.co].tiers.map((t, i) => `<option value="${i}"${String(st.tier[st.co] ?? 0) === String(i) ? " selected" : ""}>${esc(tierLabel(t))}</option>`).join("")
+    + `<option value="custom"${st.tier[st.co] === "custom" ? " selected" : ""}>My own price</option>`;
   $("#gr-controls").innerHTML = `
-    <label class="gr-f">Grading company<select class="select" data-k="co">${Object.keys(GCOS).map((c) => `<option${c === st.co ? " selected" : ""}>${c}</option>`).join("")}</select></label>
-    <label class="gr-f">Your grading cost per card $<input class="field" type="number" min="0" step="1" data-k="fee" value="${st.fee}"></label>
-    <label class="gr-f">Shipping + insurance per card $<input class="field" type="number" min="0" step="1" data-k="ship" value="${st.ship}"></label>
-    <label class="gr-f">A 9 sells for × raw<input class="field" type="number" min="0.3" max="5" step="0.1" data-k="x9" value="${st.x9}"></label>
+    <label class="gr-f">Grading company<select class="select" data-k="co">${Object.keys(GCOS).filter((c) => fees.graders[c]).map((c) => `<option${c === st.co ? " selected" : ""}>${c}</option>`).join("")}</select></label>
+    <label class="gr-f gr-wide">Service level<select class="select" data-k="tier" id="gr-tier">${tierOpts()}</select></label>
+    <label class="gr-f" id="gr-fee-f">Your grading cost per card $<input class="field" type="number" min="0" step="1" data-k="fee" value="${st.fee}"></label>
+    <label class="gr-f">Shipping + insurance per card, both ways $<input class="field" type="number" min="0" step="1" data-k="ship" value="${st.ship}"></label>
+    <label class="gr-f">Sell the slab on<select class="select" data-k="sell">${Object.entries(fees.sell).map(([k, p]) => `<option value="${k}"${k === st.sell ? " selected" : ""}>${esc(p.label)}</option>`).join("")}</select></label>
+    <label class="gr-f">A 9 sells for × raw<input class="field" type="number" min="0.3" max="5" step="0.1" data-k="x9" value="${st.x9}"><small class="muted">used when a 9 has no sales yet</small></label>
     <label class="gr-f">Chance it grades a 10: <b id="gr-o10">${st.o10}%</b><input type="range" min="5" max="90" step="5" data-k="o10" value="${st.o10}"></label>
     <label class="gr-f">Chance it grades a 9: <b id="gr-o9">${st.o9}%</b><input type="range" min="0" max="90" step="5" data-k="o9" value="${st.o9}"></label>
     <label class="gr-f">Game<select class="select" data-k="game"><option value="all">All games</option>${games.map(([s, l]) => `<option value="${s}"${s === st.game ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
@@ -1900,49 +1972,65 @@ async function pageGrading() {
     <label class="gr-f">Raw price from $<input class="field" type="number" min="0" step="1" data-k="min" value="${st.min}"></label>
     <label class="gr-f">to $<input class="field" type="number" min="0" step="1" data-k="max" value="${st.max}"></label>
     <label class="gr-f">Search<input class="field" type="search" data-k="q" value="${esc(st.q)}" placeholder="Card or set"></label>
-    <label class="toggle gr-only"><input type="checkbox" data-k="only"${st.only ? " checked" : ""}> Only cards with graded sold prices</label>`;
+    <div class="gr-toggles"><label class="toggle"><input type="checkbox" data-k="only"${st.only ? " checked" : ""}> Only cards with graded sold prices</label>
+      <label class="toggle"><input type="checkbox" data-k="liq"${st.liq ? " checked" : ""}> Hide slow sellers</label></div>`;
+  const multi = new Set(); { const c = {}; for (const r of gd.rows) { c[r[0]] = (c[r[0]] || 0) + 1; if (c[r[0]] > 1) multi.add(r[0]); } }
   const draw = () => {
-    const o10 = st.o10 / 100, o9 = Math.min(1 - o10, st.o9 / 100), o8 = Math.max(0, 1 - o10 - o9);
+    const o10 = st.o10 / 100, o9 = Math.min(1 - o10, st.o9 / 100);
     $("#gr-o10").textContent = `${st.o10}%`; $("#gr-o9").textContent = `${Math.round(o9 * 100)}%`;
-    const fees = (st.fee + st.ship) * 100, q = st.q.trim().toLowerCase(), [k10, k9, l10, l9] = GK[st.co];
-    const list = [];
-    const multi = new Set(); { const c = {}; for (const r of gd.rows) { c[r[0]] = (c[r[0]] || 0) + 1; if (c[r[0]] > 1) multi.add(r[0]); } }
+    const gr = fees.graders[st.co], pl = fees.sell[st.sell], custom = st.tier[st.co] === "custom";
+    const ti = custom ? 0 : Math.min(gr.tiers.length - 1, Number(st.tier[st.co]) || 0), tier = gr.tiers[ti];
+    $("#gr-fee-f").hidden = !custom;
+    const fee = custom ? () => Math.round(st.fee * 100) : (v) => feeAt(gr, ti, v);
+    const ship = Math.round(st.ship * 100), q = st.q.trim().toLowerCase(), [k10, k9, l10, l9] = GK[st.co];
+    const list = []; let slowHidden = 0;
     for (const [id, g, n, p, lo, r, no, game, era] of gd.rows) {
       if (p < st.min * 100 || p > st.max * 100 || (st.game !== "all" && game !== st.game) || (st.era !== "all" && era !== st.era)) continue;
       if (q && !(n + " " + setOf(g)).toLowerCase().includes(q)) continue;
-      const buy = Math.min(p, lo || p), total = buy + fees;      // you'd buy at the lowest listing today
       let gc = multi.has(id) ? {} : graded.cards?.[id]?.g || {};
       if (gc.psa10 && !(gc.psa10[0] >= p * 1.1 && gc.psa10[0] <= p * 60)) gc = {};      // mismatched comp
       const G10 = gc[k10], G9 = gc[k9];
       if (st.only && !G10) continue;
-      const nine = G9 ? G9[0] : p * (st.x9 || 1), low = p * 0.7;
-      const be10 = o10 > 0 ? Math.max(0, (total - o9 * nine - o8 * low) / o10) : Infinity;
-      const g10 = G10 ? G10[0] : null;
-      const ev = g10 ? o10 * g10 + o9 * nine + o8 * low : null;
-      list.push({ id, g, n, p, lo, r, no, buy, total, be10, mult: be10 / p, g10, g9: G9 ? G9[0] : null, sales: G10 ? G10[1] : 0, vol: G10 ? G10[2] : 0, trend: G10 ? G10[3] : "", profit: ev != null ? ev - total : null, roi: ev != null ? (ev - total) / total : null });
+      const liq = liqOf(G10, today);
+      if (st.liq && liq?.k === "slow") { slowHidden++; continue; }
+      const buy = Math.min(p, lo || p);      // you'd buy at the lowest listing today
+      const m = gradeMath({ buy, v10: G10 ? G10[0] : null, v9: G9 ? G9[0] : p * (st.x9 || 1), low: p * 0.7, o10, o9, fee, ship, pl });
+      const up = custom ? null : upTier(gr, ti, G10?.[0]);
+      list.push({ id, g, n, p, r, no, buy, ...m, mult: m.be10 / p, g10: G10 ? G10[0] : null, g9: G9 ? G9[0] : null, trend: G10 ? G10[3] : "", liq, up });
     }
-    const live = list.some((x) => x.g10);
-    const by = { value: (a, b) => b.p - a.p, deal: (a, b) => (a.buy / a.p) - (b.buy / b.p) || b.p - a.p, profit: (a, b) => (b.profit ?? -1e12) - (a.profit ?? -1e12), roi: (a, b) => (b.roi ?? -1e9) - (a.roi ?? -1e9) };
+    const by = { value: (a, b) => b.p - a.p, liq: (a, b) => (b.liq?.rate ?? -1) - (a.liq?.rate ?? -1) || (b.profit ?? -1e12) - (a.profit ?? -1e12),
+      profit: (a, b) => (b.profit ?? -1e12) - (a.profit ?? -1e12), roi: (a, b) => (b.roi ?? -1e9) - (a.roi ?? -1e9) };
     list.sort(by[st.sort] || by.profit);
     const nG = Object.keys(graded.cards || {}).length;
-    $("#gr-status").innerHTML = `Graded prices: ${nG ? `<b>${nG.toLocaleString()} Pokémon cards</b> with real eBay sold prices (updated ${esc(graded.updated || "")}, about 45 more added daily).` : "connecting"}${st.only ? "" : " Cards without graded sales show only a break-even price."} `
-      + `<b>${list.length.toLocaleString()} cards</b> match. Only cards with a steady price and live listings are shown. <b>Break-even ${esc(st.co)} 10</b> is what a 10 must sell for before grading pays off at your odds: check it against <b>${esc(st.co)} 10 sold</b>.`;
+    $("#gr-status").innerHTML = `<b>${esc(st.co)} ${custom ? "at your price" : esc(tier[0])}</b>${custom ? ` ${money(Math.round(st.fee * 100))} a card` : `: ${money(tier[1])} a card, about ${esc(tier[3])} business days${gr.upcharge ? ", upcharged when a grade is worth more than the tier covers" : ""}`}. `
+      + `Sale prices are after <b>${esc(pl.label)}</b>${st.sell === "none" ? "" : " selling fees"}. ${gr.note && !custom ? esc(gr.note) + " " : ""}Fees checked ${esc(fmtShort(fees.checked))}.<br>`
+      + `Graded sold prices for <b>${nG.toLocaleString()} Pokémon cards</b> (updated ${esc(fmtShort(graded.updated))}). <b>${list.length.toLocaleString()} cards</b> match${slowHidden ? `, ${slowHidden.toLocaleString()} slow sellers hidden` : ""}. `
+      + `<b>Break-even ${esc(st.co)} ${l10}</b> is what a ${l10} must sell for before grading pays off at your odds.`;
     const sold = (n, no, gr) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(`${cleanCard(n)}${no && !cleanCard(n).includes(no.split("/")[0]) ? " " + no : ""} ${gr}`)}&LH_Sold=1&LH_Complete=1&_sop=13`;
+    const be = (x) => !isFinite(x.be10) ? "<b>—</b>" : x.be10 < 1 ? `<b class="up">Any grade</b><small class="muted">a 9 or lower still covers your cost</small>` : `<b>${money(Math.round(x.be10))}</b><small class="muted">${x.mult.toFixed(1)}× market</small>`;
     $("#gr-list").innerHTML = list.length ? list.slice(0, 120).map((x) => `<div class="gr-row in-card">
       <a class="gr-img" href="${prodUrl(x.id, x.g)}">${imgTag(x.id, "", 200)}</a>
-      <div class="gr-main"><a class="in-name" href="${prodUrl(x.id, x.g)}">${esc(cleanN(x.n))}</a><span class="in-set">${esc(setOf(x.g))}${x.no ? ` · #${esc(x.no)}` : ""}${x.r ? ` · ${esc(x.r)}` : ""}</span>
+      <div class="gr-main"><div class="gr-title"><a class="in-name" href="${prodUrl(x.id, x.g)}">${esc(cleanN(x.n))}</a>${x.liq ? `<span class="gp-liq ${x.liq.cls}" title="${esc(st.co)} ${l10}: ${esc(x.liq.sub)}">${x.liq.label}</span>` : ""}</div>
+        <span class="in-set">${esc(setOf(x.g))}${x.no ? ` · #${esc(x.no)}` : ""}${x.r ? ` · ${esc(x.r)}` : ""}</span>
         <div class="gr-stats"><div><span class="pb-lab">MARKET</span><b>${money(x.p)}</b></div>
           <div><span class="pb-lab">BUY RAW NOW</span><b>${money(x.buy)}</b><small class="muted">lowest listing</small></div>
-          <div><span class="pb-lab">ALL-IN COST</span><b>${money(x.total)}</b></div>
-          <div><span class="pb-lab">BREAK-EVEN ${esc(st.co)} 10</span>${!isFinite(x.be10) ? "<b>—</b>" : x.be10 < 1 ? `<b class="up">Any grade</b><small class="muted">a 9 or lower still covers your cost</small>` : `<b>${money(Math.round(x.be10))}</b><small class="muted">${x.mult.toFixed(1)}× market</small>`}</div>
+          <div><span class="pb-lab">ALL-IN COST</span><b>${money(Math.round(x.total))}</b><small class="muted">incl. ${money(Math.round(x.grading))} grading</small></div>
+          <div><span class="pb-lab">BREAK-EVEN ${esc(st.co)} ${l10}</span>${be(x)}</div>
           ${x.g9 ? `<div><span class="pb-lab">${esc(st.co)} ${l9} SOLD</span><b>${money(x.g9)}</b></div>` : ""}
-          ${x.g10 ? `<div><span class="pb-lab">${esc(st.co)} ${l10} SOLD</span><b>${money(x.g10)}</b><small class="muted">${(x.g10 / x.p).toFixed(1)}× raw · ${x.vol >= 1 ? `${x.vol.toFixed(1)}/day` : `${x.sales} sales`}${x.trend === "up" ? " · ▲" : x.trend === "down" ? " · ▼" : ""}</small></div>
-          <div><span class="pb-lab">EXP. PROFIT</span><b class="${x.profit >= 0 ? "up" : "down"}">${x.profit >= 0 ? "+" : "−"}${money(Math.abs(Math.round(x.profit)))}</b><small class="muted">${x.roi >= 0 ? "+" : ""}${Math.round(x.roi * 100)}% return</small></div>` : ""}</div>
-        <div class="gr-links"><a href="${sold(x.n, x.no, st.co + " 10")}" target="_blank" rel="noopener">${esc(st.co)} 10 sold ↗</a><a href="${sold(x.n, x.no, st.co + " 9")}" target="_blank" rel="noopener">${esc(st.co)} 9 sold ↗</a><a href="centering.html">Check centering →</a><a href="${prodUrl(x.id, x.g)}#gcalc">Full calculator →</a></div></div></div>`).join("")
-      : `<p class="panel empty-note">No cards match. Widen the price range, switch era, or pick another game.</p>`;
+          ${x.g10 ? `<div><span class="pb-lab">${esc(st.co)} ${l10} SOLD</span><b>${money(x.g10)}</b><small class="muted">${(x.g10 / x.p).toFixed(1)}× raw · ${esc(x.liq.sub)}${x.trend === "up" ? " · ▲" : x.trend === "down" ? " · ▼" : ""}</small></div>
+          <div><span class="pb-lab">EXP. PROFIT</span><b class="${x.profit >= 0 ? "up" : "down"}">${x.profit >= 0 ? "+" : "−"}${money(Math.abs(Math.round(x.profit)))}</b><small class="muted">${x.roi >= 0 ? "+" : ""}${Math.round(x.roi * 100)}% after fees</small></div>` : ""}</div>
+        ${x.up ? `<p class="gr-note">${esc(upNote(st.co, l10, tier[0], x.up))}</p>` : ""}
+        <div class="gr-links"><a href="${sold(x.n, x.no, st.co + " " + l10)}" target="_blank" rel="noopener">${esc(st.co)} ${l10} sold ↗</a><a href="${sold(x.n, x.no, st.co + " " + l9)}" target="_blank" rel="noopener">${esc(st.co)} ${l9} sold ↗</a><a href="centering.html">Check centering →</a><a href="${prodUrl(x.id, x.g)}#gcalc">Full calculator →</a></div></div></div>`).join("")
+      : `<p class="panel empty-note">No cards match. Widen the price range, switch era, pick another game${st.liq ? ", or show slow sellers" : ""}.</p>`;
   };
-  $("#gr-controls").addEventListener("input", (e) => { const k = e.target.dataset.k; if (!k) return; st[k] = k === "only" ? e.target.checked : ["game", "co", "q", "era"].includes(k) ? e.target.value : Number(e.target.value) || 0; save(); draw(); });
-  tabs($("#gr-sort"), [["profit", "Best profit"], ["roi", "Best return %"], ["value", "Most valuable"], ["deal", "Cheapest vs market"]], st.sort, (v) => { st.sort = v; save(); draw(); });
+  $("#gr-controls").addEventListener("input", (e) => {
+    const k = e.target.dataset.k; if (!k) return;
+    if (k === "tier") st.tier[st.co] = e.target.value === "custom" ? "custom" : Number(e.target.value);
+    else st[k] = ["only", "liq"].includes(k) ? e.target.checked : ["game", "co", "q", "era", "sell"].includes(k) ? e.target.value : Number(e.target.value) || 0;
+    if (k === "co") $("#gr-tier").innerHTML = tierOpts();
+    save(); draw();
+  });
+  tabs($("#gr-sort"), [["profit", "Best profit"], ["roi", "Best return %"], ["liq", "Sells fastest"], ["value", "Most valuable"]], st.sort === "deal" ? "profit" : st.sort, (v) => { st.sort = v; save(); draw(); });
   draw();
 }
 

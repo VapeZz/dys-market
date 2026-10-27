@@ -48,6 +48,7 @@ After that it runs on its own every day at about 2:30pm Pacific, shortly after T
 - **Nothing to do.** Prices update nightly. If a run fails, GitHub emails you, and the next night's run usually catches up.
 - **GitHub pauses schedules on repos with no activity for 60 days.** The nightly job saves data every day, which should keep it active. If GitHub ever emails that the workflow was disabled, open **Actions → Nightly market update → Enable workflow**.
 - **In-stock badges** appear when your Shopify store is open to the public; while it's password-protected, that section is hidden. Products synced by Synq are matched automatically. To force a match, edit `store-overrides.json` on GitHub: `{"your-shopify-handle": 123456}`, where the number is the TCGplayer product ID from its tcgplayer.com/product/… URL.
+- **Grading and selling fees** (Grading Insights, the card-page calculator and the Intel grading picks) live in `site/assets/grade-fees.json`. When PSA, CGC, BGS, TAG, eBay, TCGplayer or Whatnot change prices, edit that file on GitHub and update its `checked` date. Prices are in cents.
 - **Add more games** (Lorcana, Magic, etc.): add a line to `GAMES` in `pipeline/config.py` with the TCGplayer category ID from tcgcsv.com/tcgplayer/categories.
 
 ## How it works

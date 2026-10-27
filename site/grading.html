@@ -4,17 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Grading Insights: is your card worth grading? · Drive Your Style</title>
-<meta name="description" content="Free grading calculator for Pokémon, One Piece, Lorcana, Yu-Gi-Oh! and more. See the break-even PSA, CGC, BGS or TAG 10 price for every card, set your own grading cost and odds, and compare with real sold prices.">
+<meta name="description" content="Free grading calculator for Pokémon, One Piece, Lorcana, Yu-Gi-Oh! and more. See the expected profit and break-even PSA, CGC, BGS or TAG 10 price for every card after grading and selling fees, from real sold prices.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Drive Your Style Market Insights">
 <meta property="og:title" content="Grading Insights: is your card worth grading? · Drive Your Style">
-<meta property="og:description" content="Free grading calculator for Pokémon, One Piece, Lorcana, Yu-Gi-Oh! and more. See the break-even PSA, CGC, BGS or TAG 10 price for every card, set your own grading cost and odds, and compare with real sold prices.">
+<meta property="og:description" content="Free grading calculator for Pokémon, One Piece, Lorcana, Yu-Gi-Oh! and more. See the expected profit and break-even PSA, CGC, BGS or TAG 10 price for every card after grading and selling fees, from real sold prices.">
 <meta property="og:image" content="https://market.driveyourstyle.net/assets/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Grading Insights: is your card worth grading? · Drive Your Style">
-<meta name="twitter:description" content="Free grading calculator for Pokémon, One Piece, Lorcana, Yu-Gi-Oh! and more. See the break-even PSA, CGC, BGS or TAG 10 price for every card, set your own grading cost and odds, and compare with real sold prices.">
+<meta name="twitter:description" content="Free grading calculator for Pokémon, One Piece, Lorcana, Yu-Gi-Oh! and more. See the expected profit and break-even PSA, CGC, BGS or TAG 10 price for every card after grading and selling fees, from real sold prices.">
 <meta name="twitter:image" content="https://market.driveyourstyle.net/assets/og.png">
 <link rel="canonical" href="https://market.driveyourstyle.net/grading.html">
 <meta name="theme-color" content="#0b0d14">
@@ -36,14 +36,16 @@
 
 <div class="wrap"><section class="block">
   <span class="in-kicker">FREE · NO SIGN-IN</span><h1 class="in-h">Grading Insights</h1>
-  <p class="muted" style="max-width:760px;margin:-6px 0 16px">Find the cards worth sending to PSA, CGC, BGS or TAG. Set your real grading cost and your odds of a 10, and every card shows the graded price it needs to sell for before grading pays off.</p>
+  <p class="muted" style="max-width:760px;margin:-6px 0 16px">Find the cards worth sending to PSA, CGC, BGS or TAG. Pick a grading tier, where you'll sell the slab and your odds of a 10, and every card shows its expected profit after grading and selling fees.</p>
   <div class="in-card gr-controls" id="gr-controls"></div>
   <div class="gr-bar"><div id="gr-sort"></div></div>
   <p class="muted gr-status" id="gr-status"></p>
   <div class="gr-list" id="gr-list"><div class="skeleton" style="height:240px"></div></div>
   <details class="in-card gr-how"><summary><b>How the estimate works</b></summary>
-    <p>Only cards with a steady price and live listings near the market price are shown, so thin or spiking prices don't mislead the math. Promos, event and prize cards are left out. All-in cost = the lowest raw listing today + your grading cost + shipping and insurance. Break-even 10 price = the graded 10 price where the expected value of grading equals the all-in cost, using your odds: a 9 sells for the multiple of raw you set (1× by default) and anything lower for about 0.7× raw. The lower the break-even compared to raw (shown as ×), the easier grading pays off.</p>
-    <p>Graded prices are recent eBay and Fanatics sold prices for each grade (PokemonPriceTracker), currently for English Pokémon cards and growing daily. Cards are ranked by expected profit: (chance of 10 × 10 price) + (chance of 9 × 9 value) + (rest × lower value) − all-in cost. Selling fees and taxes are not included. Odds are your estimate, not a prediction; check centering and surfaces first. Estimates only, not financial advice.</p></details>
+    <p>Only cards with a steady price and live listings near the market price are shown, so thin or spiking prices don't mislead the math. Promos, event and prize cards are left out. All-in cost = the lowest raw listing today + the grading fee + shipping and insurance both ways.</p>
+    <p>Grading fees come from each company's current price list, open tiers only. PSA and CGC charge by the card's graded value: when a grade is worth more than your tier covers, it's upcharged to the tier that covers it, and the cost includes that risk at your odds. Sale prices are after the selling fees of the marketplace you pick.</p>
+    <p>Expected profit = (chance of 10 × 10 price) + (chance of 9 × 9 price) + (rest × about 0.7× raw), each after selling fees, − all-in cost. Break-even 10 is the 10 price where that profit is zero at your odds; the lower it is compared to raw (shown as ×), the easier grading pays off.</p>
+    <p>Graded prices are recent eBay and Fanatics sold prices for each grade (PokemonPriceTracker), currently for English and Japanese Pokémon cards. A 10 that sells less than about once a week is marked Slow seller and hidden by default: a high price that rarely sells is hard to cash in. Odds are your estimate, not a prediction; check centering and surfaces first. Fees change often, so confirm with the grader before you submit. Taxes aren't included. Estimates only, not financial advice.</p></details>
 </section></div>
 </main>
 <footer id="foot"></footer>

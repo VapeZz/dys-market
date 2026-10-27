@@ -15,6 +15,9 @@ import re
 import sys
 from datetime import date, timedelta
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gradecost  # noqa: E402
+
 SKIP = re.compile(r"code card|\bjumbo\b|oversize|prerelease|\[staff\]|\bcase\b|display case", re.I)
 MODERN_YEARS = 3
 
@@ -87,9 +90,10 @@ def clean_n(n):
     return re.sub(r" \((Holofoil|Normal|Foil)\)$", "", n)
 
 
-def graded_intel(sd):
+def graded_intel(sd, site, today):
     """Grading picks, PSA 10 movers and a PSA 10 index from data/graded.json (PokemonPriceTracker sold prices)."""
     try:
+        fees = gradecost.load(site)
         graded = json.load(open(os.path.join(sd, "graded.json")))["cards"]
         allrows = json.load(open(os.path.join(sd, "grading.json")))["rows"]
         seen = {}
@@ -100,7 +104,12 @@ def graded_intel(sd):
         groups = json.load(open(os.path.join(sd, "meta.json")))["groups"]
     except (OSError, ValueError, KeyError):
         return {}
-    fee, o10, o9 = 3300, 0.30, 0.50          # $25 grading + $8 shipping; typical odds for a pack-fresh modern card
+    # picks use the site's default assumptions: PSA's cheapest open tier (with upcharges), shipping both ways,
+    # sold on eBay after fees, 30% odds of a 10 and 50% of a 9 (pack-fresh modern), and a PSA 10 that sells at least weekly
+    o10, o9 = 0.30, 0.50
+    stale = (date.fromisoformat(today) - timedelta(days=gradecost.STALE_DAYS)).isoformat()
+    psa = fees["graders"]["PSA"]["tiers"][0]
+    top_cap = fees["graders"]["PSA"]["tiers"][-1][2] or float("inf")     # past PSA's top tracked tier the fee isn't known
     picks, moves, idx = [], [], []
     for pid, c in graded.items():
         r = rows.get(pid)
@@ -114,11 +123,12 @@ def graded_intel(sd):
         base = {"id": int(pid), "g": gid, "n": n, "sn": sn, "k": game, "p": p, "g10": g10, "g9": g9, "vol": vol10, "sales": n10}
         if not (1.1 * p <= g10 <= 60 * p):       # a PSA 10 below raw or 60x over it is a mismatched listing, not a real comp
             continue
-        if era == "modern" and n10 >= 8 and vol10 > 0 and g10 <= p * 20:
-            cost = min(p, lo or p) + fee
-            profit = o10 * g10 + o9 * g9 + (1 - o10 - o9) * p * 0.7 - cost
+        last = g["psa10"][6] if len(g["psa10"]) > 6 else None
+        liq = gradecost.liquidity(g["psa10"])
+        if era == "modern" and n10 >= 8 and liq != "slow" and not (last and last < stale) and g10 <= p * 20 and g10 <= top_cap:
+            profit, cost = gradecost.expected(fees, min(p, lo or p), p, g10, g9, o10, o9)
             if profit > 0:
-                picks.append({**base, "profit": round(profit), "roi": round(profit / cost * 100)})
+                picks.append({**base, "profit": round(profit), "roi": round(profit / cost * 100), "liq": liq})
         avg, p7 = (g["psa10"] + [None, None])[4:6]
         # weekly move needs real weekly volume, and a believable size (thin vintage sales swing wildly)
         if avg and p7 and n10 >= 15 and vol10 >= 0.3 and g10 >= 3000 and 0.5 <= p7 / g10 <= 2 and 0.5 <= avg / g10 <= 2:
@@ -139,7 +149,10 @@ def graded_intel(sd):
         index = {"name": "PSA 10 Chase 50", "desc": "The 50 most valuable modern Pokémon cards in PSA 10, at recent sold prices", "n": len(top), "v": v,
                  "dates": [], "s": [], "d1": None, "w1": round((w - a) / a * 100, 2) if a else None, "m1": None, "vs90": True,
                  "top": [{"id": t[3]["id"], "g": t[3]["g"], "n": t[3]["n"], "p": t[0]} for t in top[:5]]}
-    return {"picks": picks[:8], "up": up, "down": down, "index": index, "n": len(graded)}
+    basis = (f"Modern Pokémon cards where a PSA 10 pays off best and sells at least weekly. Assumes raw at the lowest listing, "
+             f"PSA {psa[0]} grading (${psa[1] / 100:.2f}, plus upcharges when a grade is worth more than the tier covers), "
+             f"${gradecost.SHIP / 100:.0f} shipping, eBay selling fees, and 30% odds of a 10 and 50% of a 9.")
+    return {"picks": picks[:8], "up": up, "down": down, "index": index, "n": len(graded), "basis": basis}
 
 
 def main(argv):
@@ -284,7 +297,7 @@ def main(argv):
     if n_up:
         body += f" {n_up} card{'s' if n_up != 1 else ''} worth $10+ show steady week-long gains, {n_down} are cooling off."
 
-    graded = graded_intel(sd)
+    graded = graded_intel(sd, site, today)
     if graded.get("index"):
         indices.append(graded["index"])
     if graded.get("picks"):
