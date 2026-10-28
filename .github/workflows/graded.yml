@@ -23,9 +23,11 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+      - run: pip install -q cryptography
       - name: Refresh a batch of graded prices
         env:
           PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
+          PPT_API_KEY_OLD: ${{ secrets.PPT_API_KEY_OLD }}
           PPT_PER_RUN: "900"
         run: |
           set -e

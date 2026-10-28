@@ -24,9 +24,11 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+      - run: pip install -q cryptography
       - name: Run
         env:
           PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
+          PPT_API_KEY_OLD: ${{ secrets.PPT_API_KEY_OLD }}
         run: |
           set -e
           MODE="${{ inputs.mode || 'fetch' }}"

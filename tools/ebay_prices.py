@@ -7,20 +7,24 @@ Candidates come from site/data/grading.json (cards with trusted prices). For eac
 eBay US fixed-price listings for the raw card and, for cards $30+, a PSA 10 copy, and keep only
 listings whose title really matches (card number, name, language, no proxies/lots/other graders).
 Writes site/data/ebay.json: {"updated", "cards": {"<id>": {"at", "r": [cents, n, url], "p10": [cents, n, url]}}}
-Prices include shipping.
+Prices include shipping. The stored cache (STORE/cache.enc) is encrypted with a key from EBAY_CLIENT_SECRET.
 """
 import json
 import os
 import re
+import shutil
 import sys
 import time
 from datetime import date, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pipeline"))
 import ebay  # noqa: E402
+import sealed  # noqa: E402  (eBay's API terms: keep only working copies, don't make them available to others)
 
 PER_RUN = int(os.environ.get("EBAY_PER_RUN", "450"))
 STALE_DAYS = int(os.environ.get("EBAY_STALE_DAYS", "5"))
+SHOW_DAYS = 7          # don't show listings checked longer ago than this
 BAD = re.compile(r"proxy|custom|orica|fan ?art|replica|reprint|digital|\bcode\b|\blot\b|bundle|choose|you pick|pick your|playset|\b\d+ ?x\b|\bx ?\d+\b|"
                  r"jumbo|oversize|metal|gold ?plated|art card|sticker|sleeve|empty|binder|display|booster|sealed|mystery|repack|\bread\b", re.I)
 GRADED = re.compile(r"\b(psa|bgs|cgc|tag|beckett|sgc|ace|graded|slab|gem ?mint)\b", re.I)
@@ -100,11 +104,16 @@ def query(row, graded):
 def main(argv):
     site, store = argv[0], argv[1]
     os.makedirs(store, exist_ok=True)
-    cpath = os.path.join(store, "cache.json")
+    cpath, plain = os.path.join(store, "cache.enc"), os.path.join(store, "cache.json")
+    cache = {"last_run": "", "cards": {}}
     try:
-        cache = json.load(open(cpath))
-    except (OSError, ValueError):
-        cache = {"last_run": "", "cards": {}}
+        if os.path.exists(cpath):
+            cache = json.loads(sealed.read("ebay", cpath))
+        elif os.path.exists(plain):               # older unencrypted cache: sealed below, then removed
+            cache = json.load(open(plain))
+    except sealed.Locked as e:
+        print(f"::warning title=eBay prices::can't open the stored eBay prices ({e}); leaving ebay.json unchanged")
+        return
     today = date.today().isoformat()
     fetched = calls = 0
     have_keys = bool(os.environ.get("EBAY_CLIENT_ID") and os.environ.get("EBAY_CLIENT_SECRET"))
@@ -139,20 +148,15 @@ def main(argv):
             except Exception as e:  # network hiccup: try again next run
                 print(f"ebay: {pid} failed: {e}")
         cache["last_run"] = today
-        json.dump(cache, open(cpath, "w"), separators=(",", ":"))
-        # daily history of eBay asking prices: cheapest raw / PSA 10 Buy It Now, for cards checked today
-        hdir = os.path.join(store, "history")
-        os.makedirs(hdir, exist_ok=True)
-        hpath = os.path.join(hdir, f"{today}.json")
-        try:
-            hist = json.load(open(hpath))
-        except (OSError, ValueError):
-            hist = {}
-        for pid, c in cache["cards"].items():
-            if c.get("at") == today and (c.get("r") or c.get("p10")):
-                hist[pid] = [(c.get("r") or [None])[0], (c.get("p10") or [None])[0]]
-        json.dump(hist, open(hpath, "w"), separators=(",", ":"))
-    cards = {pid: c for pid, c in cache["cards"].items() if c.get("r") or c.get("p10")}
+    if sealed.can_seal("ebay"):
+        sealed.write("ebay", cpath, json.dumps(cache, separators=(",", ":")).encode("utf-8"))
+        if os.path.exists(plain):
+            os.remove(plain)
+    # we no longer keep a history of eBay asking prices (eBay's terms limit building pricing data from listings)
+    shutil.rmtree(os.path.join(store, "history"), ignore_errors=True)
+    # only listings checked in the last week are shown (with their age); older ones may have ended
+    fresh = (date.today() - timedelta(days=SHOW_DAYS)).isoformat()
+    cards = {pid: c for pid, c in cache["cards"].items() if (c.get("r") or c.get("p10")) and c.get("at", "") >= fresh}
     with open(os.path.join(site, "data", "ebay.json"), "w", encoding="utf-8") as f:
         json.dump({"updated": cache.get("last_run"), "cards": cards}, f, separators=(",", ":"))
     print(f"ebay: {fetched} cards refreshed ({calls} searches), {len(cards)} cards with eBay prices")

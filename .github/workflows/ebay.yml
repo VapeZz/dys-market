@@ -23,10 +23,12 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+      - run: pip install -q cryptography
       - name: Refresh a batch of eBay prices
         env:
           EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
           EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+          EBAY_CLIENT_SECRET_OLD: ${{ secrets.EBAY_CLIENT_SECRET_OLD }}
           EBAY_PER_RUN: "450"
         run: |
           set -e

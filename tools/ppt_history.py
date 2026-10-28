@@ -176,16 +176,15 @@ def fetch(site, store):
                 add.setdefault(day, {})[k] = cents
         got += 1
         time.sleep(2.1)
+    # through the snapshot store, so days before our own tracking are written encrypted (their terms: store, don't publish)
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pipeline"))
+    import snapshots  # noqa: E402
+    snapshots.SNAP_DIR = snapdir
     for day, vals in add.items():
-        path = snap_path(snapdir, day)
-        try:
-            cur = json.load(gzip.open(path, "rt"))
-        except (OSError, ValueError):
-            cur = {}
+        cur = snapshots.load(day)
         for k, v in vals.items():
             cur.setdefault(k, v)
-        with gzip.open(path, "wt", encoding="utf-8") as f:
-            json.dump(cur, f, separators=(",", ":"))
+        snapshots.save(day, cur)
     json.dump(sorted(done), open(donep, "w"))
     left = len(uniq) - len(todo)
     print(f"history: {got} products backfilled, {skipped} skipped, {len(add)} past days written, {left} products left")

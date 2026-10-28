@@ -36,6 +36,11 @@ KEEP_WEEKLY_DAYS = 400
 # Re-download a set's product list at least this often (days).
 CATALOG_REFRESH_DAYS = 7
 
+# Our own nightly tracking started on this day. Snapshots before it hold price history filled in from
+# PokemonPriceTracker, whose terms let us store it but not publish it, so they're kept encrypted
+# (see sealed.py and snapshots.py).
+SEALED_BEFORE = "2026-10-12"
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(ROOT, "data"))
 SITE_DIR = os.environ.get("SITE_DIR", os.path.join(ROOT, "site"))

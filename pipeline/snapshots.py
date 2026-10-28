@@ -1,39 +1,95 @@
-"""Daily price snapshots: one gzip JSON per date, {"pid:subtype": cents}."""
+"""Daily price snapshots: one gzip JSON per date, {"pid:subtype": cents}.
+
+Days before config.SEALED_BEFORE hold price history filled in from PokemonPriceTracker, which we may
+store but not publish, so those files are encrypted (<day>.json.gz.enc, see sealed.py). Everything
+here reads and writes both kinds; reading a sealed day without the key gives an empty snapshot.
+"""
 import gzip
 import json
 import os
 from datetime import date, timedelta
 
 import config
+import sealed
 
 SNAP_DIR = os.path.join(config.DATA_DIR, "snapshots")
+SEALED_BEFORE = getattr(config, "SEALED_BEFORE", "")
+_warned = []
 
 
-def path_for(day):
+def _plain(day):
     return os.path.join(SNAP_DIR, f"{day}.json.gz")
 
 
+def _sealed(day):
+    return _plain(day) + ".enc"
+
+
+def path_for(day):
+    return _sealed(day) if os.path.exists(_sealed(day)) else _plain(day)
+
+
 def exists(day):
-    return os.path.exists(path_for(day))
+    return os.path.exists(_plain(day)) or os.path.exists(_sealed(day))
+
+
+def protected(day):
+    return bool(SEALED_BEFORE) and day < SEALED_BEFORE
 
 
 def save(day, snap):
     os.makedirs(SNAP_DIR, exist_ok=True)
-    tmp = path_for(day) + ".tmp"
-    with gzip.open(tmp, "wt", encoding="utf-8") as f:
-        json.dump(snap, f, separators=(",", ":"))
-    os.replace(tmp, path_for(day))
+    raw = gzip.compress(json.dumps(snap, separators=(",", ":")).encode("utf-8"))
+    if protected(day):
+        sealed.write("ppt", _sealed(day), raw)          # raises sealed.Locked without the key: never store these in the clear
+        if os.path.exists(_plain(day)):
+            os.remove(_plain(day))
+        return
+    tmp = _plain(day) + ".tmp"
+    with open(tmp, "wb") as f:
+        f.write(raw)
+    os.replace(tmp, _plain(day))
 
 
 def load(day):
-    with gzip.open(path_for(day), "rt", encoding="utf-8") as f:
-        return json.load(f)
+    snap = {}
+    if os.path.exists(_sealed(day)):
+        try:
+            snap = json.loads(gzip.decompress(sealed.read("ppt", _sealed(day))))
+        except sealed.Locked as e:
+            if not _warned:
+                print(f"::warning title=Price history::older price history is encrypted and can't be read here ({e})")
+                _warned.append(1)
+    if os.path.exists(_plain(day)):
+        with gzip.open(_plain(day), "rt", encoding="utf-8") as f:
+            for k, v in json.load(f).items():
+                snap.setdefault(k, v)
+    return snap
 
 
 def available():
     if not os.path.isdir(SNAP_DIR):
         return []
-    return sorted(f[:10] for f in os.listdir(SNAP_DIR) if f.endswith(".json.gz"))
+    return sorted({f[:10] for f in os.listdir(SNAP_DIR) if f.endswith(".json.gz") or f.endswith(".json.gz.enc")})
+
+
+def seal_old():
+    """Encrypt any day before SEALED_BEFORE still stored in the clear, and re-seal days that only open with an
+    old key. Safe to run every night; does nothing without the key."""
+    if not SEALED_BEFORE or not sealed.can_seal("ppt"):
+        return 0
+    n = 0
+    for day in available():
+        if not protected(day):
+            break
+        restale = False
+        if os.path.exists(_sealed(day)):
+            with open(_sealed(day), "rb") as f:
+                restale = sealed.unseal("ppt", f.read())[1]
+        if os.path.exists(_plain(day)) or restale:
+            save(day, load(day))
+            n += 1
+    return n
 
 
 def prune(today):
@@ -53,7 +109,9 @@ def prune(today):
         else:
             keep = False
         if not keep:
-            os.remove(path_for(day))
+            for p in (_plain(day), _sealed(day)):
+                if os.path.exists(p):
+                    os.remove(p)
             removed += 1
     return removed
 

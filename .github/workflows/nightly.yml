@@ -57,6 +57,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install encryption library (stored third-party data is kept encrypted)
+        run: pip install -q cryptography
+
       - name: Restore saved prices (data branch)
         run: |
           if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then
@@ -72,6 +75,9 @@ jobs:
 
       - name: Backfill past prices
         if: ${{ inputs.backfill }}
+        env:
+          PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
+          PPT_API_KEY_OLD: ${{ secrets.PPT_API_KEY_OLD }}
         run: |
           which 7z || sudo apt-get install -y p7zip-full
           python pipeline/backfill.py
@@ -80,6 +86,8 @@ jobs:
         if: ${{ inputs.merge_games != '' }}
         env:
           MERGE_GAMES: ${{ inputs.merge_games }}
+          PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
+          PPT_API_KEY_OLD: ${{ secrets.PPT_API_KEY_OLD }}
         run: |
           which 7z || sudo apt-get install -y p7zip-full
           python pipeline/backfill.py --merge "$MERGE_GAMES"
@@ -89,9 +97,14 @@ jobs:
         continue-on-error: true
         env:
           MERGE_ARCHIVE: ${{ inputs.merge_archive }}
+          PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
+          PPT_API_KEY_OLD: ${{ secrets.PPT_API_KEY_OLD }}
         run: python pipeline/merge_archive.py "$MERGE_ARCHIVE"
 
       - name: Download today's prices and build site data
+        env:
+          PPT_API_KEY: ${{ secrets.PPT_API_KEY }}         # opens the encrypted older price history
+          PPT_API_KEY_OLD: ${{ secrets.PPT_API_KEY_OLD }}
         run: python pipeline/run.py
 
       - name: Collectors page (public binders, likes, follows)
@@ -127,12 +140,16 @@ jobs:
         continue-on-error: true
         env:
           PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
+          PPT_API_KEY_OLD: ${{ secrets.PPT_API_KEY_OLD }}
         run: |
           python tools/graded.py site data/graded 2>&1 | tee /tmp/graded.log
           echo "::notice title=Graded::$(tail -n 1 /tmp/graded.log)"
 
       - name: eBay Buy It Now prices (cache only; ebay.yml refreshes)
         continue-on-error: true
+        env:
+          EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}   # opens the encrypted cache; no client id, so no searches here
+          EBAY_CLIENT_SECRET_OLD: ${{ secrets.EBAY_CLIENT_SECRET_OLD }}
         run: |
           python tools/ebay_prices.py site data/ebay 2>&1 | tee /tmp/ebay.log
           echo "::notice title=eBay::$(tail -n 1 /tmp/ebay.log)"

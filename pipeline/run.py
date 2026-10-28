@@ -43,6 +43,12 @@ def main(argv):
         removed = snapshots.prune(day)
         if removed:
             print(f"snapshots: pruned {removed} old files")
+    try:
+        n = snapshots.seal_old()
+        if n:
+            print(f"snapshots: encrypted {n} days of third-party price history")
+    except Exception as err:  # noqa: BLE001  (never block the nightly update over this)
+        print(f"::warning title=Price history::couldn't encrypt older snapshots: {err}")
     logos.attach(groups)
     store_rows = store.fetch_store_products()
     stock = store.match_in_stock(products, store_rows)

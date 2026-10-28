@@ -5,6 +5,7 @@
 Needs PPT_API_KEY. The free plan gives 100 credits a day and each card with eBay graded data
 costs 2, so we refresh up to PER_DAY cards per day: never-fetched cards first, then the oldest.
 Only runs once per calendar day (dispatching the nightly job again doesn't spend credits).
+The stored cache (STORE/cache.enc) is encrypted with a key from PPT_API_KEY (see pipeline/sealed.py).
 Reads site/data/grading.json (tools/grading.py) for candidates; writes site/data/graded.json:
   {"updated", "cards": {"<tcgplayer id>": {"at": "YYYY-MM-DD", "g": {"psa10": [price_cents, sales, per_day, trend], ...}}}}
 """
@@ -16,6 +17,9 @@ import time
 import urllib.error
 import urllib.request
 from datetime import date, timedelta
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pipeline"))
+import sealed  # noqa: E402  (the stored cache is encrypted: their terms let us store it, not publish it)
 
 API = "https://www.pokemonpricetracker.com/api/v2/cards"
 PER_RUN = int(os.environ.get("PPT_PER_RUN", "45"))       # cards per run (paid plan: hundreds; free plan: 45/day)
@@ -50,11 +54,16 @@ def main(argv):
     site, store = argv[0], argv[1]
     key = (os.environ.get("PPT_API_KEY") or "").strip()
     os.makedirs(store, exist_ok=True)
-    cpath = os.path.join(store, "cache.json")
+    cpath, plain = os.path.join(store, "cache.enc"), os.path.join(store, "cache.json")
+    cache = {"last_run": "", "cards": {}}
     try:
-        cache = json.load(open(cpath))
-    except (OSError, ValueError):
-        cache = {"last_run": "", "cards": {}}
+        if os.path.exists(cpath):
+            cache = json.loads(sealed.read("ppt", cpath))
+        elif os.path.exists(plain):               # older unencrypted cache: sealed below, then removed
+            cache = json.load(open(plain))
+    except sealed.Locked as e:
+        print(f"::warning title=Graded prices::can't open the stored graded prices ({e}); leaving graded.json unchanged")
+        return
     today = date.today().isoformat()
     fetched = 0
     if not key:
@@ -85,7 +94,10 @@ def main(argv):
                 print(f"graded: {pid} failed: {e}")
             time.sleep(1.1)
         cache["last_run"] = today
-        json.dump(cache, open(cpath, "w"), separators=(",", ":"))
+    if key:
+        sealed.write("ppt", cpath, json.dumps(cache, separators=(",", ":")).encode("utf-8"))
+        if os.path.exists(plain):
+            os.remove(plain)
     cards = {pid: c for pid, c in cache["cards"].items() if c.get("g")}
     with open(os.path.join(site, "data", "graded.json"), "w", encoding="utf-8") as f:
         json.dump({"updated": cache.get("last_run"), "cards": cards}, f, separators=(",", ":"))

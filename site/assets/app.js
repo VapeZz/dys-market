@@ -703,12 +703,11 @@ function priceBreak(v, base) {
 }
 
 /* "In stock at Drive Your Style" tiles for a list of set items that have i.dys */
-function dysBuyBox(v, ebc) {
+function dysBuyBox(v) {
   const vsMkt = v.p ? Math.round((1 - v.dys.p / v.p) * 100) : null;
-  const eb = ebc?.r?.[0], vsEb = eb ? eb - v.dys.p : null;
   return `<a class="dys-buy" href="${esc(v.dys.u)}" data-where="product-box"><span class="ds-tag">● IN STOCK AT DRIVE YOUR STYLE</span>
     <span class="db-row"><b>${money(v.dys.p)}</b><span class="db-go">Buy now →</span></span>
-    <span class="db-sub">${vsMkt != null && vsMkt > 0 ? `${vsMkt}% under market · ` : ""}${vsEb != null && vsEb > 0 ? `${money(vsEb)} less than the cheapest on eBay · ` : ""}Ships from Las Vegas</span></a>`;
+    <span class="db-sub">${vsMkt != null && vsMkt > 0 ? `${vsMkt}% under market · ` : ""}Ships from Las Vegas</span></a>`;
 }
 function stockRow(anchor, items, title, where, pos = "beforebegin") {
   if (!anchor || !items.length) return;
@@ -724,7 +723,8 @@ function ebayRow(e, mkt) {
   if (!e || !(e.r || e.p10)) return "";
   const cell = (x, lab) => x ? `<a class="eb-cell" href="${esc(x[2])}" target="_blank" rel="noopener nofollow"><span class="pb-lab">${lab}</span><b>${money(x[0])}</b>
     <span class="muted pb-sm">${x[1] > 1 ? `cheapest of ${x[1]} listings` : "1 listing"}${lab === "RAW" && mkt ? ` · ${x[0] <= mkt ? `<span class="up">${Math.round((1 - x[0] / mkt) * 100)}% under market</span>` : `${Math.round((x[0] / mkt - 1) * 100)}% over market`}` : ""}</span><span class="eb-go">View on eBay ↗</span></a>` : "";
-  return `<div class="eb panel"><div class="eb-head"><b>eBay Buy It Now</b><span class="muted pb-sm">US listings, shipping included · checked ${esc(fmtShort(e.at))}</span></div>
+  const age = Math.max(0, Math.round((Date.now() - Date.parse(e.at + "T12:00:00")) / 864e5));
+  return `<div class="eb panel"><div class="eb-head"><b>eBay Buy It Now</b><span class="muted pb-sm">US listings, shipping included · checked ${age < 1 ? "today" : age === 1 ? "yesterday" : `${age} days ago`} (${esc(fmtShort(e.at))}). Listings change fast: tap through for the live price.</span></div>
     <div class="eb-grid">${cell(e.r, "RAW")}${cell(e.p10, "PSA 10")}</div></div>`;
 }
 
@@ -749,7 +749,7 @@ async function pageProduct() {
         ${variants.length > 1 ? `<div id="var" style="margin-top:12px"></div>` : ""}
         <div class="muted" style="margin-top:14px">Market price</div><div class="price-big">${v.p == null ? `<span class="muted" style="font-size:.6em">No market price yet</span>` : money(v.p)}</div>
         ${v.dys && below(v.dys.p, v.p) ? `<p style="margin:6px 0 0">${BELOW} <span class="muted">Our price ${money(v.dys.p)} is ${Math.round((1 - v.dys.p / v.p) * 100)}% under market</span></p>` : ""}
-        ${v.dys ? dysBuyBox(v, ebc) : ""}
+        ${v.dys ? dysBuyBox(v) : ""}
         <div class="kpis">${[["7", "7 days"], ["30", "30 days"], ["90", "90 days"], ["a", `Since ${fmtShort(meta.first)}`]].map(([k, l]) => `<div class="kpi"><div class="l">${l}</div>${chg(v.ch?.[k])}</div>`).join("")}</div>
         ${priceBreak(v, base)}${ebayRow(ebc, v.p)}
         <div class="btns">${v.dys ? ""
