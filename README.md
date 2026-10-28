@@ -7,7 +7,7 @@ A market price tracker in the style of market.tcgguy.com, built to run at **mark
 - Sets list, set pages (sealed and card prices with 7/30/90-day change), product pages with a price-history chart
 - Trends page ($5+ / $20+ / $100+ sealed movers) and a Card movers page (filter by game, set, last 12 months)
 - "In stock at Drive Your Style" badges that link to your Shopify products, with your price next to the market price
-- **DYS Edge** (owner only, `edge.html`): a private phone app for buying, selling and trading. Today's brief and best flips, search with price history and your max buy, deals (flips, momentum, dips, under market, movers, falling, your store), a flip calculator, trade evaluator, lot offer, grading check, fee comparison, PSA cert lookup, plus an inventory and watchlist saved on the phone (with a backup file). Open it on your phone and add it to the Home Screen.
+- **DYS Edge** (owner only, `edge/`, installs as its own app next to DYS Market): a private phone app for buying, selling and trading. Today's brief and best flips, search with price history and your max buy, deals (flips, momentum, dips, under market, movers, falling, your store), a flip calculator, trade evaluator, lot offer, grading check, fee comparison, PSA cert lookup, plus an inventory and watchlist saved on the phone (with a backup file). Open it on your phone and add it to the Home Screen.
 - **Daily Scout** (owner only, `scout.html`): a ranked buy list every night. Flips (cheapest listing far enough under market to resell for profit after fees), momentum and dip picks, each with a score, max buy price, reasons and risk flags
 - Dark and light themes, works on phones
 

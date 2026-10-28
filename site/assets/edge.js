@@ -3,6 +3,8 @@
    (TCGplayer market prices, our own price history, eBay Buy It Now listings with their age).
    Holdings, watchlist, trades, lots and settings are kept on this device (with a backup file). */
 (() => {
+  // the app lives in /edge/ (its own install scope); site files are one folder up
+  const BASE = /\/edge\/(index\.html)?$/.test(location.pathname) ? "../" : "";
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -47,8 +49,8 @@
 
   /* ---------- data (the market site's own files) ---------- */
   const cache = {};
-  const getJSON = (p) => (cache[p] ||= fetch(`data/${p}`, { cache: "no-cache" }).then((r) => { if (!r.ok) throw new Error(p); return r.json(); }));
-  const feesP = fetch("assets/grade-fees.json", { cache: "no-cache" }).then((r) => r.json()).catch(() => ({ graders: { PSA: { upcharge: false, tiers: [["Standard", 5999, null, "90–100"]] } },
+  const getJSON = (p) => (cache[p] ||= fetch(`${BASE}data/${p}`, { cache: "no-cache" }).then((r) => { if (!r.ok) throw new Error(p); return r.json(); }));
+  const feesP = fetch(`${BASE}assets/grade-fees.json`, { cache: "no-cache" }).then((r) => r.json()).catch(() => ({ graders: { PSA: { upcharge: false, tiers: [["Standard", 5999, null, "90–100"]] } },
     sell: { ebay: { label: "eBay", flat: 40, parts: [[13.25, 0, null, null]] }, none: { label: "In person (no fees)", flat: 0, parts: [] } } }));
   let META = null, FEES = null, ROWS = null, HAY = null;
   const IDX = new Map();
@@ -302,7 +304,7 @@
         <a class="btn sm" href="${tcgUrl(it.id)}" target="_blank" rel="noopener">TCGplayer ↗</a>
         <a class="btn sm" href="${soldUrl(it.n, no || "")}" target="_blank" rel="noopener">eBay sold ↗</a>
         ${it.t === "c" ? `<a class="btn sm" href="${soldUrl(it.n, (no || "") + " PSA 10")}" target="_blank" rel="noopener">PSA 10 sold ↗</a>` : ""}
-        <a class="btn sm" href="product.html?id=${it.id}&set=${g}" target="_blank" rel="noopener">Full page ↗</a></div></section>`;
+        <a class="btn sm" href="${BASE}product.html?id=${it.id}&set=${g}" target="_blank" rel="noopener">Full page ↗</a></div></section>`;
     const form = $("#c-form");
     $("#c-inv").onclick = () => {
       const k = keyOf(it.id, it.n), have = S.inv.find((y) => y.k === k);
@@ -502,7 +504,7 @@
         <label class="f full">Condition<select class="select" data-g="cond">${Object.entries(ODDS).map(([k, o]) => `<option value="${k}"${k === GRADE.cond ? " selected" : ""}>${o[2]} (${o[0]}% 10s, ${o[1]}% 9s)</option>`).join("")}</select></label>
         <label class="f full">PSA service<select class="select" data-g="tier">${psa.tiers.map((t, i) => `<option value="${i}"${String(GRADE.tier) === String(i) ? " selected" : ""}>${esc(t[0])} · ${money(t[1])}${t[2] ? ` · up to ${money(t[2], true)}` : ""}</option>`).join("")}</select></label>
         <label class="f full">Sell the slab on${platSelect("gr-p", GRADE.plat)}</label></div>
-      <div class="links">${GRADE.name ? `<a class="btn sm" href="${soldUrl(GRADE.name, GRADE.no + " PSA 10")}" target="_blank" rel="noopener">PSA 10 sold ↗</a><a class="btn sm" href="${soldUrl(GRADE.name, GRADE.no + " PSA 9")}" target="_blank" rel="noopener">PSA 9 sold ↗</a>` : ""}<a class="btn sm" href="centering.html" target="_blank" rel="noopener">Check centering ↗</a></div>
+      <div class="links">${GRADE.name ? `<a class="btn sm" href="${soldUrl(GRADE.name, GRADE.no + " PSA 10")}" target="_blank" rel="noopener">PSA 10 sold ↗</a><a class="btn sm" href="${soldUrl(GRADE.name, GRADE.no + " PSA 9")}" target="_blank" rel="noopener">PSA 9 sold ↗</a>` : ""}<a class="btn sm" href="${BASE}centering.html" target="_blank" rel="noopener">Check centering ↗</a></div>
       <div id="gr-out"></div></section>`;
     const calc = () => {
       $$("[data-g]", el).forEach((i) => { GRADE[i.dataset.g] = i.value; }); GRADE.plat = $("#gr-p").value;
@@ -644,6 +646,6 @@
     $("#asof").textContent = META.updated ? `Prices ${fmtDay(META.updated)}` : "";
     route();
     (window.requestIdleCallback || setTimeout)(() => loadIndex().catch(() => {}));
-    if ("serviceWorker" in navigator && window.isSecureContext) navigator.serviceWorker.register("sw.js").catch(() => {});
+    if ("serviceWorker" in navigator && window.isSecureContext) navigator.serviceWorker.register(`${BASE}sw.js`).catch(() => {});
   })();
 })();
