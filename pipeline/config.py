@@ -48,6 +48,12 @@ SEALED_BEFORE = "2026-10-12"
 # upgrading and everything comes back on the next nightly run.
 PPT_BUSINESS_PLAN = False
 
+# Personal use, which PokemonPriceTracker's API plan allows ("personal and non-commercial purposes"):
+# graded prices are fetched for the owner's private DYS Edge app only. They're published encrypted
+# (data/edge/graded.enc, readable only with the PokemonPriceTracker API key, which only the owner has)
+# and never shown on this site. Using them for the business's buying decisions needs the Business plan.
+PPT_PERSONAL = True
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(ROOT, "data"))
 SITE_DIR = os.environ.get("SITE_DIR", os.path.join(ROOT, "site"))

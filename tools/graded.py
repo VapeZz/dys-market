@@ -8,7 +8,12 @@ Only runs once per calendar day (dispatching the nightly job again doesn't spend
 The stored cache (STORE/cache.enc) is encrypted with a key from PPT_API_KEY (see pipeline/sealed.py).
 Reads site/data/grading.json (tools/grading.py) for candidates; writes site/data/graded.json:
   {"updated", "cards": {"<tcgplayer id>": {"at": "YYYY-MM-DD", "g": {"psa10": [price_cents, sales, per_day, trend], ...}}}}
+That public file is only filled with PPT_BUSINESS_PLAN on. With PPT_PERSONAL on, the same prices go to
+site/data/edge/graded.enc for the owner's private DYS Edge app instead: gzip'd JSON
+  {"u": updated, "c": {"<tcgplayer id>": ["YYYY-MM-DD", {"psa10": [price_cents, sales_90d, sales_per_day, last_sale], ...}]}}
+sealed with a key from PPT_API_KEY (pipeline/sealed.py, purpose "edge"), which the app derives from the key the owner enters.
 """
+import gzip
 import json
 import os
 import re
@@ -53,7 +58,7 @@ def summarize(card):
 
 def main(argv):
     site, store = argv[0], argv[1]
-    if not config.PPT_BUSINESS_PLAN:
+    if not (config.PPT_BUSINESS_PLAN or config.PPT_PERSONAL):
         # their terms need the Business plan for a site like ours: fetch nothing, show nothing, keep the stored cache
         with open(os.path.join(site, "data", "graded.json"), "w", encoding="utf-8") as f:
             json.dump({"updated": date.today().isoformat(), "cards": {}, "paused": True}, f, separators=(",", ":"))
@@ -112,8 +117,25 @@ def main(argv):
             os.remove(plain)
     cards = {pid: c for pid, c in cache["cards"].items() if c.get("g")}
     with open(os.path.join(site, "data", "graded.json"), "w", encoding="utf-8") as f:
-        json.dump({"updated": cache.get("last_run"), "cards": cards}, f, separators=(",", ":"))
-    print(f"graded: {fetched} refreshed today, {len(cards)} cards with graded prices")
+        if config.PPT_BUSINESS_PLAN:
+            json.dump({"updated": cache.get("last_run"), "cards": cards}, f, separators=(",", ":"))
+        else:   # personal use only: the public site shows none of it
+            json.dump({"updated": today, "cards": {}, "paused": True}, f, separators=(",", ":"))
+    where = "site"
+    if config.PPT_PERSONAL and key:
+        write_edge(site, cache.get("last_run"), cards)
+        where = "site" if config.PPT_BUSINESS_PLAN else "DYS Edge only (encrypted)"
+    print(f"graded: {fetched} refreshed today, {len(cards)} cards with graded prices, for {where}")
+
+
+def write_edge(site, updated, cards):
+    """The owner's private copy for DYS Edge: only someone holding PPT_API_KEY can read it."""
+    slim = {pid: [c.get("at"), {g: [v[0], v[1], v[2], v[6] if len(v) > 6 else None] for g, v in c["g"].items()}]
+            for pid, c in cards.items()}
+    blob = gzip.compress(json.dumps({"u": updated, "c": slim}, separators=(",", ":")).encode("utf-8"), mtime=0)
+    out = os.path.join(site, "data", "edge")
+    os.makedirs(out, exist_ok=True)
+    sealed.write("edge", os.path.join(out, "graded.enc"), blob)
 
 
 if __name__ == "__main__":

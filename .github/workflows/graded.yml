@@ -1,7 +1,8 @@
 name: Graded prices refresh
 
 # Paid PokemonPriceTracker plan: refreshes graded (PSA/CGC/BGS/TAG) sold prices in batches
-# every 4 hours, each card at most every 3 days, and updates just data/graded.json on the site.
+# every 4 hours, each card at most every 3 days, and updates just data/graded.json on the site
+# (Business plan) or the owner's encrypted DYS Edge copy, data/edge/graded.enc (personal use).
 on:
   schedule:
     - cron: "20 */4 * * *"
@@ -39,5 +40,5 @@ jobs:
             git -C $d config user.name "dys-market-bot"; git -C $d config user.email "dys-market-bot@users.noreply.github.com"
           done
           git -C /tmp/db add data/graded && (git -C /tmp/db diff --cached --quiet || (git -C /tmp/db commit -q -m "Graded prices $(date -u +%FT%H:%MZ)" && git -C /tmp/db push -q origin data))
-          git -C /tmp/pages add data/graded.json && (git -C /tmp/pages diff --cached --quiet || (git -C /tmp/pages commit -q -m "Graded prices $(date -u +%FT%H:%MZ)" && git -C /tmp/pages push -q origin gh-pages))
+          git -C /tmp/pages add data/graded.json $([ -d /tmp/pages/data/edge ] && echo data/edge) && (git -C /tmp/pages diff --cached --quiet || (git -C /tmp/pages commit -q -m "Graded prices $(date -u +%FT%H:%MZ)" && git -C /tmp/pages push -q origin gh-pages))
           echo "::notice title=Graded::$(tail -n 1 /tmp/g.log)"

@@ -186,9 +186,13 @@
     }
     await loadIndex();
     drawPortfolio($("#t-port"));
-    const gb = S.board.map((x) => ({ x, e: gradeEval(marketOf(x) || 0, x.p10, x.p9) })).filter((r) => r.e.profit > 0).sort((a, b) => b.e.profit - a.e.profit).slice(0, 3);
-    if (gb.length) { $("#t-grade").hidden = false; $("#t-grade").innerHTML = `<div class="sec-head"><h2>Best to grade</h2><a class="more" href="#grade">Grading board</a></div>
-      <div class="list">${gb.map(({ x, e }) => rowHTML(x, `<b class="up">${signed(Math.round(e.profit))}</b><small class="muted">${e.v[1]}</small>`)).join("")}</div>`; }
+    await loadGraded();
+    const gb = S.board.map((x) => { const bp = boardPrices(x); return { x, e: gradeEval(marketOf(x) || 0, bp.p10, bp.p9, bp.p8) }; }).filter((r) => r.e.profit > 0).sort((a, b) => b.e.profit - a.e.profit).slice(0, 3);
+    const mine = new Set(S.board.map((x) => String(x.id)));
+    if (gb.length < 3 && GR) for (const o of (await opportunities()) || []) { if (gb.length >= 3 || o.e.profit <= 0) break; if (!mine.has(String(o.r[0]))) gb.push({ x: { id: o.r[0], g: o.r[1], n: o.r[2] }, e: o.e }); }
+    if (gb.length) { $("#t-grade").hidden = false; $("#t-grade").innerHTML = `<div class="sec-head"><h2>Best to grade</h2><a class="more" href="#grade" id="t-grade-more">${GR ? "All opportunities" : "Grading board"}</a></div>
+      <div class="list">${gb.map(({ x, e }) => rowHTML(x, `<b class="up">${signed(Math.round(e.profit))}</b><small class="muted">${e.v[1]}</small>`)).join("")}</div>`;
+      $("#t-grade-more").onclick = () => { SUB.grade = GR ? "find" : "board"; }; }
     drawAlerts($("#t-alerts"));
   }
   function portfolio() {
@@ -273,7 +277,7 @@
     sheet.hidden = false; document.body.style.overflow = "hidden";
     const card = $("#sheet-card");
     card.innerHTML = `<div class="grab"><span class="lab">Card details</span><button type="button" class="btn sm close">Close</button></div><p class="muted">Loading…</p>`;
-    const [{ it, set }, eb] = await Promise.all([detail(id, g, n), getJSON("ebay.json").catch(() => ({ cards: {} }))]);
+    const [{ it, set }, eb] = await Promise.all([detail(id, g, n), getJSON("ebay.json").catch(() => ({ cards: {} })), loadGraded()]);
     if (!it) { card.innerHTML = `<div class="grab"><span class="lab">Card details</span><button type="button" class="btn sm close">Close</button></div><div class="empty"><b>No price for this one yet</b>It may be too new or not sold recently.</div>`; return; }
     const x = { id: it.id, g, n: it.n, t: it.t, sn: set.n };
     S.recent = [x, ...S.recent.filter((y) => !(y.id === x.id && y.n === x.n))].slice(0, 12); save();
@@ -297,6 +301,7 @@
         <div><span>Cash offer at ${S.set.cash}%</span><span>${money(Math.round(p * S.set.cash / 100))}</span></div>
         <div><span>Trade credit at ${S.set.trade}%</span><span>${money(Math.round(p * S.set.trade / 100))}</span></div></div>
         <p class="muted small" style="margin:6px 0 0">Selling nets are after fees and shipping out. Change them in Mine → Settings.</p></section>
+      ${it.t === "c" && GR ? gradedBlock(it, p) : ""}
       ${e && (e.r || e.p10) ? `<section class="sec panel"><span class="lab">eBay Buy It Now · checked ${ebAge < 1 ? "today" : ebAge === 1 ? "yesterday" : `${ebAge} days ago`}</span>
         <div class="kv">${e.r ? `<div><span>Cheapest raw (${e.r[1]} listing${e.r[1] === 1 ? "" : "s"})</span><span><a href="${esc(e.r[2])}" target="_blank" rel="noopener">${money(e.r[0])} ↗</a></span></div>` : ""}
         ${e.p10 ? `<div><span>Cheapest PSA 10 (${e.p10[1]} listing${e.p10[1] === 1 ? "" : "s"})</span><span><a href="${esc(e.p10[2])}" target="_blank" rel="noopener">${money(e.p10[0])} ↗</a></span></div>` : ""}</div>
@@ -563,7 +568,7 @@
   /* ---------- Grade: your grading board, candidate finder, submission planner, results log ----------
      Graded prices here are the ones you enter (from the sold links), so every number is yours to check. */
   const GL = { PSA: ["10", "9"], CGC: ["10", "9"], BGS: ["9.5", "9"], TAG: ["10", "9"] };
-  const FIND = { min: 30, max: 500, era: "modern", q: "", sort: "price" };
+  const FIND = { min: 30, max: 500, era: "modern", q: "", sort: null };
   function myRates() {
     const L = S.glog; if (L.length < 5) return null;
     const ten = L.filter((x) => parseFloat(x.grade) >= 10).length, nine = L.filter((x) => { const g = parseFloat(x.grade); return g >= 9 && g < 10; }).length;
@@ -594,6 +599,66 @@
     return { be10, profit, nine, ten, v, up, grading: o10 * fee(p10) + o9 * fee(p9) + o8 * fee(p8) };
   }
   const tierLabel = (t) => `${t[0]} · ${money(t[1])}${t[2] ? ` · cards up to ${money(t[2], true)}` : ""}${t[3] ? ` · ~${t[3]} days` : ""}`;
+  /* Graded sold prices from PokemonPriceTracker, for this phone only (personal use, on the owner's API plan).
+     The update job publishes them encrypted; the key comes from the API key entered in Mine → Settings,
+     which stays on this phone and out of backup files. */
+  const PKEY = "dys-edge-ppt";
+  const pptKey = () => { try { return (localStorage.getItem(PKEY) || "").trim(); } catch { return ""; } };
+  let GR = null, GRP = null, GR_ERR = "";
+  const GK = { PSA: ["psa10", "psa9", "psa8"], CGC: ["cgc10", "cgc9", null], BGS: ["bgs9_5", "bgs9", null], TAG: ["tag10", "tag9", null] };
+  const GNAME = [["psa10", "PSA 10"], ["psa9", "PSA 9"], ["psa8", "PSA 8"], ["cgc10", "CGC 10"], ["cgc9_5", "CGC 9.5"], ["cgc9", "CGC 9"], ["bgs10", "BGS 10"], ["bgs9_5", "BGS 9.5"], ["bgs9", "BGS 9"], ["tag10", "TAG 10"], ["tag9", "TAG 9"]];
+  function loadGraded() {
+    const k = pptKey();
+    if (!k) { GR = null; GR_ERR = ""; return Promise.resolve(null); }
+    if (!window.crypto?.subtle || typeof DecompressionStream === "undefined") { GR_ERR = "browser"; return Promise.resolve(null); }
+    return (GRP ||= (async () => {
+      const r = await fetch(`${BASE}data/edge/graded.enc`, { cache: "no-cache" });
+      const M = new TextEncoder().encode("DYSENC1"), b = r.ok ? new Uint8Array(await r.arrayBuffer()) : new Uint8Array(0);
+      if (b.length < 40 || M.some((c, i) => b[i] !== c)) { GR_ERR = "none"; return null; }
+      const ck = await crypto.subtle.importKey("raw", await crypto.subtle.digest("SHA-256", new TextEncoder().encode("dys-sealed-edge:" + k)), "AES-GCM", false, ["decrypt"]);
+      let plain;
+      try { plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b.slice(7, 19), additionalData: M }, ck, b.slice(19)); }
+      catch { GR_ERR = "key"; return null; }
+      GR = JSON.parse(await new Response(new Blob([plain]).stream().pipeThrough(new DecompressionStream("gzip"))).text());
+      GR_ERR = ""; return GR;
+    })().catch(() => { GR_ERR ||= "load"; return null; }));
+  }
+  // one company's graded prices for a card (cents), or null
+  function gradedOf(id, co = grader().co) {
+    const c = GR?.c?.[id]; if (!c) return null;
+    const [k10, k9, k8] = GK[co] || GK.PSA, g = c[1] || {}, a = g[k10], b = g[k9], d = k8 ? g[k8] : null;
+    if (!a && !b) return null;
+    return { p10: a?.[0] || null, n10: a?.[1] || 0, l10: a?.[3] || null, p9: b?.[0] || null, n9: b?.[1] || 0, p8: d?.[0] || null, at: c[0] };
+  }
+  // what the board uses: your own prices first, then PokemonPriceTracker's
+  function boardPrices(x) {
+    const gp = gradedOf(x.id);
+    return { p10: x.p10 || gp?.p10 || null, p9: x.p9 || gp?.p9 || null, p8: gp?.p8 || null, gp };
+  }
+  const solid = (gp) => gp?.p10 && gp.n10 >= 3 && (!gp.l10 || daysAgo(gp.l10) <= 60);
+  // every steady single with enough graded sales, ranked by expected profit at your assumptions
+  async function opportunities() {
+    if (!GR) return null;
+    const gd = await getJSON("grading.json").catch(() => null); if (!gd) return null;
+    const seen = {}; for (const r of gd.rows) seen[r[0]] = (seen[r[0]] || 0) + 1;
+    const out = [];
+    for (const r of gd.rows) {
+      if (seen[r[0]] > 1 || !gameOk(r[7])) continue;
+      const gp = gradedOf(r[0]); if (!solid(gp)) continue;
+      out.push({ r, gp, e: gradeEval(r[3], gp.p10, gp.p9, gp.p8) });
+    }
+    return out.sort((a, b) => b.e.profit - a.e.profit);
+  }
+  function gradedBlock(it, p) {
+    const c = GR?.c?.[it.id], g = c?.[1] || {}, have = GNAME.filter(([k]) => g[k]);
+    if (!have.length) return `<section class="sec panel"><span class="lab">Graded sold prices</span><p class="muted small" style="margin:0">No graded sales on PokemonPriceTracker for this card yet${GR.c && Object.keys(GR.c).length ? "" : " (they fill in over the next updates)"}.</p></section>`;
+    const bp = gradedOf(it.id), { co, l10 } = grader(), e = bp?.p10 ? gradeEval(p, bp.p10, bp.p9, bp.p8) : null;
+    return `<section class="sec panel"><span class="lab">Graded sold prices · last 90 days</span>
+      <div class="kv">${have.map(([k, l]) => { const v = g[k]; return `<div><span>${l}<br><small class="muted">${v[1]} sold${v[3] ? ` · last ${esc(fmtDay(v[3]))}` : ""}</small></span><span>${money(v[0])}${p ? `<br><small class="muted">${(v[0] / p).toFixed(1)}× raw</small>` : ""}</span></div>`; }).join("")}</div>
+      ${e ? `<div class="verdict ${e.v[0]}"><span class="lab">Grade it with ${esc(co)}?</span><b>${e.v[1]} · ${signed(Math.round(e.profit))} expected</b><span class="small muted">If ${esc(l10)}: ${signed(Math.round(e.ten))} · if ${esc(grader().l9)}: ${signed(Math.round(e.nine))}. At your assumptions in the Grade tab.</span></div>` : ""}
+      <p class="muted small" style="margin:0">From PokemonPriceTracker (personal use)${c[0] ? `, checked ${esc(fmtDay(c[0]))}` : ""}.</p></section>`;
+  }
+  const vchip = (v) => `<span class="chip ${v[0] === "good" ? "good" : v[0] === "bad" ? "bad" : "hot"}">${v[1]}</span>`;
   const beText = (be, raw) => !isFinite(be) ? "—" : be < 1 ? "any grade pays" : `${money(Math.round(be))} (${(be / raw).toFixed(1)}× raw)`;
   function boardAdd(x) {
     const k = keyOf(x.id, x.n);
@@ -602,7 +667,7 @@
   }
   async function viewGrade(v) {
     v.innerHTML = `<div id="g-seg"></div><div id="g-body"></div>`;
-    await loadIndex();
+    await Promise.all([loadIndex(), loadGraded()]);
     const draw = () => { const el = fresh($("#g-body")); ({ board: gradeBoard, find: gradeFind, submit: gradeSubmit, log: gradeLog, check: toolGrade }[SUB.grade] || gradeBoard)(el); };
     seg($("#g-seg"), [["board", "Board"], ["find", "Find"], ["submit", "Submit"], ["log", "Results"], ["check", "Check"]], SUB.grade, (k) => { SUB.grade = k; draw(); });
     draw();
@@ -635,8 +700,8 @@
     const draw = () => {
       const a = assumptions(draw), { co, l10, l9 } = grader();
       const rows = S.board.map((x, i) => {
-        const raw = marketOf(x) || 0, e = gradeEval(raw, x.p10, x.p9);
-        return { x, i, raw, e, no: (x.n.match(/ - ([\w/-]+)/) || [])[1] || "" };
+        const raw = marketOf(x) || 0, bp = boardPrices(x), e = gradeEval(raw, bp.p10, bp.p9, bp.p8);
+        return { x, i, raw, e, gp: bp.gp, no: (x.n.match(/ - ([\w/-]+)/) || [])[1] || "" };
       }).sort((a, b) => (b.e.profit ?? -1e12) - (a.e.profit ?? -1e12));
       const priced = rows.filter((r) => r.e.profit != null), best = priced.filter((r) => r.e.profit > 0);
       el.innerHTML = `${a.html}
@@ -644,11 +709,13 @@
           <div class="tile"><span class="lab">Worth grading</span><b class="up">${best.length}</b><small>expected profit</small></div>
           <div class="tile"><span class="lab">Safe grades</span><b>${priced.filter((r) => r.e.v[1] === "Safe grade").length}</b><small>a ${esc(l9)} still pays</small></div></div>` : ""}
         <div class="sec-head"><h2>Grading board</h2><button type="button" class="more" id="gb-add">+ Add cards</button></div>
-        ${rows.length ? rows.map(({ x, i, raw, e, no }) => `<div class="gcard panel">
+        ${!GR && !pptKey() ? `<p class="muted small" style="margin:0">Add your PokemonPriceTracker key in Mine → Settings and graded prices fill in by themselves.</p>` : ""}
+        ${rows.length ? rows.map(({ x, i, raw, e, gp, no }) => `<div class="gcard panel">
           <button type="button" class="gc-top" data-open="${x.id}" data-g="${x.g}" data-n="${esc(x.n)}">${img(x.id)}<span class="gc-name"><span class="nm">${esc(cleanN(x.n))}</span><span class="st">${esc(setName(x.g))} · raw ${money(raw)}</span></span>
             ${e.v ? `<span class="chip ${e.v[0] === "good" ? "good" : e.v[0] === "bad" ? "bad" : "hot"}">${e.v[1]}</span>` : `<span class="chip">Needs prices</span>`}</button>
-          <div class="gc-in"><label class="f">${esc(co)} ${esc(l10)} sells for $<input class="field" type="number" inputmode="decimal" min="0" step="0.01" data-b10="${i}" value="${dollars(x.p10)}" placeholder="from sold"></label>
-            <label class="f">${esc(co)} ${esc(l9)} sells for $<input class="field" type="number" inputmode="decimal" min="0" step="0.01" data-b9="${i}" value="${dollars(x.p9)}" placeholder="blank = raw price"></label></div>
+          <div class="gc-in"><label class="f">${esc(co)} ${esc(l10)} sells for $<input class="field" type="number" inputmode="decimal" min="0" step="0.01" data-b10="${i}" value="${dollars(x.p10)}" placeholder="${gp?.p10 ? dollars(gp.p10) + " (PPT)" : "from sold"}"></label>
+            <label class="f">${esc(co)} ${esc(l9)} sells for $<input class="field" type="number" inputmode="decimal" min="0" step="0.01" data-b9="${i}" value="${dollars(x.p9)}" placeholder="${gp?.p9 ? dollars(gp.p9) + " (PPT)" : "blank = raw price"}"></label></div>
+          ${gp ? `<p class="muted small" style="margin:0">PokemonPriceTracker, last 90 days: ${esc(l10)} ${gp.p10 ? `${money(gp.p10)} (${gp.n10} sold${gp.l10 ? `, last ${fmtDay(gp.l10)}` : ""})` : "no sales"} · ${esc(l9)} ${gp.p9 ? `${money(gp.p9)} (${gp.n9} sold)` : "no sales"}.${gp.n10 && gp.n10 < 3 ? ` <span class="warn">Only ${gp.n10} sale${gp.n10 === 1 ? "" : "s"}: check the sold links.</span>` : ""} Type a price to use your own.</p>` : GR ? `<p class="muted small" style="margin:0">No ${esc(co)} sales on PokemonPriceTracker for this one yet. Use the sold links.</p>` : ""}
           <div class="links"><a class="btn sm" href="${soldUrl(x.n, no + " " + co + " " + l10)}" target="_blank" rel="noopener">${esc(co)} ${esc(l10)} sold ↗</a><a class="btn sm" href="${soldUrl(x.n, no + " " + co + " " + l9)}" target="_blank" rel="noopener">${esc(co)} ${esc(l9)} sold ↗</a>
             <a class="btn sm" href="https://www.pricecharting.com/search-products?q=${encodeURIComponent(cleanN(x.n))}&type=prices" target="_blank" rel="noopener">All grades ↗</a><a class="btn sm" href="https://www.gemrate.com/" target="_blank" rel="noopener">Gem rate ↗</a></div>
           <div class="kv">${e.profit != null ? `<div><span>Expected profit</span><span class="${cls(e.profit)}">${signed(Math.round(e.profit))}</span></div>
@@ -678,7 +745,8 @@
     if (!gd) { el.innerHTML = `<div class="empty">The candidate list builds with the nightly update.</div>`; return; }
     const multi = new Set(), seen = {};
     for (const r of gd.rows) { seen[r[0]] = (seen[r[0]] || 0) + 1; if (seen[r[0]] > 1) multi.add(r[0]); }
-    el.innerHTML = `<p class="muted small" style="margin:0">Singles with steady prices and live listings near market, so the raw price is real. Each shows what a graded ${esc(grader().l10)} has to sell for to pay off at your assumptions. Add the promising ones to your board.</p>
+    el.innerHTML = `${GR ? `<div id="fd-asm"></div><p class="muted small" style="margin:0">Steady singles ranked by expected profit from grading, using ${esc(grader().co)} sold prices from PokemonPriceTracker (cards with 3+ sales in 90 days) and your assumptions above. Add the best ones to your board.</p>`
+        : `<p class="muted small" style="margin:0">Singles with steady prices and live listings near market, so the raw price is real. Each shows what a graded ${esc(grader().l10)} has to sell for to pay off at your assumptions.${pptKey() ? "" : " Add your PokemonPriceTracker key in Mine → Settings to rank them by real profit."}</p>`}
       <div class="form"><label class="f">Raw price from $<input class="field" id="fd-min" type="number" inputmode="decimal" min="0" value="${FIND.min}"></label>
         <label class="f">to $<input class="field" id="fd-max" type="number" inputmode="decimal" min="0" value="${FIND.max}"></label>
         <label class="f full">Search<input class="field" id="fd-q" type="search" placeholder="Card or set" value="${esc(FIND.q)}"></label></div>
@@ -687,15 +755,20 @@
       const q = FIND.q.trim().toLowerCase(), onBoard = new Set(S.board.map((x) => x.k));
       let rows = gd.rows.filter((r) => !multi.has(r[0]) && gameOk(r[7]) && (FIND.era === "all" || r[8] === FIND.era) && r[3] >= FIND.min * 100 && (!FIND.max || r[3] <= FIND.max * 100)
         && (!q || (r[2] + " " + setName(r[1])).toLowerCase().includes(q)));
-      rows = rows.map((r) => ({ r, be: gradeEval(r[3], null).be10 }));
-      rows.sort(FIND.sort === "easy" ? (a, b) => (a.be / a.r[3]) - (b.be / b.r[3]) : (a, b) => b.r[3] - a.r[3]);
-      const out = rows.slice(0, 80).map(({ r, be }) => { const k = keyOf(r[0], r[2]);
-        return rowHTML({ id: r[0], g: r[1], n: r[2] }, `<b>${money(r[3])}</b><small class="muted">${esc(grader().l10)} needs ${!isFinite(be) ? "—" : money(Math.round(be), be >= 100000)}</small>`,
-          `<span class="why">${onBoard.has(k) ? `<span class="chip good">On your board</span>` : `<span class="chip" data-addb="${r[0]}|${r[1]}|${esc(r[2])}">+ Add to board</span>`}</span>`); });
-      $("#fd-list").innerHTML = listOrEmpty(out, "No cards match. Widen the price range or switch games.") + (rows.length > 80 ? `<p class="muted small">Showing 80 of ${rows.length}. Narrow it with search or price.</p>` : "");
+      const sort = FIND.sort || (GR ? "profit" : "price"), { l10 } = grader();
+      rows = rows.map((r) => { const gp = GR ? gradedOf(r[0]) : null, ok = solid(gp); return { r, gp: ok ? gp : null, e: gradeEval(r[3], ok ? gp.p10 : null, ok ? gp.p9 : null, ok ? gp.p8 : null) }; });
+      if (sort === "profit") rows = rows.filter((x) => x.gp);
+      rows.sort(sort === "profit" ? (a, b) => b.e.profit - a.e.profit : sort === "easy" ? (a, b) => (a.e.be10 / a.r[3]) - (b.e.be10 / b.r[3]) : (a, b) => b.r[3] - a.r[3]);
+      const out = rows.slice(0, 80).map(({ r, gp, e }) => { const k = keyOf(r[0], r[2]), be = e.be10;
+        const add = onBoard.has(k) ? `<span class="chip good">On your board</span>` : `<span class="chip" data-addb="${r[0]}|${r[1]}|${esc(r[2])}">+ Add to board</span>`;
+        return gp ? rowHTML({ id: r[0], g: r[1], n: r[2] }, `<b class="${cls(e.profit)}">${signed(Math.round(e.profit))}</b><small class="muted">raw ${money(r[3])} · ${esc(l10)} ${money(gp.p10, gp.p10 >= 100000)}</small>`,
+            `<span class="why">${vchip(e.v)} ${gp.n10} sold in 90 days${gp.l10 ? `, last ${fmtDay(gp.l10)}` : ""} ${add}</span>`)
+          : rowHTML({ id: r[0], g: r[1], n: r[2] }, `<b>${money(r[3])}</b><small class="muted">${esc(l10)} needs ${!isFinite(be) ? "—" : money(Math.round(be), be >= 100000)}</small>`, `<span class="why">${add}</span>`); });
+      $("#fd-list").innerHTML = listOrEmpty(out, sort === "profit" ? "No cards with enough graded sales match. Widen the price range, switch era or games, or sort by Most valuable." : "No cards match. Widen the price range or switch games.") + (rows.length > 80 ? `<p class="muted small">Showing 80 of ${rows.length}. Narrow it with search or price.</p>` : "");
     };
     seg($("#fd-era"), [["modern", "Modern"], ["vintage", "Older sets"], ["all", "All"]], FIND.era, (k) => { FIND.era = k; draw(); });
-    seg($("#fd-sort"), [["price", "Most valuable"], ["easy", "Easiest to pay off"]], FIND.sort, (k) => { FIND.sort = k; draw(); });
+    seg($("#fd-sort"), [...(GR ? [["profit", "Best profit"]] : []), ["price", "Most valuable"], ["easy", "Easiest to pay off"]], FIND.sort || (GR ? "profit" : "price"), (k) => { FIND.sort = k; draw(); });
+    if (GR) { const asm = () => { const a = assumptions(() => { asm(); draw(); }); $("#fd-asm").innerHTML = a.html; a.bind($("#fd-asm")); }; asm(); }
     $("#fd-min").onchange = (e) => { FIND.min = +e.target.value || 0; draw(); };
     $("#fd-max").onchange = (e) => { FIND.max = +e.target.value || 0; draw(); };
     let t; $("#fd-q").oninput = (e) => { clearTimeout(t); t = setTimeout(() => { FIND.q = e.target.value; draw(); }, 200); };
@@ -710,13 +783,13 @@
     const draw = () => {
       const a = assumptions(draw), { co, gr, tier, l10, l9 } = grader();
       const box = S.set.boxShip, picked = S.board.filter((x) => S.sub.includes(x.k));
-      const per = picked.map((x) => { const raw = marketOf(x) || 0; return { x, raw, e: gradeEval(raw, x.p10, x.p9, null, 0) }; });
+      const per = picked.map((x) => { const raw = marketOf(x) || 0, bp = boardPrices(x); return { x, raw, e: gradeEval(raw, bp.p10, bp.p9, bp.p8, 0) }; });
       const base = picked.length * tier[1], exp = per.reduce((s, r) => s + (r.e.grading ?? tier[1]), 0);
       const profit = per.reduce((s, r) => s + (r.e.profit ?? 0), 0) - box, worst = per.reduce((s, r) => s + (r.e.nine ?? 0), 0) - box;
       const missing = per.filter((r) => r.e.profit == null).length;
       el.innerHTML = `${a.html}<section class="sec panel"><h2>Plan a submission</h2>
         <p class="muted small" style="margin:0">Tick the cards from your board to send together. Shipping and insurance are for the whole box.</p>
-        <div class="list">${S.board.length ? S.board.map((x) => { const raw = marketOf(x) || 0, e = gradeEval(raw, x.p10, x.p9, null, 0);
+        <div class="list">${S.board.length ? S.board.map((x) => { const raw = marketOf(x) || 0, bp = boardPrices(x), e = gradeEval(raw, bp.p10, bp.p9, bp.p8, 0);
           return `<label class="row" style="grid-template-columns:24px 44px minmax(0,1fr) auto;cursor:pointer"><input type="checkbox" data-sub="${esc(x.k)}"${S.sub.includes(x.k) ? " checked" : ""}>${img(x.id)}
             <span style="min-width:0"><span class="nm">${esc(cleanN(x.n))}</span><span class="st">raw ${money(raw)}</span></span><span class="rt">${e.v ? `<span class="chip ${e.v[0] === "good" ? "good" : e.v[0] === "bad" ? "bad" : "hot"}">${e.v[1]}</span>` : `<small class="muted">no ${esc(l10)} price</small>`}</span></label>`; }).join("")
           : `<p class="muted small" style="padding:12px">Your board is empty. Add cards in Find first.</p>`}</div>
@@ -803,7 +876,11 @@
   }
   function mineSettings(el) {
     const s = S.set, d = (k) => dollars(s[k]);
-    el.innerHTML = `<form class="sec panel" id="st-f"><h2>Your numbers</h2>
+    el.innerHTML = `<section class="sec panel"><h2>Graded prices</h2>
+        <p class="muted small" style="margin:0">Enter your PokemonPriceTracker API key (the same one saved on GitHub as PPT_API_KEY) to unlock graded sold prices for PSA, CGC, BGS and TAG. The grading board fills in by itself, Find ranks real grading opportunities, and each card shows its graded prices. The key stays on this phone and isn't saved in backup files. For personal use, which your API plan covers.</p>
+        <form class="btns" id="pp-f"><input class="field" id="pp-k" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="PokemonPriceTracker API key" placeholder="${pptKey() ? "Saved ✓" : "PokemonPriceTracker API key"}" style="flex:1;min-width:0"><button class="btn primary" type="submit">Save</button>${pptKey() ? `<button type="button" class="btn ghost danger" id="pp-rm">Remove</button>` : ""}</form>
+        <p class="small" id="pp-st" style="margin:0"></p></section>
+      <form class="sec panel" id="st-f"><h2>Your numbers</h2>
       <div class="form"><label class="f full">I usually sell on${platSelect("st-plat", s.platform)}</label>
         <label class="f">Target profit %<input class="field" id="st-roi" type="number" inputmode="numeric" min="0" max="500" value="${s.roi}"></label>
         <label class="f">Default games<select class="select" id="st-game">${Object.entries(GAMES).map(([k, g]) => `<option value="${k}"${k === s.game ? " selected" : ""}>${g[0]}</option>`).join("")}</select></label>
@@ -821,6 +898,24 @@
       <section class="sec panel"><h2>Backup</h2><p class="muted small" style="margin:0">Your inventory, watchlist, trades and settings live on this phone. Save a backup file now and then, or to move them to another device.</p>
         <div class="btns"><button type="button" class="btn" id="bk-save">Save backup file</button><label class="btn" for="bk-load">Restore from file</label><input type="file" id="bk-load" accept="application/json,.json" hidden></div><div id="bk-out"></div></section>
       <section class="sec panel"><h2>Look</h2><div class="btns"><button type="button" class="btn" id="th">${document.documentElement.dataset.theme === "light" ? "Switch to dark" : "Switch to light"}</button></div></section>`;
+    const ppStatus = async () => {
+      const st = $("#pp-st"); if (!st) return;
+      if (!pptKey()) { st.className = "small muted"; st.textContent = "Not set up."; return; }
+      st.className = "small muted"; st.textContent = "Checking…";
+      const d = await loadGraded();
+      if (d) { st.className = "small up"; st.textContent = `Unlocked: graded prices for ${Object.keys(d.c || {}).length.toLocaleString()} cards, updated ${fmtDay(d.u)}.`; return; }
+      st.className = "small down";
+      st.textContent = { key: "That key doesn't open your graded prices. Use the same key that's saved on GitHub as PPT_API_KEY.",
+        none: "Key saved. Your graded prices aren't published yet; they arrive with the next update (every 4 hours).",
+        browser: "This browser can't unlock them. Use Chrome or Safari, up to date." }[GR_ERR] || "Couldn't load your graded prices. Check your connection.";
+    };
+    $("#pp-f").onsubmit = (e) => {
+      e.preventDefault(); const v = $("#pp-k").value.trim(); if (!v) return;
+      try { localStorage.setItem(PKEY, v); } catch { toast("This browser won't save it"); return; }
+      GR = null; GRP = null; GR_ERR = ""; mineSettings(el);
+    };
+    const rm = $("#pp-rm"); if (rm) rm.onclick = () => { try { localStorage.removeItem(PKEY); } catch {} GR = null; GRP = null; GR_ERR = ""; toast("Key removed from this phone"); mineSettings(el); };
+    ppStatus();
     $("#st-f").onsubmit = (e) => {
       e.preventDefault();
       const n = (id) => Math.max(0, parseFloat($(id).value) || 0);

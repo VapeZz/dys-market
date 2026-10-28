@@ -8,6 +8,7 @@ visitors; only the raw stored copies are sealed.
 AES-256-GCM with a key derived from a GitHub secret the jobs already have:
     "ppt"   PPT_API_KEY          (PPT_API_KEY_OLD is also tried when reading, after a key change)
     "ebay"  EBAY_CLIENT_SECRET   (EBAY_CLIENT_SECRET_OLD likewise)
+    "edge"  PPT_API_KEY          (published for DYS Edge; rewritten on every run, so no old key)
 Changing one of those secrets? Save the old value as the matching *_OLD secret first; files are
 re-sealed with the new key as they're rewritten.
 
@@ -17,7 +18,8 @@ import hashlib
 import os
 
 MAGIC = b"DYSENC1"
-SECRETS = {"ppt": ("PPT_API_KEY", "PPT_API_KEY_OLD"), "ebay": ("EBAY_CLIENT_SECRET", "EBAY_CLIENT_SECRET_OLD")}
+SECRETS = {"ppt": ("PPT_API_KEY", "PPT_API_KEY_OLD"), "ebay": ("EBAY_CLIENT_SECRET", "EBAY_CLIENT_SECRET_OLD"),
+           "edge": ("PPT_API_KEY",)}   # the owner's private DYS Edge copy: his phone derives the same key from his API key
 
 
 class Locked(Exception):
