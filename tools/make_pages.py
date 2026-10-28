@@ -422,6 +422,61 @@ PAGES = {
       <p class="muted cz-note">From each company's published grading standards. Graders can allow a little leeway for eye appeal, and centering is only one part of the grade: corners, edges and surface count too.</p></div>
   </div>
 </section></div>'''),
+"legal": ("Privacy & Terms · Drive Your Style Market Insights", "How Drive Your Style Market Insights handles your information, and the terms for using the site.", '''
+<div class="wrap"><article class="prose">
+  <h1>Privacy &amp; Terms</h1>
+  <p class="muted">Effective October 28, 2026. Drive Your Style Market Insights (market.driveyourstyle.net) is run by Drive Style Wizards LLC, doing business as Drive Your Style, in Las Vegas, Nevada. Questions: <b>customerservice@driveyourstyle.net</b>.</p>
+
+  <h2 id="privacy">Privacy</h2>
+  <h3>What we collect</h3>
+  <ul>
+    <li><b>Visits.</b> We count page views with GoatCounter, which doesn't use cookies or follow you to other sites. We see totals like which pages are popular and where visitors come from, not who you are.</li>
+    <li><b>Things saved on your device.</b> Your collection, want list, calculator numbers, settings and theme are saved in your own browser. We don't receive them unless you sign in and save them, or share a link.</li>
+    <li><b>Store account (optional).</b> If you sign in with your Drive Your Style store account (run by Shopify), we receive your first name, email address and account ID, and we save your binder (cards, quantities, grades and what you paid) to your account.</li>
+    <li><b>Public binders.</b> If you make your binder public, anyone can see your display name, your cards and their quantities. Your email and what you paid are never shown. Likes and follows are public too. You can make your binder private at any time.</li>
+    <li><b>Shared links.</b> A collection share link carries your list inside the link itself. Anyone you send it to can see that list.</li>
+    <li><b>Offers.</b> Drive Your Style may send offers on cards in public binders. Offers and replies are kept in your private inbox.</li>
+    <li><b>Card scanner.</b> The scanner uses your camera inside your browser. Images stay on your device and are never uploaded.</li>
+    <li><b>Messages.</b> When you email us or use our store's contact form (for example to sell us cards), we use what you send to reply and make an offer.</li>
+  </ul>
+  <h3>How we use it</h3>
+  <p>To run the site's features, answer you, make offers you asked for, and improve the site. We don't sell your personal information or use it for advertising profiles.</p>
+  <h3>Who we share it with</h3>
+  <p>Only the services that run the site: GitHub (hosting), Shopify (store accounts and our store) and GoatCounter (visit counts), each under their own privacy terms, or when the law requires it. Our store's own privacy policy is at <a href="https://driveyourstyle.net/policies/privacy-policy">driveyourstyle.net/policies/privacy-policy</a>.</p>
+  <h3>Links and affiliate links</h3>
+  <p>The site links to other sites such as TCGplayer, eBay, StockX and GOAT. Some eBay links are affiliate links (eBay Partner Network): if you buy through them we may earn a small commission at no extra cost to you, and eBay may set its own cookies. Their privacy policies apply once you leave our site.</p>
+  <h3>Your choices</h3>
+  <ul>
+    <li>Clear what's saved on your device by clearing this site's data in your browser.</li>
+    <li>Make your binder private, or email us to delete your binder, likes, follows and offers.</li>
+    <li>Manage or delete your store account through our store or by emailing us.</li>
+  </ul>
+  <h3>Children</h3>
+  <p>The site isn't directed to children under 13, and we don't knowingly collect their personal information. If you think a child has given us information, email us and we'll delete it.</p>
+  <h3>Security and keeping data</h3>
+  <p>We keep account data only as long as your account or binder exists, and we protect what we store with access controls and encryption. No site is perfectly secure, so please don't put sensitive information in your binder name or alias.</p>
+
+  <h2 id="terms">Terms of use</h2>
+  <h3>What the site is</h3>
+  <p>A free market research tool. Prices are market reference prices recorded nightly from public TCGplayer data, plus eBay listings shown with the date we checked them. They can be wrong, late or missing, and they aren't Drive Your Style's prices unless an item is marked in stock. Calculators and picks are estimates. Nothing here is financial, investment or legal advice; please do your own research before you buy, sell or grade.</p>
+  <h3>Trademarks and images</h3>
+  <p>Not affiliated with or endorsed by The Pokémon Company, Nintendo, Creatures, GAME FREAK, Bandai, Disney, Ravensburger, Riot Games, Sunrise, Konami, Pocketpair, TCGplayer, eBay, PSA, CGC, Beckett or TAG. All trademarks, product names and card images belong to their owners and appear only to identify products. eBay and the eBay logo are trademarks of eBay Inc.</p>
+  <h3>Using the site</h3>
+  <ul>
+    <li>Use the site for your own research and collecting.</li>
+    <li>Don't scrape, bulk download, resell or republish the site's data.</li>
+    <li>Don't misuse accounts, offers or public binders: no spam, fraud, impersonation, or offensive or illegal content.</li>
+    <li>We may remove content or limit access that breaks these terms.</li>
+  </ul>
+  <h3>Your content</h3>
+  <p>You own your binder and display name. By making them public, you let us show them on the site until you make them private or delete them.</p>
+  <h3>Offers and purchases</h3>
+  <p>Offers from Drive Your Style are invitations to talk, not binding until we both agree. Purchases and sales go through our store or a written agreement, under our store's terms. Giveaways, when running, follow the official rules posted with each one.</p>
+  <h3>No warranty, limits</h3>
+  <p>The site is provided as is, without warranties. To the extent the law allows, Drive Style Wizards LLC isn't liable for losses from using the site or relying on its prices, estimates or picks.</p>
+  <h3>Changes and law</h3>
+  <p>We may update this page; the effective date above shows the latest version. These terms are governed by the laws of Nevada, USA. Questions: <b>customerservice@driveyourstyle.net</b>.</p>
+</article></div>'''),
 "about": ("About the data · Drive Your Style Market Insights", "Where Drive Your Style market prices come from.", '''
 <div class="wrap"><article class="prose">
   <h1>Where this data comes from</h1>
@@ -434,7 +489,8 @@ PAGES = {
   <ul><li>Prices can lag by about a day and swing on thin sales, especially right after release.</li>
   <li>These are market reference prices, not Drive Your Style's prices. Items marked "In stock" link to our store.</li>
   <li>For research only. Not financial advice.</li>
-  <li>Not affiliated with or endorsed by The Pokémon Company, Nintendo, Bandai, Disney, Ravensburger, Riot Games, Sunrise, Konami, Pocketpair or TCGplayer.</li></ul>
+  <li>Not affiliated with or endorsed by The Pokémon Company, Nintendo, Bandai, Disney, Ravensburger, Riot Games, Sunrise, Konami, Pocketpair or TCGplayer.</li>
+  <li>How we handle your information and the terms for using the site: <a href="legal.html">Privacy &amp; Terms</a>.</li></ul>
 </article></div>'''),
 }
 

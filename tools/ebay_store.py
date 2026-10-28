@@ -1,4 +1,6 @@
-"""eBay store health check: active listings, item details, 30-day traffic and live comparable prices.
+"""eBay store health check: active listings, item details and 30-day traffic (your own store data only).
+
+It doesn't look up other sellers' listings: eBay's API license doesn't allow using listings to suggest or model prices.
 
     python tools/ebay_store.py STORE OUT_FILE [PUBKEY_B64]
 
@@ -18,7 +20,6 @@ import xml.etree.ElementTree as ET
 from datetime import date, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import ebay        # noqa: E402  (application token for comparable listings)
 import ebay_user   # noqa: E402
 
 NS = {"e": "urn:ebay:apis:eBLBaseComponents"}
@@ -97,31 +98,6 @@ def traffic(tok):
     return {"from": str(start), "to": str(end), "listings": out}
 
 
-def comps(item):
-    """Live Buy It Now asks for the same shoe (style code if we have one, else the title), same size when known."""
-    sp = item["specifics"]
-    code = (sp.get("Style Code") or sp.get("Style Number") or sp.get("MPN") or [None])[0]
-    size = (sp.get("US Shoe Size") or sp.get("US Shoe Size (Men's)") or sp.get("Size") or [None])[0]
-    q = code or re.sub(r"\b(size|sz|men'?s|womens?|new|ds|brand|with box|og all)\b", " ", item["title"], flags=re.I)
-    if size and code:
-        q = f"{code} {size}"
-    try:
-        d = ebay.search(q, category=item["category_id"] or "", limit=50, filters="buyingOptions:{FIXED_PRICE},deliveryCountry:US")
-    except Exception as e:
-        return {"query": q, "error": str(e)}
-    rows = []
-    for it in d.get("itemSummaries") or []:
-        if it.get("itemId", "").split("|")[1:2] == [item["id"]] or item["id"] in it.get("itemId", ""):
-            continue
-        try:
-            p = float(it["price"]["value"]) + float(((it.get("shippingOptions") or [{}])[0].get("shippingCost") or {}).get("value") or 0)
-        except (KeyError, ValueError, TypeError):
-            continue
-        rows.append({"p": round(p, 2), "title": it.get("title"), "cond": it.get("condition"), "seller_fb": (it.get("seller") or {}).get("feedbackScore")})
-    rows.sort(key=lambda r: r["p"])
-    return {"query": q, "size": size, "count": len(rows), "cheapest": rows[:8]}
-
-
 def encrypt(obj, pub_b64):
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import padding
@@ -148,7 +124,6 @@ def main(argv):
     for iid in ids:
         try:
             it = item_detail(tok, iid)
-            it["comps"] = comps(it)
             rep["listings"].append(it)
         except Exception as e:
             rep["errors"].append(f"item {iid}: {e}")

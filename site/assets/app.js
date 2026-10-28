@@ -186,7 +186,7 @@ function shell() {
       <p id="updated-line"></p>${AFF_ON ? `<p>Some outbound links (TCGplayer, eBay, StockX, GOAT) are affiliate links. If you buy through them we may earn a small commission at no extra cost to you.</p>` : ""}
     </div>
     <div>
-      <p><a href="${STORE}">Shop Drive Your Style</a> · <a href="sell.html">Sell to us</a> ·${GIVEAWAY_ON ? ` <a href="giveaway.html">Monthly giveaway</a> ·` : ""} <a href="blog/">Market reports</a> · <a href="centering.html">Centering check</a> · <a href="about.html">Where this data comes from</a></p>
+      <p><a href="${STORE}">Shop Drive Your Style</a> · <a href="sell.html">Sell to us</a> ·${GIVEAWAY_ON ? ` <a href="giveaway.html">Monthly giveaway</a> ·` : ""} <a href="blog/">Market reports</a> · <a href="centering.html">Centering check</a> · <a href="about.html">Where this data comes from</a> · <a href="legal.html">Privacy &amp; Terms</a></p>
       <div class="socials" aria-label="Follow Drive Your Style">${SOCIALS.map(([n, u, d]) => `<a href="${u}" target="_blank" rel="noopener" aria-label="${n}" title="${n}"><svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg></a>`).join("")}</div>
       <div class="theme-switch" role="group" aria-label="Theme"><button data-t="dark">Dark</button><button data-t="light">Light</button></div>
     </div></div></footer>`;
