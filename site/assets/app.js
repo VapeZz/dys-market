@@ -584,7 +584,7 @@ function gradedHtml(base, set, v) {
   const ebay = (g) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q + " " + g)}&LH_Sold=1&LH_Complete=1&_sop=13`;
   const link = (h, t, s) => `<a class="glink" href="${h}" target="_blank" rel="noopener"><b>${t}</b><span>${s}</span></a>`;
   return `<section class="graded"><h2 style="font-size:24px">Graded prices &amp; gem rate</h2>
-    <p class="muted">Live graded data isn't built in yet. These links search recent graded sales for this card, and GemRate for its population and gem rate.</p>
+    <p class="muted gl-note">These links search recent graded sales for this card, and GemRate for its population and gem rate.</p>
     <div class="glinks">${link(ebay("PSA 10"), "PSA 10 sold ↗", "eBay sold listings")}${link(ebay("PSA 9"), "PSA 9 sold ↗", "eBay sold listings")}${link(ebay("CGC 10"), "CGC 10 sold ↗", "eBay sold listings")}${link(`https://www.pricecharting.com/search-products?q=${encodeURIComponent(q)}&type=prices`, "All grades ↗", "PriceCharting")}${link("https://www.gemrate.com/", "Gem rate &amp; pop ↗", "Search it on GemRate")}<a class="glink" href="centering.html"><b>Check centering →</b><span>Measure yours before you submit</span></a></div>
     <div class="gcalc" id="gcalc"></div>
   </section>`;
@@ -605,7 +605,7 @@ function gradedPanel(sec, gr, raw, at) {
     ${p10 && raw ? `<p class="gp-sum">A <b>PSA 10</b> sells for about <b>${money(p10)}</b>, <b>${(p10 / raw).toFixed(1)}×</b> the raw price.</p>` : ""}
     <div class="table-wrap"><table><thead><tr><th>Grade</th><th class="num">Sold price</th><th class="num">× raw</th><th class="num hide-sm">7D vs 90D</th><th class="num">Sales</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>
     <p class="muted" style="font-size:12px;margin:6px 0 0">Recent eBay and Fanatics sold prices (PokemonPriceTracker), updated ${esc(at)}. Prices vary with centering and label.</p></div>`);
-  const old = sec.querySelector(":scope > p.muted"); if (old && /isn't built in yet/.test(old.textContent)) old.textContent = "Check individual sales and population:";
+  const old = sec.querySelector(":scope > p.gl-note"); if (old) old.textContent = "Check individual sales and population:";
 }
 
 /* ---------- Grade It? calculator ---------- */
@@ -1951,6 +1951,7 @@ async function pageGrading() {
     for (const k of ["co", "o10", "o9", "x9", "game", "era", "min", "max", "sort", "q", "only"]) if (k in old) st[k] = old[k];
     st = { ...st, ...JSON.parse(localStorage.getItem(KEY) || "{}") };
   } catch {}
+  const live = Object.keys(graded.cards || {}).length > 0;    // graded sold prices can be switched off (pipeline/config.py)
   if (!fees.graders[st.co]) st.co = "PSA";
   if (!fees.sell[st.sell]) st.sell = "ebay";
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch {} };
@@ -1972,8 +1973,8 @@ async function pageGrading() {
     <label class="gr-f">Raw price from $<input class="field" type="number" min="0" step="1" data-k="min" value="${st.min}"></label>
     <label class="gr-f">to $<input class="field" type="number" min="0" step="1" data-k="max" value="${st.max}"></label>
     <label class="gr-f">Search<input class="field" type="search" data-k="q" value="${esc(st.q)}" placeholder="Card or set"></label>
-    <div class="gr-toggles"><label class="toggle"><input type="checkbox" data-k="only"${st.only ? " checked" : ""}> Only cards with graded sold prices</label>
-      <label class="toggle"><input type="checkbox" data-k="liq"${st.liq ? " checked" : ""}> Hide slow sellers</label></div>`;
+    ${live ? `<div class="gr-toggles"><label class="toggle"><input type="checkbox" data-k="only"${st.only ? " checked" : ""}> Only cards with graded sold prices</label>
+      <label class="toggle"><input type="checkbox" data-k="liq"${st.liq ? " checked" : ""}> Hide slow sellers</label></div>` : ""}`;
   const multi = new Set(); { const c = {}; for (const r of gd.rows) { c[r[0]] = (c[r[0]] || 0) + 1; if (c[r[0]] > 1) multi.add(r[0]); } }
   const draw = () => {
     const o10 = st.o10 / 100, o9 = Math.min(1 - o10, st.o9 / 100);
@@ -1990,22 +1991,23 @@ async function pageGrading() {
       let gc = multi.has(id) ? {} : graded.cards?.[id]?.g || {};
       if (gc.psa10 && !(gc.psa10[0] >= p * 1.1 && gc.psa10[0] <= p * 60)) gc = {};      // mismatched comp
       const G10 = gc[k10], G9 = gc[k9];
-      if (st.only && !G10) continue;
+      if (live && st.only && !G10) continue;
       const liq = liqOf(G10, today);
-      if (st.liq && liq?.k === "slow") { slowHidden++; continue; }
+      if (live && st.liq && liq?.k === "slow") { slowHidden++; continue; }
       const buy = Math.min(p, lo || p);      // you'd buy at the lowest listing today
       const m = gradeMath({ buy, v10: G10 ? G10[0] : null, v9: G9 ? G9[0] : p * (st.x9 || 1), low: p * 0.7, o10, o9, fee, ship, pl });
       const up = custom ? null : upTier(gr, ti, G10?.[0]);
       list.push({ id, g, n, p, r, no, buy, ...m, mult: m.be10 / p, g10: G10 ? G10[0] : null, g9: G9 ? G9[0] : null, trend: G10 ? G10[3] : "", liq, up });
     }
-    const by = { value: (a, b) => b.p - a.p, liq: (a, b) => (b.liq?.rate ?? -1) - (a.liq?.rate ?? -1) || (b.profit ?? -1e12) - (a.profit ?? -1e12),
+    const by = { value: (a, b) => b.p - a.p, deal: (a, b) => (a.buy / a.p) - (b.buy / b.p) || b.p - a.p, liq: (a, b) => (b.liq?.rate ?? -1) - (a.liq?.rate ?? -1) || (b.profit ?? -1e12) - (a.profit ?? -1e12),
       profit: (a, b) => (b.profit ?? -1e12) - (a.profit ?? -1e12), roi: (a, b) => (b.roi ?? -1e9) - (a.roi ?? -1e9) };
-    list.sort(by[st.sort] || by.profit);
+    list.sort(by[live ? (["profit", "roi", "liq", "value"].includes(st.sort) ? st.sort : "profit") : st.sort === "deal" ? "deal" : "value"]);
     const nG = Object.keys(graded.cards || {}).length;
     $("#gr-status").innerHTML = `<b>${esc(st.co)} ${custom ? "at your price" : esc(tier[0])}</b>${custom ? ` ${money(Math.round(st.fee * 100))} a card` : `: ${money(tier[1])} a card, about ${esc(tier[3])} business days${gr.upcharge ? ", upcharged when a grade is worth more than the tier covers" : ""}`}. `
       + `Sale prices are after <b>${esc(pl.label)}</b>${st.sell === "none" ? "" : " selling fees"}. ${gr.note && !custom ? esc(gr.note) + " " : ""}Fees checked ${esc(fmtShort(fees.checked))}.<br>`
-      + `Graded sold prices for <b>${nG.toLocaleString()} Pokémon cards</b> (updated ${esc(fmtShort(graded.updated))}). <b>${list.length.toLocaleString()} cards</b> match${slowHidden ? `, ${slowHidden.toLocaleString()} slow sellers hidden` : ""}. `
-      + `<b>Break-even ${esc(st.co)} ${l10}</b> is what a ${l10} must sell for before grading pays off at your odds.`;
+      + (live ? `Graded sold prices for <b>${nG.toLocaleString()} Pokémon cards</b> (updated ${esc(fmtShort(graded.updated))}). <b>${list.length.toLocaleString()} cards</b> match${slowHidden ? `, ${slowHidden.toLocaleString()} slow sellers hidden` : ""}. `
+        : `<b>${list.length.toLocaleString()} cards</b> match. `)
+      + `<b>Break-even ${esc(st.co)} ${l10}</b> is what a ${l10} must sell for before grading pays off at your odds${live ? "" : `: check it against recent sales with the <b>${esc(st.co)} ${l10} sold</b> link`}.`;
     const sold = (n, no, gr) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(`${cleanCard(n)}${no && !cleanCard(n).includes(no.split("/")[0]) ? " " + no : ""} ${gr}`)}&LH_Sold=1&LH_Complete=1&_sop=13`;
     const be = (x) => !isFinite(x.be10) ? "<b>—</b>" : x.be10 < 1 ? `<b class="up">Any grade</b><small class="muted">a 9 or lower still covers your cost</small>` : `<b>${money(Math.round(x.be10))}</b><small class="muted">${x.mult.toFixed(1)}× market</small>`;
     $("#gr-list").innerHTML = list.length ? list.slice(0, 120).map((x) => `<div class="gr-row in-card">
@@ -2030,7 +2032,8 @@ async function pageGrading() {
     if (k === "co") $("#gr-tier").innerHTML = tierOpts();
     save(); draw();
   });
-  tabs($("#gr-sort"), [["profit", "Best profit"], ["roi", "Best return %"], ["liq", "Sells fastest"], ["value", "Most valuable"]], st.sort === "deal" ? "profit" : st.sort, (v) => { st.sort = v; save(); draw(); });
+  if (live) tabs($("#gr-sort"), [["profit", "Best profit"], ["roi", "Best return %"], ["liq", "Sells fastest"], ["value", "Most valuable"]], ["profit", "roi", "liq", "value"].includes(st.sort) ? st.sort : "profit", (v) => { st.sort = v; save(); draw(); });
+  else tabs($("#gr-sort"), [["value", "Most valuable"], ["deal", "Cheapest vs market"]], st.sort === "deal" ? "deal" : "value", (v) => { st.sort = v; save(); draw(); });
   draw();
 }
 

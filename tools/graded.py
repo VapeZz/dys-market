@@ -19,6 +19,7 @@ import urllib.request
 from datetime import date, timedelta
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pipeline"))
+import config  # noqa: E402
 import sealed  # noqa: E402  (the stored cache is encrypted: their terms let us store it, not publish it)
 
 API = "https://www.pokemonpricetracker.com/api/v2/cards"
@@ -52,6 +53,17 @@ def summarize(card):
 
 def main(argv):
     site, store = argv[0], argv[1]
+    if not config.PPT_BUSINESS_PLAN:
+        # their terms need the Business plan for a site like ours: fetch nothing, show nothing, keep the stored cache
+        with open(os.path.join(site, "data", "graded.json"), "w", encoding="utf-8") as f:
+            json.dump({"updated": date.today().isoformat(), "cards": {}, "paused": True}, f, separators=(",", ":"))
+        plain = os.path.join(store, "cache.json")
+        if os.path.exists(plain) and sealed.can_seal("ppt"):        # still keep the stored copy encrypted
+            with open(plain, "rb") as f:
+                sealed.write("ppt", os.path.join(store, "cache.enc"), f.read())
+            os.remove(plain)
+        print("graded: paused (PPT_BUSINESS_PLAN is off in pipeline/config.py); graded prices hidden, stored cache kept")
+        return
     key = (os.environ.get("PPT_API_KEY") or "").strip()
     os.makedirs(store, exist_ok=True)
     cpath, plain = os.path.join(store, "cache.enc"), os.path.join(store, "cache.json")

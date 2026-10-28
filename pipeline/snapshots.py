@@ -67,10 +67,16 @@ def load(day):
     return snap
 
 
-def available():
+def _days():
     if not os.path.isdir(SNAP_DIR):
         return []
     return sorted({f[:10] for f in os.listdir(SNAP_DIR) if f.endswith(".json.gz") or f.endswith(".json.gz.enc")})
+
+
+def available():
+    """Days the site may use. The PokemonPriceTracker-filled days count only on its Business plan."""
+    days = _days()
+    return days if getattr(config, "PPT_BUSINESS_PLAN", True) else [d for d in days if not protected(d)]
 
 
 def seal_old():
@@ -79,7 +85,7 @@ def seal_old():
     if not SEALED_BEFORE or not sealed.can_seal("ppt"):
         return 0
     n = 0
-    for day in available():
+    for day in _days():
         if not protected(day):
             break
         restale = False
@@ -97,7 +103,7 @@ def prune(today):
     t = date.fromisoformat(today)
     removed = 0
     kept_weeks = set()
-    for day in reversed(available()):  # newest first, so we keep the latest day of each old week
+    for day in reversed(_days()):  # newest first, so we keep the latest day of each old week
         d = date.fromisoformat(day)
         age = (t - d).days
         week = d.isocalendar()[:2]

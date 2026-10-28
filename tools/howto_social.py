@@ -34,7 +34,7 @@ def base(n):
 
 
 def examples(site, week):
-    """Example Pokémon cards for the screenshots, rotating weekly: modern cards $40-$400 with PSA 10 sales."""
+    """Example Pokémon cards for the screenshots, rotating weekly: modern cards $40-$400 (with PSA 10 sales when graded prices are on)."""
     d = os.path.join(site, "data")
     rows = json.load(open(os.path.join(d, "grading.json")))["rows"]
     graded = json.load(open(os.path.join(d, "graded.json"))).get("cards", {})
@@ -43,7 +43,7 @@ def examples(site, week):
         g = (graded.get(str(r[0])) or {}).get("g") or {}
         if r[7] != "pokemon" or r[8] != "modern" or not (4000 <= r[3] <= 40000) or SKIP.search(r[2]):
             continue
-        if not g.get("psa10") or not (1.5 * r[3] <= g["psa10"][0] <= 30 * r[3]):
+        if graded and (not g.get("psa10") or not (1.5 * r[3] <= g["psa10"][0] <= 30 * r[3])):    # graded prices may be off
             continue
         b = base(r[2])
         if b in seen:
@@ -69,16 +69,16 @@ def features(ex):
          "sub": "Look up any card in 5 seconds. Free, no sign-up.",
          "steps": [("Search any card", "Name, set or card number. 120,000+ cards across 10 games.", {"url": f"search.html?q={c['name']}"}),
                    ("See today's price", "Market price updated every night, plus the price chart.", {"url": prod, "scroll": ".price-big"}),
-                   ("Check real listings", "Cheapest eBay Buy It Now and PSA 10 price, side by side.", {"url": prod, "scroll": ".eb"})],
+                   ("See the cheapest listing", "Lowest listing vs recent sales, plus condition prices.", {"url": prod, "scroll": ".pb"})],
          "lines": [f"Example: {c['name']} is {money(c['p'])} today.", "1. Search any card by name, set or number", "2. See today's market price and its price chart",
-                   "3. Compare the cheapest eBay listing and the PSA 10 price"],
+                   "3. Compare the cheapest listing with recent sales"],
          "yt": "What's your Pokémon card worth? 🔎 Check any card FREE in 5 seconds #pokemon"},
         {"key": "grading", "tag": "Grading calculator",
          "hooks": [("Is your card", "worth grading?"), ("Don't waste money", "on grading")],
          "sub": "See which cards actually pay off at PSA, CGC, BGS or TAG.",
          "steps": [("Set your real cost", "Pick the grader, your fee and your odds of a 10.", {"url": "grading.html"}),
                    ("See what's worth it", "Every card with its break-even graded price.", {"url": "grading.html", "scroll": "#gr-list"}),
-                   ("Check one card", "Raw vs PSA 10 vs PSA 9 on any card page.", {"url": prod, "scroll": "#gcalc"})],
+                   ("Check one card", "Run the numbers for any card: grade it, keep it raw, or buy the slab.", {"url": prod, "scroll": "#gcalc"})],
          "lines": ["1. Set your grading company, fee and your odds of a 10", "2. See the price a slab needs to sell for before grading pays off",
                    f"3. Check any single card (e.g. {c['name']}: raw {money(c['p'])})"],
          "yt": "Is your Pokémon card worth grading? 🤔 Free PSA grading calculator #pokemon"},

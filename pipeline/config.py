@@ -41,6 +41,13 @@ CATALOG_REFRESH_DAYS = 7
 # (see sealed.py and snapshots.py).
 SEALED_BEFORE = "2026-10-12"
 
+# PokemonPriceTracker's terms allow showing its data on a site like this one (it promotes the store,
+# so it counts as commercial use) only on its Business or Enterprise plan. While this is False the
+# site uses none of it: no graded prices, and the price history it filled in before SEALED_BEFORE is
+# left out of charts and movers. The data stays stored (encrypted), so set this to True after
+# upgrading and everything comes back on the next nightly run.
+PPT_BUSINESS_PLAN = False
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(ROOT, "data"))
 SITE_DIR = os.environ.get("SITE_DIR", os.path.join(ROOT, "site"))
