@@ -90,8 +90,11 @@ def seal_old():
             break
         restale = False
         if os.path.exists(_sealed(day)):
-            with open(_sealed(day), "rb") as f:
-                restale = sealed.unseal("ppt", f.read())[1]
+            try:
+                with open(_sealed(day), "rb") as f:
+                    restale = sealed.unseal("ppt", f.read())[1]
+            except sealed.Locked:
+                continue        # sealed with a key we no longer have: leave it untouched (it opens again if that key is restored)
         if os.path.exists(_plain(day)) or restale:
             save(day, load(day))
             n += 1

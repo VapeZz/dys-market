@@ -101,8 +101,16 @@ def main(argv):
         elif os.path.exists(plain):               # older unencrypted cache: sealed below, then removed
             cache = json.load(open(plain))
     except sealed.Locked as e:
-        print(f"::warning title=Graded prices::can't open the stored graded prices ({e}); leaving graded.json unchanged")
-        return
+        if not key:
+            print(f"::warning title=Graded prices::can't open the stored graded prices ({e}); leaving graded.json unchanged")
+            return
+        # the key changed and no saved key opens the old cache: keep it aside (it opens again if the old key is
+        # saved as PPT_API_KEY_OLD) and start over with the new key
+        keep = os.path.join(store, f"cache-locked-{date.today().isoformat()}.enc")
+        if not os.path.exists(keep):
+            os.replace(cpath, keep)
+        print(f"::warning title=Graded prices::the stored graded prices are sealed with a key we no longer have; kept as {os.path.basename(keep)}, starting fresh")
+        cache = {"last_run": "", "cards": {}}
     today = date.today().isoformat()
     fetched = 0
     if not key:

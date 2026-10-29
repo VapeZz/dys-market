@@ -13,7 +13,7 @@ on:
         default: "1"
       per_run:
         description: "Cards per batch"
-        default: "1200"
+        default: "1600"
       cheap_share:
         description: "Share of each batch for $1-$20 cards (1 = only cheap cards)"
         default: "0.4"
@@ -40,7 +40,7 @@ jobs:
           PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
           PPT_API_KEY_NEW: ${{ secrets.PPT_API_KEY_NEW }}
           PPT_API_KEY_OLD: ${{ secrets.PPT_API_KEY_OLD }}
-          PPT_PER_RUN: ${{ inputs.per_run || '1200' }}
+          PPT_PER_RUN: ${{ inputs.per_run || '1600' }}
           PPT_CHEAP_SHARE: ${{ inputs.cheap_share || '0.4' }}
           ROUNDS: ${{ inputs.rounds || '1' }}
         run: |
