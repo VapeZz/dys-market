@@ -30,6 +30,8 @@ import sealed  # noqa: E402  (the stored cache is encrypted: their terms let us 
 API = "https://www.pokemonpricetracker.com/api/v2/cards"
 PER_RUN = int(os.environ.get("PPT_PER_RUN", "45"))       # cards per run (paid plan: hundreds; free plan: 45/day)
 STALE_DAYS = int(os.environ.get("PPT_STALE_DAYS", "3"))   # refresh a card's graded prices this often
+CHEAP_SHARE = float(os.environ.get("PPT_CHEAP_SHARE", "0.4"))   # share of each run for $1-$20 cards
+GOOD_RARITY = re.compile(r"illustration|art rare|character|trainer gallery|shiny|secret|hyper|ultra|special|double|holo|prism|rainbow|amazing|radiant|kagayaku|classic", re.I)
 GRADES = ["psa10", "psa9", "psa8", "cgc10", "cgc9_5", "cgc9", "bgs10", "bgs9_5", "bgs9", "tag10", "tag9"]
 
 
@@ -38,6 +40,26 @@ def fetch(pid, key, jp=False):
                                  headers={"Authorization": "Bearer " + key, "User-Agent": "dys-market"})
     with urllib.request.urlopen(req, timeout=60) as r:
         return json.load(r).get("data")
+
+
+def due(cache, r, days):
+    at = cache["cards"].get(str(r[0]), {}).get("at", "")
+    return at <= (date.today() - timedelta(days=days)).isoformat()
+
+
+def cheap_stale(cache, r):
+    """How often to refresh a $1-$20 card: every few days if its PSA 10 sells for 6x+ raw, else rarely."""
+    c = cache["cards"].get(str(r[0]))
+    if not c:
+        return 0
+    p10 = (c.get("g") or {}).get("psa10")
+    if p10 and p10[1] >= 3 and p10[0] >= 6 * r[3]:
+        return STALE_DAYS
+    return 14 if c.get("g") else 30
+
+
+def rarity_rank(r):
+    return 0 if GOOD_RARITY.search(r or "") else 1 if re.search(r"rare", r or "", re.I) else 2
 
 
 def summarize(card):
@@ -87,16 +109,25 @@ def main(argv):
         print("::warning title=Graded prices::PPT_API_KEY not set; using cached prices only")
     else:
         rows = json.load(open(os.path.join(site, "data", "grading.json")))["rows"]
-        cutoff = (date.today() - timedelta(days=STALE_DAYS)).isoformat()
+        try:
+            rows += json.load(open(os.path.join(site, "data", "grading-cheap.json")))["rows"]
+        except (OSError, ValueError):
+            pass
         once = {}
         for r in rows:
             once[r[0]] = once.get(r[0], 0) + 1
         # graded sales are per product, so only cards with a single printing under their id give clean numbers
-        cands = [r for r in rows if r[7] in ("pokemon", "pokemon-jp") and 2000 <= r[3] <= 500000 and once[r[0]] == 1      # Pokémon (EN + JP), $20+
-                 and cache["cards"].get(str(r[0]), {}).get("at", "") <= cutoff]
+        pool = [r for r in rows if r[7] in ("pokemon", "pokemon-jp") and 100 <= r[3] <= 500000 and once[r[0]] == 1]
+        main_due = [r for r in pool if r[3] >= 2000 and due(cache, r, STALE_DAYS)]
+        cheap_due = [r for r in pool if r[3] < 2000 and due(cache, r, cheap_stale(cache, r))]
         # never-fetched first, then oldest; within that, modern $30-$500 cards (what people grade most) before the rest
-        cands.sort(key=lambda r: (str(r[0]) in cache["cards"], cache["cards"].get(str(r[0]), {}).get("at", ""),
-                                  not (r[8] == "modern" and 3000 <= r[3] <= 50000), -r[3]))
+        main_due.sort(key=lambda r: (str(r[0]) in cache["cards"], cache["cards"].get(str(r[0]), {}).get("at", ""),
+                                     not (r[8] == "modern" and 3000 <= r[3] <= 50000), -r[3]))
+        # cheap cards ($1-$20, the 10x finder): never-fetched first, likeliest gem rarities first, then oldest
+        cheap_due.sort(key=lambda r: (str(r[0]) in cache["cards"], cache["cards"].get(str(r[0]), {}).get("at", ""), rarity_rank(r[5]), -r[3]))
+        q = min(len(cheap_due), int(PER_RUN * CHEAP_SHARE))
+        q = max(q, PER_RUN - len(main_due))                 # spare room goes to the other pool
+        cands = cheap_due[:q] + main_due[:PER_RUN - min(q, len(cheap_due))]
         for r in cands[:PER_RUN]:
             pid = str(r[0])
             try:

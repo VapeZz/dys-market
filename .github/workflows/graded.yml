@@ -18,7 +18,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -29,7 +29,7 @@ jobs:
         env:
           PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
           PPT_API_KEY_OLD: ${{ secrets.PPT_API_KEY_OLD }}
-          PPT_PER_RUN: "900"
+          PPT_PER_RUN: "1200"
         run: |
           set -e
           R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"

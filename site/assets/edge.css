@@ -201,3 +201,4 @@ label.toggle{display:flex;gap:8px;align-items:center;font-size:13.5px;color:var(
 #g-body{display:flex;flex-direction:column;gap:12px;min-width:0}
 .tabs a{max-width:96px}
 .tabs a span{font-size:10.5px}
+.btn.full{width:100%;justify-content:center;margin:0 0 4px}

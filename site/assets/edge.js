@@ -568,7 +568,7 @@
   /* ---------- Grade: your grading board, candidate finder, submission planner, results log ----------
      Graded prices here are the ones you enter (from the sold links), so every number is yours to check. */
   const GL = { PSA: ["10", "9"], CGC: ["10", "9"], BGS: ["9.5", "9"], TAG: ["10", "9"] };
-  const FIND = { min: 30, max: 500, era: "modern", q: "", sort: null };
+  const FIND = { min: 30, max: 500, era: "modern", q: "", sort: null, mult: 0, liquid: false };
   function myRates() {
     const L = S.glog; if (L.length < 5) return null;
     const ten = L.filter((x) => parseFloat(x.grade) >= 10).length, nine = L.filter((x) => { const g = parseFloat(x.grade); return g >= 9 && g < 10; }).length;
@@ -741,33 +741,45 @@
   }
   async function gradeFind(el) {
     el.innerHTML = `<p class="muted">Loading cards…</p>`;
-    const gd = await getJSON("grading.json").catch(() => null);
-    if (!gd) { el.innerHTML = `<div class="empty">The candidate list builds with the nightly update.</div>`; return; }
+    const [main, cheap] = await Promise.all([getJSON("grading.json").catch(() => null), getJSON("grading-cheap.json").catch(() => null)]);
+    if (!main) { el.innerHTML = `<div class="empty">The candidate list builds with the nightly update.</div>`; return; }
+    const gd = { rows: main.rows.concat(cheap?.rows || []) };
     const multi = new Set(), seen = {};
     for (const r of gd.rows) { seen[r[0]] = (seen[r[0]] || 0) + 1; if (seen[r[0]] > 1) multi.add(r[0]); }
+    // liquid = the graded copy actually trades: 5+ sold in 90 days and one in the last 30
+    const liquid = (gp) => gp && gp.n10 >= 5 && gp.l10 && daysAgo(gp.l10) <= 30;
     el.innerHTML = `${GR ? `<div id="fd-asm"></div><p class="muted small" style="margin:0">Steady singles ranked by expected profit from grading, using ${esc(grader().co)} sold prices from PokemonPriceTracker (cards with 3+ sales in 90 days) and your assumptions above. Add the best ones to your board.</p>`
         : `<p class="muted small" style="margin:0">Singles with steady prices and live listings near market, so the raw price is real. Each shows what a graded ${esc(grader().l10)} has to sell for to pay off at your assumptions.${pptKey() ? "" : " Add your PokemonPriceTracker key in Mine → Settings to rank them by real profit."}</p>`}
+      ${GR ? `<button type="button" class="btn full" id="fd-10x">Cheap 10× finder: $1–$25 raw, ${esc(grader().co + " " + grader().l10)} sells 10×+, liquid</button>` : ""}
       <div class="form"><label class="f">Raw price from $<input class="field" id="fd-min" type="number" inputmode="decimal" min="0" value="${FIND.min}"></label>
         <label class="f">to $<input class="field" id="fd-max" type="number" inputmode="decimal" min="0" value="${FIND.max}"></label>
         <label class="f full">Search<input class="field" id="fd-q" type="search" placeholder="Card or set" value="${esc(FIND.q)}"></label></div>
-      <div id="fd-era"></div><div id="fd-sort"></div><div id="fd-list"></div>`;
+      <div id="fd-era"></div>${GR ? `<div id="fd-mult"></div><label class="toggle"><input type="checkbox" id="fd-liq"${FIND.liquid ? " checked" : ""}> Liquid only: ${esc(grader().co + " " + grader().l10)} sold 5+ times in 90 days, last sale within 30 days</label>` : ""}<div id="fd-sort"></div><div id="fd-list"></div>`;
     const draw = () => {
       const q = FIND.q.trim().toLowerCase(), onBoard = new Set(S.board.map((x) => x.k));
       let rows = gd.rows.filter((r) => !multi.has(r[0]) && gameOk(r[7]) && (FIND.era === "all" || r[8] === FIND.era) && r[3] >= FIND.min * 100 && (!FIND.max || r[3] <= FIND.max * 100)
         && (!q || (r[2] + " " + setName(r[1])).toLowerCase().includes(q)));
       const sort = FIND.sort || (GR ? "profit" : "price"), { l10 } = grader();
       rows = rows.map((r) => { const gp = GR ? gradedOf(r[0]) : null, ok = solid(gp); return { r, gp: ok ? gp : null, e: gradeEval(r[3], ok ? gp.p10 : null, ok ? gp.p9 : null, ok ? gp.p8 : null) }; });
-      if (sort === "profit") rows = rows.filter((x) => x.gp);
-      rows.sort(sort === "profit" ? (a, b) => b.e.profit - a.e.profit : sort === "easy" ? (a, b) => (a.e.be10 / a.r[3]) - (b.e.be10 / b.r[3]) : (a, b) => b.r[3] - a.r[3]);
+      if (GR && FIND.mult) rows = rows.filter((x) => x.gp && x.gp.p10 >= FIND.mult * x.r[3]);
+      if (GR && FIND.liquid) rows = rows.filter((x) => liquid(x.gp));
+      if (sort === "profit" || sort === "mult") rows = rows.filter((x) => x.gp);
+      rows.sort(sort === "mult" ? (a, b) => b.gp.p10 / b.r[3] - a.gp.p10 / a.r[3] : sort === "profit" ? (a, b) => b.e.profit - a.e.profit : sort === "easy" ? (a, b) => (a.e.be10 / a.r[3]) - (b.e.be10 / b.r[3]) : (a, b) => b.r[3] - a.r[3]);
       const out = rows.slice(0, 80).map(({ r, gp, e }) => { const k = keyOf(r[0], r[2]), be = e.be10;
         const add = onBoard.has(k) ? `<span class="chip good">On your board</span>` : `<span class="chip" data-addb="${r[0]}|${r[1]}|${esc(r[2])}">+ Add to board</span>`;
         return gp ? rowHTML({ id: r[0], g: r[1], n: r[2] }, `<b class="${cls(e.profit)}">${signed(Math.round(e.profit))}</b><small class="muted">raw ${money(r[3])} · ${esc(l10)} ${money(gp.p10, gp.p10 >= 100000)}</small>`,
-            `<span class="why">${vchip(e.v)} ${gp.n10} sold in 90 days${gp.l10 ? `, last ${fmtDay(gp.l10)}` : ""} ${add}</span>`)
+            `<span class="why">${vchip(e.v)} <b>${(gp.p10 / r[3]).toFixed(1)}×</b> · ${gp.n10} sold in 90 days${gp.l10 ? `, last ${fmtDay(gp.l10)}` : ""}${gp.p9 ? ` · ${esc(grader().l9)} ${money(gp.p9)}` : ""} ${add}</span>`)
           : rowHTML({ id: r[0], g: r[1], n: r[2] }, `<b>${money(r[3])}</b><small class="muted">${esc(l10)} needs ${!isFinite(be) ? "—" : money(Math.round(be), be >= 100000)}</small>`, `<span class="why">${add}</span>`); });
-      $("#fd-list").innerHTML = listOrEmpty(out, sort === "profit" ? "No cards with enough graded sales match. Widen the price range, switch era or games, or sort by Most valuable." : "No cards match. Widen the price range or switch games.") + (rows.length > 80 ? `<p class="muted small">Showing 80 of ${rows.length}. Narrow it with search or price.</p>` : "");
+      $("#fd-list").innerHTML = (FIND.mult && rows.length ? `<p class="muted small" style="margin:0">${rows.length} card${rows.length === 1 ? "" : "s"} where a ${esc(grader().co + " " + l10)} sells for ${FIND.mult}×+ raw${FIND.liquid ? " and trades often" : ""}. A big multiple on a cheap card can still lose money once fees are in: the green number is profit after grading fees, shipping, selling fees and your grade odds.</p>` : "")
+        + listOrEmpty(out, FIND.mult ? `No cards at ${FIND.mult}×+ yet${FIND.liquid ? " that trade often" : ""}. Graded prices for $1–$20 cards fill in over the next few days; try again soon, lower the multiple, or turn off Liquid only.` : sort === "profit" ? "No cards with enough graded sales match. Widen the price range, switch era or games, or sort by Most valuable." : "No cards match. Widen the price range or switch games.") + (rows.length > 80 ? `<p class="muted small">Showing 80 of ${rows.length}. Narrow it with search or price.</p>` : "");
     };
     seg($("#fd-era"), [["modern", "Modern"], ["vintage", "Older sets"], ["all", "All"]], FIND.era, (k) => { FIND.era = k; draw(); });
-    seg($("#fd-sort"), [...(GR ? [["profit", "Best profit"]] : []), ["price", "Most valuable"], ["easy", "Easiest to pay off"]], FIND.sort || (GR ? "profit" : "price"), (k) => { FIND.sort = k; draw(); });
+    if (GR) {
+      seg($("#fd-mult"), [[0, "Any multiple"], [5, "5×+"], [10, "10×+"], [20, "20×+"]], FIND.mult, (k) => { FIND.mult = +k; draw(); });
+      $("#fd-liq").onchange = (e) => { FIND.liquid = e.target.checked; draw(); };
+      $("#fd-10x").onclick = () => { Object.assign(FIND, { min: 1, max: 25, era: "all", mult: 10, liquid: true, sort: "profit", q: "" }); gradeFind(fresh($("#g-body"))); };
+    }
+    seg($("#fd-sort"), [...(GR ? [["profit", "Best profit"], ["mult", "Multiple"]] : []), ["price", "Most valuable"], ["easy", "Easiest to pay off"]], FIND.sort || (GR ? "profit" : "price"), (k) => { FIND.sort = k; draw(); });
     if (GR) { const asm = () => { const a = assumptions(() => { asm(); draw(); }); $("#fd-asm").innerHTML = a.html; a.bind($("#fd-asm")); }; asm(); }
     $("#fd-min").onchange = (e) => { FIND.min = +e.target.value || 0; draw(); };
     $("#fd-max").onchange = (e) => { FIND.max = +e.target.value || 0; draw(); };
