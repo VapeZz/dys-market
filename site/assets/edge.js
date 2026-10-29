@@ -135,10 +135,10 @@
 
   /* ---------- router ---------- */
   let PICK = null;     // adding cards to a trade side or a lot from Search
-  const TABS = { today: viewToday, search: viewSearch, deals: viewDeals, grade: viewGrade, tools: viewTools, mine: viewMine };
+  const TABS = { today: viewToday, search: viewSearch, sets: viewSets, deals: viewDeals, grade: viewGrade, tools: viewTools, mine: viewMine };
   let TAB = "today", SUB = { deals: "flip", tools: "flip", mine: "inv", grade: "board" };
   function route() {
-    const h = (location.hash || "").slice(1);
+    const h = (location.hash || "").slice(1).split("/")[0];
     TAB = TABS[h] ? h : "today";
     if (TAB !== "search") PICK = null;
     $$(".tabs a").forEach((a) => a.setAttribute("aria-current", a.dataset.tab === TAB ? "page" : "false"));
@@ -258,6 +258,85 @@
     let t; q.addEventListener("input", () => { clearTimeout(t); t = setTimeout(run, 140); });
     run();
     if (!PICK) q.focus({ preventScroll: true });
+  }
+  /* ---------- Sets: every set with its box price and weekly move; tap one for all its cards ---------- */
+  const SETV = { q: "", sort: "new" }, SETD = { type: "c", sort: "price", q: "", n: 120 };
+  const fmtMon = (d) => d ? new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+  const gameLabel = (k) => (META?.games || []).find((g) => g.slug === k)?.label || k;
+  async function viewSets(v) {
+    const gid = +((location.hash || "").split("/")[1] || 0);
+    if (gid) return viewSet(v, gid);
+    v.innerHTML = `<div class="searchbox"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+        <input id="sq" class="field" type="search" placeholder="Set name or code" autocomplete="off" aria-label="Find a set" value="${esc(SETV.q)}"></div>
+      <div id="ss-game"></div><div id="ss-sort"></div><div id="ss-list"><p class="muted small">Loading sets…</p></div>`;
+    const sets = await getJSON("sets.json"), today = localDay();
+    const draw = () => {
+      const q = SETV.q.trim().toLowerCase();
+      let rows = sets.filter((x) => gameOk(x.k) && (!q || (x.n + " " + (x.a || "")).toLowerCase().includes(q)));
+      const by = { new: (a, b) => (b.pub || "").localeCompare(a.pub || ""), box: (a, b) => (b.bb || 0) - (a.bb || 0),
+        up: (a, b) => (b.c7 ?? -1e9) - (a.c7 ?? -1e9), down: (a, b) => (a.c7 ?? 1e9) - (b.c7 ?? 1e9), az: (a, b) => a.n.localeCompare(b.n) }[SETV.sort];
+      if (SETV.sort === "box" || SETV.sort === "up" || SETV.sort === "down") rows = rows.filter((x) => SETV.sort === "box" ? x.bb : x.c7 != null);
+      rows.sort(by);
+      const out = rows.slice(0, 150).map((x) => {
+        const pic = x.lg ? `<img class="logo" src="${esc(x.lg)}" alt="" loading="lazy" onerror="this.outerHTML='<span class=&quot;ph abbr&quot;>${esc(esc((x.a || x.n).slice(0, 5)))}</span>'">` : x.bbId ? img(x.bbId) : `<span class="ph abbr">${esc((x.a || x.n).slice(0, 5))}</span>`;
+        return `<a class="row" href="#sets/${x.id}">${pic}<span style="min-width:0;display:flex;flex-direction:column;gap:2px"><span class="nm">${esc(x.n)}</span>
+          <span class="st">${esc(gameLabel(x.k))}${x.pub ? ` · ${esc(fmtMon(x.pub))}` : ""}${x.np ? ` · ${x.np} products` : ""}</span></span>
+          <span class="rt">${x.pub && x.pub > today ? `<span class="chip hot">Upcoming</span>` : ""}${x.bb ? `<b>${money(x.bb)}</b><small class="muted">${/booster box/i.test(x.bbN || "") ? "box" : "sealed"}</small>` : ""}${x.c7 != null ? `<small class="${cls(x.c7)}">${pct(x.c7)} 7d</small>` : ""}</span></a>`;
+      });
+      $("#ss-list").innerHTML = listOrEmpty(out, "No sets match. Try another name or switch games.") + (rows.length > 150 ? `<p class="muted small">Showing 150 of ${rows.length}. Search to find the rest.</p>` : "");
+    };
+    seg($("#ss-game"), Object.entries(GAMES).map(([k, g]) => [k, g[0]]), S.set.game, (k) => { S.set.game = k; save(); draw(); });
+    seg($("#ss-sort"), [["new", "Newest"], ["box", "Box price"], ["up", "Up this week"], ["down", "Down this week"], ["az", "A–Z"]], SETV.sort, (k) => { SETV.sort = k; draw(); });
+    let t; $("#sq").oninput = (e) => { clearTimeout(t); t = setTimeout(() => { SETV.q = e.target.value; draw(); }, 140); };
+    draw();
+  }
+  // % change over the last 7 days of a daily price series (null when there isn't a week of prices)
+  function chg7(sr) {
+    if (!sr || sr.length < 2) return null;
+    let i = sr.length - 1; while (i >= 0 && sr[i] == null) i--;
+    if (i < 0) return null;
+    let j = Math.min(i - 1, sr.length - 8); while (j >= 0 && sr[j] == null) j--;
+    return j >= 0 && sr[j] ? (sr[i] - sr[j]) / sr[j] * 100 : null;
+  }
+  async function viewSet(v, gid) {
+    v.innerHTML = `<p class="muted">Loading set…</p>`;
+    const [d] = await Promise.all([getJSON(`set/${gid}.json`), loadGraded()]);
+    const cards = d.items.filter((i) => i.t === "c"), sealed = d.items.filter((i) => i.t === "s");
+    const uniq = new Map(); for (const i of cards) if (i.p && !uniq.has(i.id)) uniq.set(i.id, i.p);
+    const value = [...uniq.values()].reduce((a, b) => a + b, 0), top = cards.reduce((a, b) => (b.p || 0) > (a?.p || 0) ? b : a, null);
+    const { co, l10 } = GR ? grader() : {};
+    const mover = cards.filter((i) => (i.p || 0) >= 500).map((i) => ({ i, c: chg7(i.s) })).filter((x) => x.c != null).sort((a, b) => b.c - a.c)[0];
+    if (!cards.length) SETD.type = "s";
+    v.innerHTML = `<a class="more" href="#sets">← All sets</a>
+      <section class="sec"><h2 style="margin:0">${esc(d.n)}</h2><p class="muted small" style="margin:2px 0 0">${esc(gameLabel(d.k))}${d.pub ? ` · ${d.pub > localDay() ? "releases" : "released"} ${esc(fmtMon(d.pub))}` : ""} · ${cards.length} cards · ${sealed.length} sealed</p></section>
+      <div class="tiles"><div class="tile"><span class="lab">Every card, one each</span><b>${money(value, true)}</b><small>${uniq.size} priced</small></div>
+        <div class="tile"><span class="lab">Top card</span><b>${top?.p ? money(top.p, true) : "—"}</b><small>${esc(top ? cleanN(top.n) : "")}</small></div>
+        <div class="tile"><span class="lab">Up most, 7 days</span><b class="${mover ? cls(mover.c) : ""}">${mover ? pct(mover.c) : "—"}</b><small>${esc(mover ? cleanN(mover.i.n) : "Needs a week of prices")}</small></div></div>
+      <div id="sd-type"></div><div class="searchbox"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+        <input id="sdq" class="field" type="search" placeholder="Card name, number or rarity" autocomplete="off" aria-label="Search this set" value=""></div>
+      <div id="sd-sort"></div><div id="sd-list"></div>`;
+    SETD.q = ""; SETD.n = 120;
+    const num = (no) => { const m = String(no || "").match(/\d+/); return m ? +m[0] : 1e9; };
+    const draw = () => {
+      const q = SETD.q.trim().toLowerCase();
+      let rows = (SETD.type === "s" ? sealed : cards).filter((i) => !q || (i.n + " " + (i.no || "") + " " + (i.r || "")).toLowerCase().includes(q)).map((i) => ({ i, c: chg7(i.s) }));
+      if (SETD.sort === "up" || SETD.sort === "down") rows = rows.filter((x) => x.c != null);
+      rows.sort({ price: (a, b) => (b.i.p || 0) - (a.i.p || 0), up: (a, b) => b.c - a.c, down: (a, b) => a.c - b.c,
+        num: (a, b) => num(a.i.no) - num(b.i.no) || String(a.i.no).localeCompare(String(b.i.no)) }[SETD.sort]);
+      const out = rows.slice(0, SETD.n).map(({ i, c }) => {
+        const gp = GR && i.t === "c" ? gradedOf(i.id) : null;
+        const extra = gp?.p10 ? `<span class="why">${esc(co)} ${esc(l10)} ${money(gp.p10, gp.p10 >= 100000)}${i.p ? ` · <b>${(gp.p10 / i.p).toFixed(1)}×</b>` : ""} · ${gp.n10} sold in 90 days</span>` : "";
+        return rowHTML({ id: i.id, g: gid, n: i.n, sn: [i.no, i.r].filter(Boolean).join(" · ") },
+          `<b>${i.p ? money(i.p) : "—"}</b>${c != null ? `<small class="${cls(c)}">${pct(c)} 7d</small>` : i.lo ? `<small class="muted">low ${money(i.lo)}</small>` : ""}`, extra);
+      });
+      $("#sd-list").innerHTML = listOrEmpty(out, SETD.type === "s" ? "No sealed products in this set." : "No cards match.")
+        + (rows.length > SETD.n ? `<button type="button" class="btn full" id="sd-more">Show more (${rows.length - SETD.n} left)</button>` : "");
+      const more = $("#sd-more"); if (more) more.onclick = () => { SETD.n += 200; draw(); };
+    };
+    seg($("#sd-type"), [["c", `Cards (${cards.length})`], ["s", `Sealed (${sealed.length})`]], SETD.type, (k) => { SETD.type = k; SETD.n = 120; draw(); });
+    seg($("#sd-sort"), [["price", "Price"], ["up", "Up 7d"], ["down", "Down 7d"], ["num", "Number"]], SETD.sort, (k) => { SETD.sort = k; draw(); });
+    let t; $("#sdq").oninput = (e) => { clearTimeout(t); t = setTimeout(() => { SETD.q = e.target.value; SETD.n = 120; draw(); }, 140); };
+    draw();
   }
   function pickAdd(id, g, n) {
     const r = IDX.get(keyOf(id, n)) || IDX.get(String(id));
