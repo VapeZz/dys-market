@@ -7,6 +7,16 @@ on:
   schedule:
     - cron: "20 */4 * * *"
   workflow_dispatch:
+    inputs:
+      rounds:
+        description: "Batches to run back to back (results are published after each)"
+        default: "1"
+      per_run:
+        description: "Cards per batch"
+        default: "1200"
+      cheap_share:
+        description: "Share of each batch for $1-$20 cards (1 = only cheap cards)"
+        default: "0.4"
 
 permissions:
   contents: write
@@ -18,7 +28,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 300
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -29,16 +39,25 @@ jobs:
         env:
           PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
           PPT_API_KEY_OLD: ${{ secrets.PPT_API_KEY_OLD }}
-          PPT_PER_RUN: "1200"
+          PPT_PER_RUN: ${{ inputs.per_run || '1200' }}
+          PPT_CHEAP_SHARE: ${{ inputs.cheap_share || '0.4' }}
+          ROUNDS: ${{ inputs.rounds || '1' }}
         run: |
           set -e
           R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
           git clone -q --depth 1 --branch data "$R" /tmp/db
           git clone -q --depth 1 --branch gh-pages "$R" /tmp/pages
-          python tools/graded.py /tmp/pages /tmp/db/data/graded | tee /tmp/g.log
-          for d in /tmp/db /tmp/pages; do
-            git -C $d config user.name "dys-market-bot"; git -C $d config user.email "dys-market-bot@users.noreply.github.com"
+          for i in $(seq 1 "$ROUNDS"); do
+            python tools/graded.py /tmp/pages /tmp/db/data/graded | tee /tmp/g.log
+            for d in /tmp/db /tmp/pages; do
+              git -C $d config user.name "dys-market-bot"; git -C $d config user.email "dys-market-bot@users.noreply.github.com"
+            done
+            git -C /tmp/db add data/graded && (git -C /tmp/db diff --cached --quiet || (git -C /tmp/db commit -q -m "Graded prices $(date -u +%FT%H:%MZ)" && git -C /tmp/db push -q origin data))
+            # gh-pages is rebuilt (force-pushed) by other jobs: put just our files on top of the latest
+            rm -rf /tmp/edge-out; git -C /tmp/pages fetch -q origin gh-pages && cp /tmp/pages/data/graded.json /tmp/graded.json && { [ -d /tmp/pages/data/edge ] && cp -r /tmp/pages/data/edge /tmp/edge-out || true; }
+            git -C /tmp/pages reset -q --hard origin/gh-pages && cp /tmp/graded.json /tmp/pages/data/graded.json && { [ -d /tmp/edge-out ] && mkdir -p /tmp/pages/data/edge && cp -r /tmp/edge-out/. /tmp/pages/data/edge/ || true; }
+            git -C /tmp/pages add data/graded.json $([ -d /tmp/pages/data/edge ] && echo data/edge) && (git -C /tmp/pages diff --cached --quiet || (git -C /tmp/pages commit -q -m "Graded prices $(date -u +%FT%H:%MZ)" && git -C /tmp/pages push -q origin gh-pages)) || echo "::warning::round $i: publish failed, retrying next round"
+            echo "round $i: $(tail -n 1 /tmp/g.log)" >> /tmp/rounds.log
+            grep -q "stopped: HTTP" /tmp/g.log && break
           done
-          git -C /tmp/db add data/graded && (git -C /tmp/db diff --cached --quiet || (git -C /tmp/db commit -q -m "Graded prices $(date -u +%FT%H:%MZ)" && git -C /tmp/db push -q origin data))
-          git -C /tmp/pages add data/graded.json $([ -d /tmp/pages/data/edge ] && echo data/edge) && (git -C /tmp/pages diff --cached --quiet || (git -C /tmp/pages commit -q -m "Graded prices $(date -u +%FT%H:%MZ)" && git -C /tmp/pages push -q origin gh-pages))
-          echo "::notice title=Graded::$(tail -n 1 /tmp/g.log)"
+          echo "::notice title=Graded::$(tr '\n' ' ' < /tmp/rounds.log)"
