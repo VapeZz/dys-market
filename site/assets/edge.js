@@ -278,7 +278,7 @@
       if (SETV.sort === "box" || SETV.sort === "up" || SETV.sort === "down") rows = rows.filter((x) => SETV.sort === "box" ? x.bb : x.c7 != null);
       rows.sort(by);
       const out = rows.slice(0, 150).map((x) => {
-        const pic = x.lg ? `<img class="logo" src="${esc(x.lg)}" alt="" loading="lazy" onerror="this.outerHTML='<span class=&quot;ph abbr&quot;>${esc(esc((x.a || x.n).slice(0, 5)))}</span>'">` : x.bbId ? img(x.bbId) : `<span class="ph abbr">${esc((x.a || x.n).slice(0, 5))}</span>`;
+        const pic = x.lg ? `<img class="logo" src="${esc(x.lg)}" alt="" loading="lazy" onerror="this.outerHTML='<span class=&quot;ph abbr&quot;>${(x.a || x.n).replace(/[^\w ]/g, "").slice(0, 5)}</span>'">` : x.bbId ? img(x.bbId) : `<span class="ph abbr">${esc((x.a || x.n).slice(0, 5))}</span>`;
         return `<a class="row" href="#sets/${x.id}">${pic}<span style="min-width:0;display:flex;flex-direction:column;gap:2px"><span class="nm">${esc(x.n)}</span>
           <span class="st">${esc(gameLabel(x.k))}${x.pub ? ` · ${esc(fmtMon(x.pub))}` : ""}${x.np ? ` · ${x.np} products` : ""}</span></span>
           <span class="rt">${x.pub && x.pub > today ? `<span class="chip hot">Upcoming</span>` : ""}${x.bb ? `<b>${money(x.bb)}</b><small class="muted">${/booster box/i.test(x.bbN || "") ? "box" : "sealed"}</small>` : ""}${x.c7 != null ? `<small class="${cls(x.c7)}">${pct(x.c7)} 7d</small>` : ""}</span></a>`;
