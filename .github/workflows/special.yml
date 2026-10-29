@@ -4,7 +4,7 @@ permissions:
   contents: write
 jobs:
   render:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # Playwright 1.56 has no Chromium for ubuntu-26.04 (ubuntu-latest)
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6

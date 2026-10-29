@@ -9,7 +9,7 @@ permissions:
   contents: write
 jobs:
   bench:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # Playwright 1.56 has no Chromium for ubuntu-26.04 (ubuntu-latest)
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
