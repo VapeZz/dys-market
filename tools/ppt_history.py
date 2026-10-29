@@ -10,6 +10,7 @@ import glob
 import gzip
 import json
 import os
+import re
 import sys
 from datetime import date
 import time
@@ -36,7 +37,7 @@ def shape(x, depth=0, maxd=4):
 
 
 def main(argv):
-    key = (os.environ.get("PPT_API_KEY") or "").strip()
+    key = re.sub(r"\s+", "", os.environ.get("PPT_API_KEY_NEW") or os.environ.get("PPT_API_KEY") or "")
     cmd = argv[0]
     if cmd == "probe":
         for label, path in [("card 610516", "/cards?tcgPlayerId=610516&includeHistory=true&days=180"),
@@ -118,7 +119,7 @@ def fetch(site, store):
     for p, pid, sealed in sorted(cands, reverse=True):
         uniq.setdefault(pid, (p, sealed))
     todo = list(uniq.items())[:PER_RUN]
-    key = (os.environ.get("PPT_API_KEY") or "").strip()
+    key = re.sub(r"\s+", "", os.environ.get("PPT_API_KEY_NEW") or os.environ.get("PPT_API_KEY") or "")
     add = {}          # day -> {key: cents}
     got = skipped = 0
     sp = os.path.join(store, "ppt-history-start.txt")      # first day of our own nightly tracking

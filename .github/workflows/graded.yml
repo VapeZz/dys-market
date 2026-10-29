@@ -38,6 +38,7 @@ jobs:
       - name: Refresh a batch of graded prices
         env:
           PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
+          PPT_API_KEY_NEW: ${{ secrets.PPT_API_KEY_NEW }}
           PPT_API_KEY_OLD: ${{ secrets.PPT_API_KEY_OLD }}
           PPT_PER_RUN: ${{ inputs.per_run || '1200' }}
           PPT_CHEAP_SHARE: ${{ inputs.cheap_share || '0.4' }}

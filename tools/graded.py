@@ -91,7 +91,7 @@ def main(argv):
             os.remove(plain)
         print("graded: paused (PPT_BUSINESS_PLAN is off in pipeline/config.py); graded prices hidden, stored cache kept")
         return
-    key = (os.environ.get("PPT_API_KEY") or "").strip()
+    key = re.sub(r"\s+", "", os.environ.get("PPT_API_KEY_NEW") or os.environ.get("PPT_API_KEY") or "")
     os.makedirs(store, exist_ok=True)
     cpath, plain = os.path.join(store, "cache.enc"), os.path.join(store, "cache.json")
     cache = {"last_run": "", "cards": {}}

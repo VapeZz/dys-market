@@ -28,6 +28,7 @@ jobs:
       - name: Run
         env:
           PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
+          PPT_API_KEY_NEW: ${{ secrets.PPT_API_KEY_NEW }}
           PPT_API_KEY_OLD: ${{ secrets.PPT_API_KEY_OLD }}
         run: |
           set -e

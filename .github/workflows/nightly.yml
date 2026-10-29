@@ -77,6 +77,7 @@ jobs:
         if: ${{ inputs.backfill }}
         env:
           PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
+          PPT_API_KEY_NEW: ${{ secrets.PPT_API_KEY_NEW }}
           PPT_API_KEY_OLD: ${{ secrets.PPT_API_KEY_OLD }}
         run: |
           which 7z || sudo apt-get install -y p7zip-full
@@ -87,6 +88,7 @@ jobs:
         env:
           MERGE_GAMES: ${{ inputs.merge_games }}
           PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
+          PPT_API_KEY_NEW: ${{ secrets.PPT_API_KEY_NEW }}
           PPT_API_KEY_OLD: ${{ secrets.PPT_API_KEY_OLD }}
         run: |
           which 7z || sudo apt-get install -y p7zip-full
@@ -98,12 +100,14 @@ jobs:
         env:
           MERGE_ARCHIVE: ${{ inputs.merge_archive }}
           PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
+          PPT_API_KEY_NEW: ${{ secrets.PPT_API_KEY_NEW }}
           PPT_API_KEY_OLD: ${{ secrets.PPT_API_KEY_OLD }}
         run: python pipeline/merge_archive.py "$MERGE_ARCHIVE"
 
       - name: Download today's prices and build site data
         env:
           PPT_API_KEY: ${{ secrets.PPT_API_KEY }}         # opens the encrypted older price history
+          PPT_API_KEY_NEW: ${{ secrets.PPT_API_KEY_NEW }}
           PPT_API_KEY_OLD: ${{ secrets.PPT_API_KEY_OLD }}
         run: python pipeline/run.py
 
@@ -140,6 +144,7 @@ jobs:
         continue-on-error: true
         env:
           PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
+          PPT_API_KEY_NEW: ${{ secrets.PPT_API_KEY_NEW }}
           PPT_API_KEY_OLD: ${{ secrets.PPT_API_KEY_OLD }}
         run: |
           python tools/graded.py site data/graded 2>&1 | tee /tmp/graded.log

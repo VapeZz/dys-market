@@ -682,7 +682,7 @@
      The update job publishes them encrypted; the key comes from the API key entered in Mine → Settings,
      which stays on this phone and out of backup files. */
   const PKEY = "dys-edge-ppt";
-  const pptKey = () => { try { return (localStorage.getItem(PKEY) || "").trim(); } catch { return ""; } };
+  const pptKey = () => { try { return (localStorage.getItem(PKEY) || "").replace(/\s+/g, ""); } catch { return ""; } };   // keys never contain spaces; pasted ones sometimes do
   let GR = null, GRP = null, GR_ERR = "";
   const GK = { PSA: ["psa10", "psa9", "psa8"], CGC: ["cgc10", "cgc9", null], BGS: ["bgs9_5", "bgs9", null], TAG: ["tag10", "tag9", null] };
   const GNAME = [["psa10", "PSA 10"], ["psa9", "PSA 9"], ["psa8", "PSA 8"], ["cgc10", "CGC 10"], ["cgc9_5", "CGC 9.5"], ["cgc9", "CGC 9"], ["bgs10", "BGS 10"], ["bgs9_5", "BGS 9.5"], ["bgs9", "BGS 9"], ["tag10", "TAG 10"], ["tag9", "TAG 9"]];
@@ -996,12 +996,12 @@
       const d = await loadGraded();
       if (d) { st.className = "small up"; st.textContent = `Unlocked: graded prices for ${Object.keys(d.c || {}).length.toLocaleString()} cards, updated ${fmtDay(d.u)}.`; return; }
       st.className = "small down";
-      st.textContent = { key: "That key doesn't open your graded prices. Use the same key that's saved on GitHub as PPT_API_KEY.",
+      st.textContent = { key: "That key doesn't open your graded prices yet. It has to match the key saved on GitHub (PPT_API_KEY_NEW, or PPT_API_KEY if you haven't added a new one). After you add or change it there, they unlock with the next update, within 4 hours.",
         none: "Key saved. Your graded prices aren't published yet; they arrive with the next update (every 4 hours).",
         browser: "This browser can't unlock them. Use Chrome or Safari, up to date." }[GR_ERR] || "Couldn't load your graded prices. Check your connection.";
     };
     $("#pp-f").onsubmit = (e) => {
-      e.preventDefault(); const v = $("#pp-k").value.trim(); if (!v) return;
+      e.preventDefault(); const v = $("#pp-k").value.replace(/\s+/g, ""); if (!v) return;
       try { localStorage.setItem(PKEY, v); } catch { toast("This browser won't save it"); return; }
       GR = null; GRP = null; GR_ERR = ""; mineSettings(el);
     };
