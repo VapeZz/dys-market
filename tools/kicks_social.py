@@ -113,7 +113,8 @@ def cover(pairs, mode, when):
     fan = "".join(
         f'<div style="position:absolute;left:{x}px;top:{y}px;width:{w}px;height:{w}px;transform:rotate({rot}deg);z-index:{z};'
         f'background:#f2f2f2;border-radius:28px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6)">{shoe(r)}</div>'
-        for r, (x, y, rot, z, w) in zip([p for p in pairs if p.get("im")][:3], spots))
+        for r, (x, y, rot, z, w) in zip([p for p in pairs if p.get("im")][:3],
+                                        spots if sum(bool(p.get("im")) for p in pairs) > 1 else [(250, 0, 0, 5, 520)]))
     best = max(pairs, key=lambda p: p["profit"])
     title = 'Cop or<br><span class="holo">drop?</span>' if mode == "drop" else 'Did it<br><span class="holo">flip?</span>'
     sub = (f"Retail vs eBay resale · {esc(when)}" if mode == "drop" else f"Last week's drops, retail vs eBay sold · {esc(when)}")
