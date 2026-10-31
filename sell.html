@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sell your cards · Drive Your Style</title>
+<meta name="description" content="Get a cash or store-credit offer for your Pokémon, One Piece, Lorcana and other TCG cards, slabs and sealed product from Drive Your Style in Las Vegas.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Drive Your Style Market Insights">
+<meta property="og:title" content="Sell your cards · Drive Your Style">
+<meta property="og:description" content="Get a cash or store-credit offer for your Pokémon, One Piece, Lorcana and other TCG cards, slabs and sealed product from Drive Your Style in Las Vegas.">
+<meta property="og:image" content="https://market.driveyourstyle.net/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Sell your cards · Drive Your Style">
+<meta name="twitter:description" content="Get a cash or store-credit offer for your Pokémon, One Piece, Lorcana and other TCG cards, slabs and sealed product from Drive Your Style in Las Vegas.">
+<meta name="twitter:image" content="https://market.driveyourstyle.net/assets/og.png">
+<link rel="canonical" href="https://market.driveyourstyle.net/sell.html">
+<meta name="theme-color" content="#0b0d14">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=41152994099">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="DYS Market">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<script data-goatcounter="https://driveyourstyle.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("dys-theme")||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
+</head>
+<body data-page="sell">
+<header id="top"></header>
+<main>
+
+<section class="hero hero-tight"><div class="wrap">
+  <span class="eyebrow"><b>●</b> We buy cards · Las Vegas</span>
+  <h1>Sell your cards <span class="holo">for cash or credit.</span></h1>
+  <p class="lead">Build your list from any card page or your collection, check the estimate, and send it. We reply within 24–48 hours with a firm offer.</p>
+</div></section>
+<div class="wrap"><section class="block" style="padding-top:8px">
+  <div class="stats" id="sell-est" style="margin:0 0 14px"></div>
+  <p class="muted" id="sell-bulk" style="font-size:13px;margin:0 0 10px"></p>
+  <div id="sell-list"><div class="skeleton" style="height:160px"></div></div>
+  <form id="sell-form" class="panel sell-form" method="post" hidden accept-charset="UTF-8">
+    <input type="hidden" name="form_type" value="contact"><input type="hidden" name="utf8" value="✓">
+    <input type="hidden" name="contact[tags]" value="sell-request">
+    <textarea id="sell-body" name="contact[body]" hidden></textarea>
+    <h2 style="font-size:22px;margin:0 0 4px">Send your list</h2>
+    <p class="muted" style="margin:0 0 14px;font-size:14px">No obligation. You'll get our offer by email.</p>
+    <div class="sell-grid">
+      <label>Name<input class="field" name="contact[name]" required autocomplete="name"></label>
+      <label>Email<input class="field" type="email" name="contact[email]" required autocomplete="email"></label>
+      <label>Phone (optional)<input class="field" type="tel" name="contact[phone]" autocomplete="tel"></label>
+      <label>I'd like<select class="select" name="payout"><option>Cash (PayPal / Zelle / cash)</option><option>Store credit (higher offer)</option><option>Either, show me both</option></select></label>
+    </div>
+    <label style="display:block;margin-top:10px">Notes<textarea class="field" name="notes" rows="3" placeholder="Anything we should know: local pickup, photos available, condition details" style="width:100%"></textarea></label>
+    <div class="btns" style="margin-top:14px"><button class="btn primary" type="submit">Send for an offer</button><button class="btn" type="button" id="sell-clear">Clear list</button></div>
+    <p class="muted" style="font-size:12.5px;margin:12px 0 0"><span id="sell-rates"></span> Final offers depend on condition once we see the cards. Have photos? Email them to <a id="sell-mail" href="#"></a>. Local sellers can meet in Las Vegas.</p>
+  </form>
+  <p class="muted" style="font-size:13px;margin-top:18px">Prefer to consign high-end items instead? <a href="https://driveyourstyle.net/pages/sell-with-us">Consign with us</a> and keep up to 85% of the sale.</p>
+</section></div>
+</main>
+<footer id="foot"></footer>
+<script src="assets/app.js?v=41152994099"></script>
+</body>
+</html>
