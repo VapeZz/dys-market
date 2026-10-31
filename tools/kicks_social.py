@@ -97,6 +97,9 @@ def load(spec, site):
         base = by.get(p["c"], {})
         q = dict(base, **{k: v for k, v in p.items() if v is not None})
         q["im"] = big(q.get("im") or imgs.get(q["c"]))
+        if not q.get("im"):
+            print(f"::warning title=Kicks: no photo::{q['c']} {q.get('n', '')} left out (every pair needs an official photo)")
+            continue
         if not q.get("r"):
             continue                      # no retail price, no call
         v, src = resale(q)

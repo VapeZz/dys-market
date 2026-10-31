@@ -11,7 +11,7 @@ A URL only counts when it really returns a product photo (an image, big enough, 
 so they stay after a shoe sells out; misses are retried every night. A release can also carry its own
 "im" URL in site/sneakers.json (used for collabs no brand server has), which always wins.
 
-    python tools/sneaker_images.py [--rel site/sneakers.json] [--report]
+    python tools/sneaker_images.py [--rel site/sneakers.json] [--report] [--add "CODE=url CODE=url"]
 Writes site/data/sneaker-images.json = {"STYLE-CODE": image_url}. --report prints one annotation per brand
 with what's still missing.
 """
@@ -26,6 +26,7 @@ import urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REL = os.path.join(ROOT, "site", "sneakers.json")
 CACHE = os.path.join(ROOT, "data", "sneaker-images.json")
+MANUAL = os.path.join(ROOT, "data", "sneaker-images-manual.json")   # {"CODE": url} official photos added by hand (collabs)
 OUT = os.path.join(ROOT, "site", "data", "sneaker-images.json")
 NIKE_CODE = re.compile(r"^[A-Z0-9]{6}-\d{3}$")
 IMG = re.compile(r'https://static\.nike\.com/a/images/[^"\\]+')
@@ -128,7 +129,8 @@ def main(argv):
     rel_path = argv[argv.index("--rel") + 1] if "--rel" in argv else REL
     rel = load(rel_path, {}).get("releases", [])
     cache = load(CACHE, {})
-    todo = [r for r in rel if r.get("c") and not r.get("im") and r["c"] not in cache]
+    have = set(cache) | set(load(MANUAL, {}))
+    todo = [r for r in rel if r.get("c") and not r.get("im") and r["c"] not in have]
     new = {}
     nike = [r["c"] for r in todo if NIKE_CODE.match(r["c"]) and r.get("b") in ("Nike", "Jordan")]
     for ch in ("nike.com", "snkrs"):
@@ -144,7 +146,20 @@ def main(argv):
     cache.update(new)
     keep = {r["c"] for r in rel if r.get("c")}
     cache = {k: v for k, v in cache.items() if k in keep}
+    manual = load(MANUAL, {})
+    if "--add" in argv:   # "CODE=url CODE=url": keep only URLs that really serve a photo
+        for pair in argv[argv.index("--add") + 1].split():
+            code, _, url = pair.partition("=")
+            st, ct, body = fetch(url)
+            if st == 200 and ct.startswith("image/") and len(body) >= 6000:
+                manual[code.strip().upper()] = url
+                print(f"sneaker images: added {code}")
+            else:
+                print(f"::warning title=Sneaker photo rejected::{code} {st} {ct} {len(body)} bytes")
+        with open(MANUAL, "w", encoding="utf-8") as f:
+            json.dump(manual, f, indent=0)
     out = dict(cache)
+    out.update(manual)
     out.update({r["c"]: r["im"] for r in rel if r.get("c") and r.get("im")})
     os.makedirs(os.path.dirname(CACHE), exist_ok=True)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)

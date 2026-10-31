@@ -45,9 +45,7 @@ def pick(site, start, end):
         r["pick"] = picks.get(r.get("c"))
     # featured: picks and hot drops first, photos before no-photo, then by date
     ranked = sorted(week, key=lambda r: (-(r["pick"] is not None), -r["h"], -(r["im"] is not None), r["d"]))
-    featured = [r for r in ranked if r["im"]][:5]
-    if len(featured) < 3:
-        featured = (featured + [r for r in ranked if r not in featured])[:5]
+    featured = [r for r in ranked if r["im"]][:5]     # every featured drop needs an official photo
     featured.sort(key=lambda r: (r["d"], -r["h"]))
     return week, featured
 

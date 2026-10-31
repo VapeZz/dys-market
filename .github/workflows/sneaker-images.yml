@@ -4,6 +4,10 @@ name: Sneaker photos
 # The nightly build runs the same lookup; this is for filling gaps on demand.
 on:
   workflow_dispatch:
+    inputs:
+      add:
+        description: 'official photos to add by hand, space separated: CODE=https://... CODE=https://...'
+        default: ""
 permissions:
   contents: write
 concurrency:
@@ -18,19 +22,23 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: |
+      - env:
+          ADD: ${{ inputs.add }}
+        run: |
           set -e
           R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
           git clone -q --depth 1 --branch data "$R" /tmp/db
           git clone -q --depth 1 --branch gh-pages "$R" /tmp/pages
           mkdir -p data site/data
           [ -f /tmp/db/data/sneaker-images.json ] && cp /tmp/db/data/sneaker-images.json data/sneaker-images.json || true
+          [ -f /tmp/db/data/sneaker-images-manual.json ] && cp /tmp/db/data/sneaker-images-manual.json data/sneaker-images-manual.json || true
           cp /tmp/pages/sneakers.json site/sneakers.json
-          python tools/sneaker_images.py --report | tee /tmp/snk.log
+          if [ -n "$ADD" ]; then python tools/sneaker_images.py --report --add "$ADD" | tee /tmp/snk.log; else python tools/sneaker_images.py --report | tee /tmp/snk.log; fi
           echo "::notice title=Sneaker photos::$(grep '^sneaker images:' /tmp/snk.log | tail -n 1)"
           for d in /tmp/db /tmp/pages; do git -C $d config user.name "dys-market-bot"; git -C $d config user.email "dys-market-bot@users.noreply.github.com"; done
           mkdir -p /tmp/db/data && cp data/sneaker-images.json /tmp/db/data/sneaker-images.json
-          git -C /tmp/db add data/sneaker-images.json
+          [ -f data/sneaker-images-manual.json ] && cp data/sneaker-images-manual.json /tmp/db/data/sneaker-images-manual.json || true
+          git -C /tmp/db add data/sneaker-images.json $(ls /tmp/db/data/sneaker-images-manual.json 2>/dev/null | sed 's#/tmp/db/##')
           git -C /tmp/db diff --cached --quiet || git -C /tmp/db commit -q -m "Sneaker photos"
           for i in 1 2 3; do git -C /tmp/db push -q origin data && break; git -C /tmp/db pull -q --rebase origin data; done
           for i in 1 2 3; do
