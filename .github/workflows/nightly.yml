@@ -279,6 +279,13 @@ jobs:
           if [ -d data/social-howto ]; then mkdir -p site/social-howto && cp -r data/social-howto/. site/social-howto/; fi
           if [ -d data/social-grade ]; then mkdir -p site/social-grade && cp -r data/social-grade/. site/social-grade/; fi
 
+      - name: Link-in-bio pictures
+        continue-on-error: true
+        run: |
+          python -c "import playwright" 2>/dev/null || { pip install -q playwright==1.56.0 && python -m playwright install --with-deps chromium; } > /tmp/lt.log 2>&1
+          python tools/links_thumbs.py site >> /tmp/lt.log 2>&1
+          echo "::notice title=Links page::$(grep 'links thumbs' /tmp/lt.log | tail -n 1)"
+
       - name: Sync Shopify prices to market
         continue-on-error: true
         env:

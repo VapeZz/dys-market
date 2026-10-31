@@ -1,5 +1,6 @@
 """Regenerates site/*.html from one shared template. Run: python tools/make_pages.py"""
 import os
+from datetime import date
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GW_BANNER = '''<section class="block" style="padding-top:0;padding-bottom:0"><div class="wrap"><a class="report-banner gw-banner" href="giveaway.html?ref=home"><div><b>🎁 Win an Elite Trainer Box every month</b><span>Free to enter: build your binder on the site. Bonus entries for every friend you bring.</span></div><span>Enter →</span></a></div></section>
@@ -500,19 +501,24 @@ LINKS_ICONS = {'TikTok': '<path fill="currentColor" d="M16.6 5.8A4.3 4.3 0 0 1 1
 def links_page():
     """Link-in-bio page (no site chrome): market.driveyourstyle.net/links.html"""
     rows = [
-        ("Shop Drive Your Style", "Sealed Pokémon & One Piece, singles, sneakers, Pop Mart", "https://driveyourstyle.net/?utm_source=bio&utm_medium=social", True),
-        ("Check what your cards are worth", "Free prices on 70,000+ cards, scan with your camera", "index.html?ref=bio", False),
-        *([("🎁 Win an Elite Trainer Box", "Free monthly giveaway: build your binder to enter", "giveaway.html?ref=bio", False)] if GIVEAWAY_ON else []),
-        ("Sell us your cards", "Get a cash or store-credit offer", "sell.html?ref=bio", False),
-        ("Cheap cards worth grading", "This week's 5 picks: raw vs PSA 10 sold prices, with eBay links", "social-grade/?ref=bio", False),
-        ("Check centering before you grade", "Free PSA, CGC and BGS centering check from a photo", "centering.html?ref=bio", False),
-        ("Sneaker release calendar", "This week's drops, our cop or wait calls, reminders", "sneakers.html?ref=bio", False),
-        ("This week's market report", "Biggest card gains and drops, new sets", "blog/?ref=bio", False),
-        ("Track your collection", "See what your binder is worth", "collection.html?ref=bio", False),
+        # (title, line, link, main button, picture key in assets/links/: made nightly by tools/links_thumbs.py)
+        ("Shop Drive Your Style", "Sealed Pokémon & One Piece, singles, sneakers, Pop Mart", "https://driveyourstyle.net/?utm_source=bio&utm_medium=social", True, "shop"),
+        ("Check what your cards are worth", "Free prices on 150,000+ cards, scan with your camera", "index.html?ref=bio", False, "worth"),
+        *([("🎁 Win an Elite Trainer Box", "Free monthly giveaway: build your binder to enter", "giveaway.html?ref=bio", False, None)] if GIVEAWAY_ON else []),
+        ("Cheap cards worth grading", "This week's 5 picks with eBay links", "social-grade/?ref=bio", False, "grade"),
+        ("Sell us your cards", "Cash or store-credit offer", "sell.html?ref=bio", False, "sell"),
+        ("Centering check", "Free PSA, CGC and BGS check from a photo", "centering.html?ref=bio", False, "centering"),
+        ("Sneaker release calendar", "This week's drops and our calls", "sneakers.html?ref=bio", False, "sneakers"),
+        ("Trending cards & market report", "Biggest gains and drops this week", "blog/?ref=bio", False, "report"),
+        ("Track your collection", "See what your binder is worth", "collection.html?ref=bio", False, "collection"),
     ]
     socials = [("TikTok", "https://www.tiktok.com/@drive.your.style"), ("Instagram", "https://www.instagram.com/drive.yourstyle/"),
                ("YouTube", "https://www.youtube.com/@DriveYourStyle"), ("Facebook", "https://www.facebook.com/682608764928900")]
-    btns = "".join(f'<a class="lk{" lk-main" if main else ""}" href="{u}"><b>{t}</b><span>{d}</span></a>' for t, d, u, main in rows)
+    ver = date.today().isoformat()
+    pic = lambda k: f'<img src="assets/links/{k}.jpg?v={ver}" alt="" loading="lazy" onerror="this.remove()">' if k else ""
+    main_btns = "".join(f'<a class="lk lk-main" href="{u}">{pic(k)}<span class="tx"><b>{t}</b><span>{d}</span></span></a>' for t, d, u, main, k in rows if main)
+    tiles = "".join(f'<a class="tile" href="{u}">{pic(k)}<span class="tx"><b>{t}</b><span>{d}</span></span></a>' for t, d, u, main, k in rows if not main)
+    btns = main_btns + f'<div class="grid">{tiles}</div>'
     soc = "".join(f'<a href="{u}" aria-label="{n}" title="{n}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true">{LINKS_ICONS[n]}</svg></a>' for n, u in socials)
     html = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Drive Your Style · Cards &amp; Kicks</title><meta name="description" content="Shop, check card prices, sell your cards and follow Drive Your Style.">
@@ -529,13 +535,21 @@ main{{max-width:520px;margin:0 auto;padding:42px 18px 36px;text-align:center}}
 .logo img{{width:100%;height:100%;object-fit:cover}}
 h1{{font-size:22px;margin-bottom:4px}}
 .sub{{color:var(--ink2);font-size:14.5px;margin-bottom:22px}}
-.lk{{display:block;text-align:left;padding:14px 18px;margin-bottom:10px;border-radius:16px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--ink);text-decoration:none}}
-.lk b{{display:block;font-size:16.5px}}
-.lk span{{display:block;color:var(--ink2);font-size:13.5px;margin-top:2px}}
-.lk:hover,.lk:focus-visible{{border-color:rgba(242,240,235,.4);background:rgba(255,255,255,.07)}}
-.lk-main{{background:var(--ink);color:var(--bg);border-color:var(--ink)}}
-.lk-main span{{color:#3b3f4a}}
+.lk,.tile{{display:block;text-align:left;border-radius:16px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--ink);text-decoration:none;overflow:hidden}}
+.lk img,.tile img{{display:block;width:100%;aspect-ratio:3/2;object-fit:cover;background:#151827}}
+.lk img{{aspect-ratio:2/1}}
+.tx{{display:block;padding:11px 13px 12px}}
+.lk .tx{{padding:13px 18px 14px}}
+.tx b{{display:block;font-size:15px;line-height:1.25}}
+.lk .tx b{{font-size:17px}}
+.tx span{{display:block;color:var(--ink2);font-size:12.5px;margin-top:3px;line-height:1.3}}
+.lk:hover,.lk:focus-visible,.tile:hover,.tile:focus-visible{{border-color:rgba(242,240,235,.4);background:rgba(255,255,255,.07)}}
+.lk-main{{background:var(--ink);color:var(--bg);border-color:var(--ink);margin-bottom:12px}}
+.lk-main .tx span{{color:#3b3f4a}}
 .lk-main:hover,.lk-main:focus-visible{{background:#fff}}
+.grid{{display:grid;grid-template-columns:1fr 1fr;gap:10px}}
+.grid .tile:last-child:nth-child(odd){{grid-column:1/-1}}
+.grid .tile:last-child:nth-child(odd) img{{aspect-ratio:2/1}}
 .soc{{display:flex;justify-content:center;gap:12px;margin:22px 0 14px}}
 .soc a{{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line);color:var(--ink)}}
 .soc svg{{width:20px;height:20px}}
