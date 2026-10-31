@@ -23,7 +23,7 @@ import urllib.request
 from PIL import Image
 
 W, H = 600, 400
-PAGES = {"worth": "index.html", "sell": "sell.html", "centering": "centering.html", "collection": "collection.html"}
+PAGES = {"worth": "index.html", "sell": "sell.html", "centering": "centering.html", "collection": "collection.html", "supplies": "supplies.html"}
 FEEDS = {"grade": "social-grade", "sneakers": "social-sneakers", "report": "social"}
 
 

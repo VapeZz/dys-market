@@ -195,6 +195,12 @@ def ebay(q, day, sold=False):
     return "https://www.ebay.com/sch/i.html?" + urlencode(p)
 
 
+def amz(q):
+    """Amazon search link with our Associates tag."""
+    from urllib.parse import quote_plus
+    return f"https://www.amazon.com/s?k={quote_plus(q)}&tag=driveyourstyl-20"
+
+
 def page(post, cards, game, day):
     """market.driveyourstyle.net/social-grade/<date>/: the cards with affiliate links (what 'link in bio' opens)."""
     from html import escape as e
@@ -214,12 +220,14 @@ a{{color:#5ee7ff}}h1{{font-size:28px;line-height:1.15;margin:14px 0 6px}}.sub{{c
 .c img{{width:110px;border-radius:8px;background:#151515}}h2{{font-size:19px;margin:0 0 6px}}h2 small{{display:block;font-size:13px;color:#bdb9b2;font-weight:400}}
 .p{{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0 0 6px}}.g{{color:#3ee08f}}.m{{color:#bdb9b2;font-size:14px;margin:0 0 10px}}
 .b{{display:flex;flex-wrap:wrap;gap:8px;margin:0}}.btn{{display:inline-block;padding:9px 14px;border-radius:10px;background:#3ee08f;color:#050404;font-weight:700;text-decoration:none;font-size:14px}}
-.btn.o{{background:none;color:#f2f0eb;border:1px solid #444}}.f{{color:#8f8a84;font-size:13px;margin-top:24px}}.top{{display:flex;justify-content:space-between;align-items:center;font-weight:700}}
+.btn.o{{background:none;color:#f2f0eb;border:1px solid #444}}.sp{{border-top:1px solid #222;padding:16px 0 0}}.f{{color:#8f8a84;font-size:13px;margin-top:24px}}.top{{display:flex;justify-content:space-between;align-items:center;font-weight:700}}
 @media(max-width:420px){{.c{{grid-template-columns:84px 1fr;gap:12px}}.c img{{width:84px}}}}</style></head>
 <body><main><div class="top"><a href="../../index.html?ref=grade" style="color:#f2f0eb;text-decoration:none">DRIVE YOUR STYLE · Market</a><a href="../../links.html">More links</a></div>
 <h1>{e(post['first'])}</h1><p class="sub">{len(cards)} cheap {e(label)} cards worth grading · {d.strftime('%B %-d, %Y')}</p>{rows}
+<section class="sp"><h2>Sending one in?</h2><p class="m">PSA asks for each card in a semi-rigid holder like a Card Saver 1. Sleeve the card first and bag each holder to keep dust out.</p>
+<p class="b"><a class="btn o" href="{e(amz('Ultra Pro penny sleeves'))}" target="_blank" rel="sponsored noopener">Penny sleeves</a><a class="btn o" href="{e(amz('Cardboard Gold Card Saver 1'))}" target="_blank" rel="sponsored noopener">Card Saver 1</a><a class="btn o" href="{e(amz('resealable team bags trading cards'))}" target="_blank" rel="sponsored noopener">Team bags</a><a class="btn o" href="../../supplies.html?ref=grade">All supplies</a></p></section>
 <p class="f">PSA 10 = median eBay sold price over the last {max(c.get('days', 30) for c in cards)} days (Buy It Now and auctions). Raw = TCGplayer market price on {d.strftime('%b %-d')}. Prices change; not every card grades a 10, so check centering first with our <a href="../../centering.html">free centering tool</a>. Not financial advice.<br><br>
-Affiliate disclosure: eBay links on this page are affiliate links (eBay Partner Network). If you buy through them we may earn a small commission at no extra cost to you.</p></main></body></html>"""
+Affiliate disclosure: eBay and Amazon links on this page are affiliate links (eBay Partner Network, Amazon Associates). If you buy through them we may earn a small commission at no extra cost to you. As an Amazon Associate we earn from qualifying purchases.</p></main></body></html>"""
 
 
 def main(argv):

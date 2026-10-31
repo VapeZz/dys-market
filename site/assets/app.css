@@ -1228,3 +1228,10 @@ a.in-stat:hover{border-color:var(--accent)}
 
 /* home on phones: title, search and tools first (the card fan sits lower on bigger screens only) */
 @media(max-width:600px){.hero-deal .hd-fan{display:none}.hero-deal{padding-top:22px;padding-bottom:8px}.hero-deal h1{font-size:34px}}
+/* supplies.html: Amazon supply links */
+.sup-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin-top:10px}
+.sup{display:flex;flex-direction:column;gap:6px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);text-decoration:none}
+.sup b{font-size:16px}
+.sup span{color:var(--ink-2);font-size:14px;line-height:1.45;flex:1}
+.sup em{font-style:normal;font-weight:600;font-size:14px;color:var(--accent-2)}
+.sup:hover,.sup:focus-visible{border-color:var(--line-strong);background:var(--surface-2)}

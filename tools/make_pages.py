@@ -54,6 +54,53 @@ SK = '<div class="stat"><div class="skeleton"></div></div>'
 MOVERS = '''<div class="movers"><div class="panel"><h3><span class="chg up">▲</span> Biggest gains</h3><div data-up></div></div>
   <div class="panel"><h3><span class="chg down">▼</span> Biggest drops</h3><div data-down></div></div></div>'''
 
+AMZ_TAG = "driveyourstyl-20"   # Amazon Associates tracking id (also in site/assets/app.js AFF.amazon)
+
+
+def amz(q):
+    """Amazon search link with our Associates tag (search links: no prices or Amazon images on our pages)."""
+    from urllib.parse import quote_plus
+    return f"https://www.amazon.com/s?k={quote_plus(q)}&tag={AMZ_TAG}"
+
+
+SUPPLIES = [
+    ("Before you grade", "What PSA, CGC and BGS want in the box, and what saves you a wasted fee.", [
+        ("Penny sleeves", "Every card goes in a soft sleeve first so it never touches hard plastic.", "Ultra Pro penny sleeves"),
+        ("Card Saver 1 holders", "The semi-rigid holder PSA asks for. Graders can slide cards out without damage, unlike top loaders.", "Cardboard Gold Card Saver 1"),
+        ("Team bags", "Seal each Card Saver so dust and moisture stay out on the way to the grader.", "resealable team bags trading cards"),
+        ("Microfiber cloth", "Wipe fingerprints and dust off the surface right before it goes in.", "microfiber cleaning cloth"),
+        ("LED loupe", "Check corners, edges and surface for whitening and scratches before you pay to grade.", "jeweler loupe LED 30x 60x"),
+    ]),
+    ("Store & display", "Keep raw cards and slabs in the condition you bought them.", [
+        ("Top loaders (35pt)", "Stiff protection for cards you keep or ship.", "Ultra Pro toploaders 35pt"),
+        ("9-pocket binder", "Side-loading pages keep a whole set together without cards sliding out.", "Vault X 9 pocket binder"),
+        ("Magnetic one-touch holders", "Show off your best raw cards on a shelf or at a card show.", "magnetic card holder 35pt one touch"),
+        ("Graded slab storage box", "Holds PSA, CGC and BGS slabs upright and scratch-free.", "graded card storage box PSA slabs"),
+    ]),
+    ("Ship cards", "What sellers use so cards arrive in the grade you sold them in.", [
+        ("Bubble mailers 4x8", "Fits a top loader with room for cardboard on both sides.", "bubble mailers 4x8"),
+        ("Painter's tape", "Seals the top loader shut and peels off without sticky residue.", "painters tape 1 inch"),
+    ]),
+]
+
+
+def supplies_body():
+    out = []
+    for h, sub, items in SUPPLIES:
+        cards = "".join(f'<a class="sup" href="{amz(q)}" target="_blank" rel="sponsored noopener"><b>{t}</b><span>{why}</span><em>See on Amazon →</em></a>' for t, why, q in items)
+        out.append(f'<section class="block" style="padding-top:8px"><div class="block-head"><div><h2>{h}</h2><p>{sub}</p></div></div><div class="sup-grid">{cards}</div></section>')
+    return f"""
+<div class="wrap"><section class="block" style="padding-bottom:0">
+  <span class="in-kicker">GRADING · STORAGE · SHIPPING</span><h1 class="in-h">Card supplies</h1>
+  <p class="muted" style="max-width:760px;margin:-6px 0 6px">What we use to send cards to PSA, CGC and BGS, and to store and ship them. Not sure a card is worth grading yet? Check it with <a href="grading.html">Grading Insights</a> and the <a href="centering.html">centering check</a> first.</p>
+  <p class="muted" style="font-size:13px;margin:0">Links go to Amazon. As an Amazon Associate we earn from qualifying purchases, at no extra cost to you.</p>
+</section>
+{''.join(out)}
+</div>"""
+
+
+SUPPLIES_BODY = supplies_body()
+
 PAGES = {
 "index": ("Market Insights · Drive Your Style",
           "Nightly market prices, biggest movers and set values for Pokémon, One Piece, Lorcana, Riftbound, Gundam, Union Arena, Yu-Gi-Oh!, Dragon Ball and Palworld sealed product and cards.", f'''
@@ -382,6 +429,7 @@ PAGES = {
   <div class="gr-bar"><div id="gr-sort"></div></div>
   <p class="muted gr-status" id="gr-status"></p>
   <div class="gr-list" id="gr-list"><div class="skeleton" style="height:240px"></div></div>
+  <a class="report-banner" href="supplies.html" style="margin-top:14px"><div><b>📦 Ready to submit?</b><span>Penny sleeves, Card Saver 1s and team bags: what graders want in the box.</span></div><span>Supplies →</span></a>
   <details class="in-card gr-how"><summary><b>How the estimate works</b></summary>
     <p>Only cards with a steady price and live listings near the market price are shown, so thin or spiking prices don't mislead the math. Promos, event and prize cards are left out. All-in cost = the lowest raw listing today + the grading fee + shipping and insurance both ways.</p>
     <p>Grading fees come from each company's current price list, open tiers only. PSA and CGC charge by the card's graded value: when a grade is worth more than your tier covers, it's upcharged to the tier that covers it, and the cost includes that risk at your odds. Sale prices are after the selling fees of the marketplace you pick.</p>
@@ -478,6 +526,8 @@ PAGES = {
   <h3>Changes and law</h3>
   <p>We may update this page; the effective date above shows the latest version. These terms are governed by the laws of Nevada, USA. Questions: <b>customerservice@driveyourstyle.net</b>.</p>
 </article></div>'''),
+"supplies": ("Card grading & storage supplies · Drive Your Style",
+             "What you need to send cards to PSA, CGC or BGS and to store, display and ship them: penny sleeves, Card Saver 1, team bags, top loaders, binders and more.", SUPPLIES_BODY),
 "about": ("About the data · Drive Your Style Market Insights", "Where Drive Your Style market prices come from.", '''
 <div class="wrap"><article class="prose">
   <h1>Where this data comes from</h1>
@@ -506,6 +556,7 @@ def links_page():
         ("Check what your cards are worth", "Free prices on 150,000+ cards, scan with your camera", "index.html?ref=bio", False, "worth"),
         *([("🎁 Win an Elite Trainer Box", "Free monthly giveaway: build your binder to enter", "giveaway.html?ref=bio", False, None)] if GIVEAWAY_ON else []),
         ("Cheap cards worth grading", "This week's 5 picks with eBay links", "social-grade/?ref=bio", False, "grade"),
+        ("Grading & card supplies", "Sleeves, Card Saver 1s, top loaders, mailers", "supplies.html?ref=bio", False, "supplies"),
         ("Sell us your cards", "Cash or store-credit offer", "sell.html?ref=bio", False, "sell"),
         ("Centering check", "Free PSA, CGC and BGS check from a photo", "centering.html?ref=bio", False, "centering"),
         ("Sneaker release calendar", "This week's drops and our calls", "sneakers.html?ref=bio", False, "sneakers"),
@@ -571,6 +622,8 @@ def main():
         canon = "" if page == "index" else f"{page}.html"
         hidden = ("importer", "demand", "buyer") + (() if GIVEAWAY_ON else ("giveaway",))
         head = HEAD.replace("<link rel=\"canonical\"", "<meta name=\"robots\" content=\"noindex\">\n<link rel=\"canonical\"") if page in hidden else HEAD
+        if page == "index":   # impact.com site ownership check
+            head = head.replace('<meta name="theme-color" content="#0b0d14">', '<meta name="theme-color" content="#0b0d14">\n<meta name="impact-site-verification" value="9961457d-75f1-4449-9d0a-10bb739058b9">')
         body = body.replace("@@GWBANNER@@", GW_BANNER if GIVEAWAY_ON else "")
         html = head.replace("@@CANON@@", canon).replace("@@TITLE@@", title).replace("@@DESC@@", desc).replace("@@PAGE@@", page).replace("@@BODY@@", body)
         with open(os.path.join(ROOT, "site", f"{page}.html"), "w", encoding="utf-8") as f:
