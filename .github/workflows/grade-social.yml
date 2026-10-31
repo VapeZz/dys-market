@@ -27,15 +27,18 @@ jobs:
           SPEC: ${{ inputs.spec }}
         run: |
           set -e
-          pip install -q playwright==1.56.0 imageio-ffmpeg numpy pillow > /dev/null
-          python -m playwright install --with-deps chromium > /dev/null 2>&1
+          pip install -q playwright==1.56.0 imageio-ffmpeg numpy pillow > /tmp/pip.log 2>&1 || { echo "::error title=pip::$(tail -c 800 /tmp/pip.log | tr '\n' ' ')"; exit 1; }
+          python -m playwright install --with-deps chromium > /tmp/pw.log 2>&1 || { echo "::error title=playwright::$(tail -c 800 /tmp/pw.log | tr '\n' ' ')"; exit 1; }
           R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
           git clone -q --depth 1 --branch data "$R" /tmp/db
           git clone -q --depth 1 --branch gh-pages "$R" /tmp/pages
           printf '%s' "$SPEC" > /tmp/spec.json
           python -c "import json; json.load(open('/tmp/spec.json'))"
           mkdir -p /tmp/db/data/social-grade
-          python tools/grade_social.py /tmp/spec.json /tmp/pages /tmp/db/data/social-grade | tee /tmp/g.log
+          set +e
+          python tools/grade_social.py /tmp/spec.json /tmp/pages /tmp/db/data/social-grade > /tmp/g.log 2>&1; rc=$?
+          set -e
+          if [ $rc -ne 0 ]; then echo "::error title=Grade it?::$(tail -c 1500 /tmp/g.log | tr '\n' ' ')"; exit 1; fi
           for d in /tmp/db /tmp/pages; do git -C $d config user.name "dys-market-bot"; git -C $d config user.email "dys-market-bot@users.noreply.github.com"; done
           # data branch keeps slides + post.json (no videos); the site gets everything
           mkdir -p /tmp/site-grade && cp -r /tmp/db/data/social-grade/. /tmp/site-grade/
