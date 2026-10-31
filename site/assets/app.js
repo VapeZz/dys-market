@@ -73,8 +73,9 @@ const HEARTS = (on) => on ? "♥" : "♡";
    Fill these in once each program approves you; links rewrite on click and the footer shows a disclosure.
    tcgplayer / stockx / goat: the program's "deep link" prefix that ends in ?u= (Impact style), e.g.
      "https://partner.tcgplayer.com/c/1234567/1830156/21018?u="
-   ebay: your eBay Partner Network campaign id (campid), e.g. "5339123456". */
-const AFF = { tcgplayer: "", stockx: "", goat: "", ebay: "5339229587" };
+   ebay: your eBay Partner Network campaign id (campid), e.g. "5339123456".
+   amazon: Amazon Associates tracking id (added to amazon.com links as ?tag=). */
+const AFF = { tcgplayer: "", stockx: "", goat: "", ebay: "5339229587", amazon: "driveyourstyl-20" };
 const AFF_ON = Object.values(AFF).some(Boolean);
 function affUrl(href) {
   let u; try { u = new URL(href); } catch (e) { return href; }
@@ -83,6 +84,10 @@ function affUrl(href) {
   if (h === "tcgplayer.com" || h.endsWith(".tcgplayer.com") && !h.startsWith("partner") && !h.includes("cdn")) return deep("tcgplayer");
   if (h === "stockx.com") return deep("stockx");
   if (h === "goat.com") return deep("goat");
+  if (h === "amazon.com" && AFF.amazon && !u.searchParams.has("tag")) {
+    u.searchParams.set("tag", AFF.amazon);
+    return u.toString();
+  }
   if (h === "ebay.com" && AFF.ebay && !u.searchParams.has("campid")) {
     u.searchParams.set("mkcid", "1"); u.searchParams.set("mkrid", "711-53200-19255-0"); u.searchParams.set("siteid", "0");
     u.searchParams.set("campid", AFF.ebay); u.searchParams.set("customid", `dys-${PAGE}`); u.searchParams.set("toolid", "10001"); u.searchParams.set("mkevt", "1");
@@ -183,7 +188,7 @@ function shell() {
     <div style="max-width:560px">
       <p><b style="color:var(--ink)">Drive Your Style Market Insights</b> · Beta</p>
       <p>Market prices are recorded nightly from public TCGplayer market data and may lag by a day. For research only, not financial advice. These are not Drive Your Style's prices. Not affiliated with or endorsed by The Pokémon Company, Bandai, Sunrise, Disney, Ravensburger, Riot Games, Konami, Pocketpair or TCGplayer.</p>
-      <p id="updated-line"></p>${AFF_ON ? `<p>Some outbound links (TCGplayer, eBay, StockX, GOAT) are affiliate links. If you buy through them we may earn a small commission at no extra cost to you.</p>` : ""}
+      <p id="updated-line"></p>${AFF_ON ? `<p>Some outbound links (eBay, Amazon, TCGplayer, StockX, GOAT) are affiliate links. If you buy through them we may earn a small commission at no extra cost to you. As an Amazon Associate we earn from qualifying purchases.</p>` : ""}
     </div>
     <div>
       <p><a href="${STORE}">Shop Drive Your Style</a> · <a href="sell.html">Sell to us</a> ·${GIVEAWAY_ON ? ` <a href="giveaway.html">Monthly giveaway</a> ·` : ""} <a href="blog/">Market reports</a> · <a href="centering.html">Centering check</a> · <a href="about.html">Where this data comes from</a> · <a href="legal.html">Privacy &amp; Terms</a></p>
