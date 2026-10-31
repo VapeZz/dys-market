@@ -1,0 +1,29 @@
+name: Grade scout (eBay PSA 10 vs raw)
+on:
+  workflow_dispatch:
+    inputs:
+      game:
+        description: "pokemon | one-piece | lorcana | riftbound | ..."
+        default: "pokemon"
+      max:
+        description: "cards to check (one eBay search each)"
+        default: "250"
+permissions:
+  contents: read
+jobs:
+  scout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - env:
+          EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
+          EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+          GAME: ${{ inputs.game }}
+          MAX: ${{ inputs.max }}
+        run: |
+          git clone -q --depth 1 --branch gh-pages "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" /tmp/pages
+          python tools/grade_scout.py /tmp/pages "$GAME" --max "$MAX"
