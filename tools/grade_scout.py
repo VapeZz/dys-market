@@ -69,7 +69,7 @@ def main(argv):
         except Exception as e:
             print(f"scout: {r[0]} failed: {e}")
             continue
-        if got and got[1] >= 2 and got[0] >= mm * r[3]:
+        if got and got[1] >= 2 and mm * r[3] <= got[0] <= 80 * r[3]:   # 80x+ is nearly always a different printing
             hits.append({"id": r[0], "g": r[1], "n": r[2], "no": r[6], "r": r[5], "raw": r[3], "p10_ask": got[0], "asks": got[1], "x": round(got[0] / r[3], 1),
                          "game": r[7]})
         time.sleep(0.25)

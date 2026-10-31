@@ -8,7 +8,7 @@ Kept:  single cards $15-$5,000, not promos/events/prize cards/markers/tokens, wh
        (no single-day spike: week high <= 1.8x week low).
 Each row: [id, set id, name, market cents, lowest listing cents, rarity, number, game, era]
 era: "modern" (set from the last 5 years) or "vintage".
-Also writes site/data/grading-cheap.json, same rows, for Pokémon (EN + JP) singles $1-$14.99 that pass the same
+Also writes site/data/grading-cheap.json, same rows, for singles $1-$14.99 (every game) that pass the same
 checks: the pool for finding cheap cards whose PSA 10 sells for 10x+ raw (graded prices come from tools/graded.py).
 """
 import glob
@@ -37,8 +37,6 @@ def main(argv):
             p, lo = i.get("p"), i.get("lo")
             if i["t"] != "c" or not p or not (100 <= p <= 500000) or SKIP_NAME.search(i["n"]) or SKIP_RARITY.search(i.get("r") or ""):
                 continue
-            if p < 1500 and d["k"] not in ("pokemon", "pokemon-jp"):   # cheap pool: only games with graded sold prices
-                continue
             if not lo or not (0.5 * p <= lo <= 1.6 * p):            # no live listing near the market price: thin or stale
                 continue
             s = [v for v in (i.get("s") or [])[-8:] if v]
@@ -56,7 +54,7 @@ def main(argv):
         json.dump({"updated": today, "rows": cheap}, f, separators=(",", ":"), ensure_ascii=False)
     with open(os.path.join(sd, "grading.json"), "w", encoding="utf-8") as f:
         json.dump({"updated": today, "rows": rows}, f, separators=(",", ":"), ensure_ascii=False)
-    print(f"grading: {len(rows)} cards with trusted prices, plus {len(cheap)} Pokémon singles $1-$15 for the 10x finder")
+    print(f"grading: {len(rows)} cards with trusted prices, plus {len(cheap)} singles $1-$15 for the 10x finder")
 
 
 if __name__ == "__main__":
