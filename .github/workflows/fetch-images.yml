@@ -5,14 +5,21 @@ on:
       ids:
         description: "space separated product ids"
         required: true
+      urls:
+        description: "optional extra files: space separated name=url pairs"
+        required: false
+        default: ""
 permissions:
   contents: write
 jobs:
   f:
     runs-on: ubuntu-latest
     steps:
-      - run: |
+      - env:
+          EXTRA: ${{ inputs.urls }}
+        run: |
           mkdir out && cd out
+          for pair in $EXTRA; do curl -s -L -A "Mozilla/5.0" -o "${pair%%=*}" "${pair#*=}"; done
           for id in ${{ inputs.ids }}; do curl -s -A "Mozilla/5.0" -o "$id.jpg" "https://tcgplayer-cdn.tcgplayer.com/product/${id}_in_1000x1000.jpg"; curl -s -A "Mozilla/5.0" -o "${id}_200w.jpg" "https://tcgplayer-cdn.tcgplayer.com/product/${id}_200w.jpg"; done
           ls -la
           git init -q -b card-images && git config user.name bot && git config user.email bot@users.noreply.github.com && git add -A && git commit -qm imgs
