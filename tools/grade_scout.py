@@ -2,7 +2,8 @@
 
     python tools/grade_scout.py SITE_DIR GAME [--max N] [--min-mult 10] [--out shortlist.json] [--history history.json]
 
-GAME "auto" picks the next game in the rotation from history.json (one entry per posted card).
+GAME "auto" takes the next game in ROTATION (pointer in rotation.json next to history.json); if it has fewer than
+6 candidates, it tries the next two games and keeps the one with the most.
 
 Uses only our own data (TCGplayer market prices we collect) and eBay's Browse API (live PSA 10 Buy It Now
 listings), never PokemonPriceTracker. Candidates: single cards $1-$25 from grading.json / grading-cheap.json
@@ -22,33 +23,15 @@ import ebay  # noqa: E402
 from ebay_prices import best, query  # noqa: E402
 
 GOOD = re.compile(r"illustration|art rare|character|trainer gallery|galarian gallery|shiny|secret|hyper|ultra|special|double|"
-                  r"holo|alternate|manga|leader|super rare|treasure|enchanted|legendary|epic|iconic|showcase|overnumbered", re.I)
-ROTATION = ["pokemon", "one-piece", "pokemon", "riftbound", "pokemon", "lorcana"]
+                  r"holo|alternate|manga|leader|super rare|treasure|enchanted|legendary|epic|iconic|showcase|overnumbered|"
+                  r"starlight|ghost|collector|quarter century|prismatic|god rare|\bSCR\b|\bSPR\b|\bSR\b|\bUR\b|\bSEC\b|\bAP\b", re.I)
+# every TCG on the market site; Pokémon (the biggest audience) every third post. Two posts a week = one full lap in 7 weeks.
+ROTATION = ["pokemon", "one-piece", "yugioh", "pokemon", "riftbound", "lorcana", "pokemon", "pokemon-jp", "gundam",
+            "pokemon", "dragon-ball-fusion-world", "union-arena", "pokemon", "palworld"]
 
 
-def main(argv):
-    site, game = argv[0], argv[1]
-    mx = int(argv[argv.index("--max") + 1]) if "--max" in argv else 250
-    mm = float(argv[argv.index("--min-mult") + 1]) if "--min-mult" in argv else 10
-    out = argv[argv.index("--out") + 1] if "--out" in argv else None
-    hist = {}
-    if "--history" in argv:
-        try:
-            hist = json.load(open(argv[argv.index("--history") + 1]))
-        except (OSError, ValueError):
-            hist = {}
-    if game == "auto":   # next in the rotation: one step per carousel already posted
-        game = ROTATION[len(set(hist.values())) % len(ROTATION)]
-    recent = {k for k, v in hist.items() if v >= (date.today() - timedelta(days=56)).isoformat()}
-    d = os.path.join(site, "data")
-    rows = json.load(open(os.path.join(d, "grading.json")))["rows"]
-    try:
-        rows += json.load(open(os.path.join(d, "grading-cheap.json")))["rows"]
-    except OSError:
-        pass
-    once = {}
-    for r in rows:
-        once[r[0]] = once.get(r[0], 0) + 1
+def scan(rows, once, game, recent, mx, mm):
+    """eBay PSA 10 asks for up to mx cheap cards of one game; returns (hits sorted best first, searches made)."""
     games = {"pokemon": ("pokemon",), "pokemon-jp": ("pokemon-jp",)}.get(game, (game,))
     cands = [r for r in rows if r[7] in games and once[r[0]] == 1 and r[6] and 100 <= r[3] <= 2500 and str(r[0]) not in recent
              and not re.search(r"\bBREAK\b|\bLEGEND\b|jumbo|oversize", r[2], re.I)
@@ -74,10 +57,54 @@ def main(argv):
                          "game": r[7]})
         time.sleep(0.25)
     hits.sort(key=lambda h: -(h["p10_ask"] - h["raw"]))
-    print(f"::notice title=Grade scout {game}::{calls} cards checked, {len(hits)} with PSA 10 asks {mm:g}x+ raw")
-    # one annotation (GitHub keeps only 10 per step): id|name|number|raw|cheapest PSA 10 ask|asks|x
+    return hits, calls
+
+
+def main(argv):
+    site, game = argv[0], argv[1]
+    mx = int(argv[argv.index("--max") + 1]) if "--max" in argv else 250
+    mm = float(argv[argv.index("--min-mult") + 1]) if "--min-mult" in argv else 10
+    out = argv[argv.index("--out") + 1] if "--out" in argv else None
+    hp = argv[argv.index("--history") + 1] if "--history" in argv else None
+    hist = {}
+    try:
+        hist = json.load(open(hp)) if hp else {}
+    except (OSError, ValueError):
+        hist = {}
+    recent = {k for k, v in hist.items() if v >= (date.today() - timedelta(days=56)).isoformat()}
+    d = os.path.join(site, "data")
+    rows = json.load(open(os.path.join(d, "grading.json")))["rows"]
+    try:
+        rows += json.load(open(os.path.join(d, "grading-cheap.json")))["rows"]
+    except OSError:
+        pass
+    once = {}
+    for r in rows:
+        once[r[0]] = once.get(r[0], 0) + 1
+    # rotation pointer lives next to history.json (data/social-grade/rotation.json)
+    rp = os.path.join(os.path.dirname(hp), "rotation.json") if hp else None
+    try:
+        nxt = json.load(open(rp))["next"] if rp else 0
+    except (OSError, ValueError, KeyError):
+        nxt = len(set(hist.values()))
+    tries = [ROTATION[(nxt + t) % len(ROTATION)] for t in range(3)] if game == "auto" else [game]
+    best_try = None
+    for t, g in enumerate(tries):
+        hits, calls = scan(rows, once, g, recent, mx, mm)
+        print(f"::notice title=Grade scout {g}::{calls} cards checked, {len(hits)} with PSA 10 asks {mm:g}x+ raw")
+        if best_try is None or len(hits) > len(best_try[1]):
+            best_try = (g, hits, t)
+        if len(hits) >= 6:     # enough to end up with 3-5 after the sold-price check
+            best_try = (g, hits, t)
+            break
+    game, hits, t = best_try
+    if game != tries[0]:
+        print(f"::notice title=Grade scout::{tries[0]} had too few candidates; using {game}")
+    if rp and len(tries) > 1:
+        json.dump({"next": (nxt + t + 1) % len(ROTATION), "last": game, "date": date.today().isoformat()}, open(rp, "w"))
     if out:
         json.dump({"date": date.today().isoformat(), "game": game, "hits": hits[:40]}, open(out, "w"), ensure_ascii=False, indent=0)
+    # one annotation (GitHub keeps only 10 per step): id|name|number|raw|cheapest PSA 10 ask|asks|x
     print("::notice title=hits::" + " ;; ".join(f"{h['id']}|{h['n']}|{h['no']}|{h['raw']}|{h['p10_ask']}|{h['asks']}|{h['x']}" for h in hits[:40]))
 
 

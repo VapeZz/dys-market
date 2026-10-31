@@ -40,4 +40,4 @@ jobs:
           mkdir -p /tmp/db/data/social-grade
           python tools/grade_scout.py /tmp/pages "$GAME" --max "$MAX" --out /tmp/db/data/social-grade/shortlist.json --history /tmp/db/data/social-grade/history.json
           git -C /tmp/db config user.name "dys-market-bot"; git -C /tmp/db config user.email "dys-market-bot@users.noreply.github.com"
-          git -C /tmp/db add data/social-grade/shortlist.json && (git -C /tmp/db diff --cached --quiet || (git -C /tmp/db commit -q -m "Grade scout shortlist" && git -C /tmp/db push -q origin data))
+          git -C /tmp/db add data/social-grade/shortlist.json $(ls /tmp/db/data/social-grade/rotation.json 2>/dev/null) && (git -C /tmp/db diff --cached --quiet || (git -C /tmp/db commit -q -m "Grade scout shortlist" && git -C /tmp/db push -q origin data))
