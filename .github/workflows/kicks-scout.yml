@@ -1,0 +1,44 @@
+name: Kicks scout (eBay resale vs retail)
+# Live eBay new-with-box Buy It Now prices for upcoming sneaker releases, for the "Cop or drop?" posts.
+# Saves data/social-kicks/scout.json on the data branch; the posting task checks real SOLD prices before posting.
+on:
+  workflow_dispatch:
+    inputs:
+      from:
+        description: "first release date (YYYY-MM-DD); empty = today (Pacific)"
+        default: ""
+      to:
+        description: "last release date; empty = from + 7 days"
+        default: ""
+permissions:
+  contents: write
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+jobs:
+  scout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - env:
+          EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
+          EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+          FROM: ${{ inputs.from }}
+          TO: ${{ inputs.to }}
+        run: |
+          set -e
+          FROM=${FROM:-$(TZ=America/Los_Angeles date +%F)}
+          TO=${TO:-$(date -d "$FROM +7 days" +%F)}
+          R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git clone -q --depth 1 --branch gh-pages "$R" /tmp/pages
+          git clone -q --depth 1 --branch data "$R" /tmp/db
+          mkdir -p /tmp/db/data/social-kicks
+          python tools/sneaker_scout.py /tmp/pages --from "$FROM" --to "$TO" --out /tmp/db/data/social-kicks/scout.json
+          git -C /tmp/db config user.name "dys-market-bot"; git -C /tmp/db config user.email "dys-market-bot@users.noreply.github.com"
+          git -C /tmp/db add data/social-kicks/scout.json
+          git -C /tmp/db diff --cached --quiet || git -C /tmp/db commit -q -m "Kicks scout $FROM..$TO"
+          for i in 1 2 3; do git -C /tmp/db push -q origin data && break; git -C /tmp/db pull -q --rebase origin data; done
