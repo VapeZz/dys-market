@@ -3,7 +3,8 @@
     python tools/grade_scout.py SITE_DIR GAME [--max N] [--min-mult 10] [--out shortlist.json] [--history history.json]
 
 GAME "auto" takes the next game in ROTATION (pointer in rotation.json next to history.json); if it has fewer than
-6 candidates, it tries the next two games and keeps the one with the most.
+6 candidates, it tries the next two games and keeps the one with the most. Benched games (BENCH) get a quick
+look every 4 weeks and join the rotation once they have 6+ candidates.
 
 Uses only our own data (TCGplayer market prices we collect) and eBay's Browse API (live PSA 10 Buy It Now
 listings), never PokemonPriceTracker. Candidates: single cards $1-$25 from grading.json / grading-cheap.json
@@ -27,7 +28,9 @@ GOOD = re.compile(r"illustration|art rare|character|trainer gallery|galarian gal
                   r"starlight|ghost|collector|quarter century|prismatic|god rare|\bSCR\b|\bSPR\b|\bSR\b|\bUR\b|\bSEC\b|\bAP\b", re.I)
 # every TCG on the market site; Pokémon (the biggest audience) every third post. Posting Monday to Saturday = one full lap in about 2.5 weeks.
 ROTATION = ["pokemon", "one-piece", "yugioh", "pokemon", "riftbound", "lorcana", "pokemon", "pokemon-jp", "gundam",
-            "pokemon", "dragon-ball-fusion-world", "union-arena", "pokemon", "palworld"]
+            "pokemon", "dragon-ball-fusion-world"]
+# games with almost no PSA 10 sales yet: re-checked every 4 weeks and added to the rotation once they have candidates
+BENCH = ["union-arena", "palworld"]
 
 
 def scan(rows, once, game, recent, mx, mm):
@@ -84,10 +87,20 @@ def main(argv):
     # rotation pointer lives next to history.json (data/social-grade/rotation.json)
     rp = os.path.join(os.path.dirname(hp), "rotation.json") if hp else None
     try:
-        nxt = json.load(open(rp))["next"] if rp else 0
-    except (OSError, ValueError, KeyError):
-        nxt = len(set(hist.values()))
-    tries = [ROTATION[(nxt + t) % len(ROTATION)] for t in range(3)] if game == "auto" else [game]
+        rot = json.load(open(rp)) if rp else {}
+    except (OSError, ValueError):
+        rot = {}
+    nxt = rot.get("next", len(set(hist.values())))
+    added = [g for g in rot.get("added", []) if g in BENCH]
+    if game == "auto" and rp and rot.get("bench_checked", "") <= (date.today() - timedelta(days=28)).isoformat():
+        for g in [g for g in BENCH if g not in added]:   # monthly look at the benched games
+            hits, calls = scan(rows, once, g, recent, 120, mm)
+            print(f"::notice title=Grade scout bench {g}::{calls} cards checked, {len(hits)} candidates" + (" (added to the rotation)" if len(hits) >= 6 else ""))
+            if len(hits) >= 6:
+                added.append(g)
+        rot["bench_checked"] = date.today().isoformat()
+    order = ROTATION + [x for g in added for x in ("pokemon", g)]
+    tries = [order[(nxt + t) % len(order)] for t in range(3)] if game == "auto" else [game]
     best_try = None
     for t, g in enumerate(tries):
         hits, calls = scan(rows, once, g, recent, mx, mm)
@@ -101,7 +114,8 @@ def main(argv):
     if game != tries[0]:
         print(f"::notice title=Grade scout::{tries[0]} had too few candidates; using {game}")
     if rp and len(tries) > 1:
-        json.dump({"next": (nxt + t + 1) % len(ROTATION), "last": game, "date": date.today().isoformat()}, open(rp, "w"))
+        rot.update({"next": (nxt + t + 1) % len(order), "last": game, "date": date.today().isoformat(), "added": added})
+        json.dump(rot, open(rp, "w"))
     if out:
         json.dump({"date": date.today().isoformat(), "game": game, "hits": hits[:40]}, open(out, "w"), ensure_ascii=False, indent=0)
     # one annotation (GitHub keeps only 10 per step): id|name|number|raw|cheapest PSA 10 ask|asks|x
