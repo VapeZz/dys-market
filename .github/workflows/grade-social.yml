@@ -26,7 +26,8 @@ jobs:
         env:
           SPEC: ${{ inputs.spec }}
         run: |
-          set -e
+          set -eE
+          trap 'echo "::error title=Grade it? failed::line $LINENO: $BASH_COMMAND"' ERR
           pip install -q playwright==1.56.0 imageio-ffmpeg numpy pillow > /tmp/pip.log 2>&1 || { echo "::error title=pip::$(tail -c 800 /tmp/pip.log | tr '\n' ' ')"; exit 1; }
           python -m playwright install --with-deps chromium > /tmp/pw.log 2>&1 || { echo "::error title=playwright::$(tail -c 800 /tmp/pw.log | tr '\n' ' ')"; exit 1; }
           R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
