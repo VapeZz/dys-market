@@ -30,7 +30,11 @@
   const soldUrl = (n, extra = "") => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent((cleanN(n).replace(/ \(Reverse Holofoil\)$/, "") + " " + extra).trim())}&LH_Sold=1&LH_Complete=1&_sop=13`;
   const COND = [["NM", 1], ["LP", 0.85], ["MP", 0.7], ["HP", 0.55], ["DMG", 0.4]];
   const condX = (c, t) => t === "s" ? 1 : (COND.find((x) => x[0] === c) || COND[0])[1];
-  const GAMES = { pokemon: ["Pokémon EN + JP", (k) => k === "pokemon" || k === "pokemon-jp"], en: ["Pokémon", (k) => k === "pokemon"], jp: ["Pokémon Japan", (k) => k === "pokemon-jp"], all: ["All games", () => true] };
+  // game filter: [label, game slugs (null = every game)]; every TCG the market site tracks
+  const GAMES = { pokemon: ["Pokémon EN + JP", ["pokemon", "pokemon-jp"]], en: ["Pokémon", ["pokemon"]], jp: ["Pokémon Japan", ["pokemon-jp"]],
+    "one-piece": ["One Piece", ["one-piece"]], yugioh: ["Yu-Gi-Oh!", ["yugioh"]], lorcana: ["Lorcana", ["lorcana"]], riftbound: ["Riftbound", ["riftbound"]],
+    gundam: ["Gundam", ["gundam"]], "union-arena": ["Union Arena", ["union-arena"]], "dragon-ball-fusion-world": ["Dragon Ball", ["dragon-ball-fusion-world"]],
+    palworld: ["Palworld", ["palworld"]], all: ["All games", null] };
 
   /* ---------- this device's state ---------- */
   const KEY = "dys-edge-v1";
@@ -48,7 +52,13 @@
   };
   let S = load();
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} };
-  const gameOk = (k) => (GAMES[S.set.game] || GAMES.pokemon)[1](k);
+  const hasPkm = () => { const g = (GAMES[S.set.game] || GAMES.pokemon)[1]; return !g || g.some((x) => x.startsWith("pokemon")); };   // graded sold prices are Pokémon only
+  const gameOk = (k) => { const g = (GAMES[S.set.game] || GAMES.pokemon)[1]; return !g || g.includes(k); };
+  // the game picker: a dropdown (too many games for a row of buttons)
+  function gamePick(el, onChange) {
+    el.innerHTML = `<label class="gpick"><span class="lab">Game</span><select class="select">${Object.entries(GAMES).map(([k, g]) => `<option value="${k}"${k === S.set.game ? " selected" : ""}>${esc(g[0])}</option>`).join("")}</select></label>`;
+    $("select", el).onchange = (e) => { S.set.game = e.target.value; save(); onChange(); };
+  }
 
   /* ---------- data (the market site's own files) ---------- */
   const cache = {};
@@ -230,7 +240,7 @@
         <input id="q" class="field" type="search" placeholder="Card name, number or set" autocomplete="off" enterkeyhint="search" aria-label="Search cards and sealed" value="${esc(LAST_Q)}"></div>
       <div id="s-game"></div><div id="s-type"></div><div id="s-res"><p class="muted small">Loading every card and sealed product…</p></div>`;
     if (PICK) $("#pick-done").onclick = () => { const back = PICK.back; PICK = null; location.hash = back; };
-    seg($("#s-game"), Object.entries(GAMES).map(([k, g]) => [k, g[0]]), S.set.game, (k) => { S.set.game = k; save(); run(); });
+    gamePick($("#s-game"), () => run());
     seg($("#s-type"), [["all", "Everything"], ["c", "Cards"], ["s", "Sealed"]], S_TYPE, (k) => { S_TYPE = k; run(); });
     await loadIndex();
     const q = $("#q");
@@ -253,7 +263,7 @@
     const drawRecent = () => {
       const rows = S.recent.filter((x) => S_TYPE === "all" || x.t === S_TYPE).map((x) => rowHTML(x, `<b>${money(marketOf(x))}</b>`));
       $("#s-res").innerHTML = rows.length ? `<div class="sec"><div class="sec-head"><h2>Recently viewed</h2></div><div class="list">${rows.join("")}</div></div>`
-        : `<div class="empty"><b>Look up anything</b>Every Pokémon card and sealed product, with today's market price, lowest listing and price history.</div>`;
+        : `<div class="empty"><b>Look up anything</b>Every card and sealed product in ${esc((GAMES[S.set.game] || GAMES.pokemon)[0])}, with today's market price, lowest listing and price history.</div>`;
     };
     let t; q.addEventListener("input", () => { clearTimeout(t); t = setTimeout(run, 140); });
     run();
@@ -285,7 +295,7 @@
       });
       $("#ss-list").innerHTML = listOrEmpty(out, "No sets match. Try another name or switch games.") + (rows.length > 150 ? `<p class="muted small">Showing 150 of ${rows.length}. Search to find the rest.</p>` : "");
     };
-    seg($("#ss-game"), Object.entries(GAMES).map(([k, g]) => [k, g[0]]), S.set.game, (k) => { S.set.game = k; save(); draw(); });
+    gamePick($("#ss-game"), () => draw());
     seg($("#ss-sort"), [["new", "Newest"], ["box", "Box price"], ["up", "Up this week"], ["down", "Down this week"], ["az", "A–Z"]], SETV.sort, (k) => { SETV.sort = k; draw(); });
     let t; $("#sq").oninput = (e) => { clearTimeout(t); t = setTimeout(() => { SETV.q = e.target.value; draw(); }, 140); };
     draw();
@@ -365,7 +375,7 @@
     const inInv = S.inv.find((y) => y.k === keyOf(it.id, it.n)), watching = S.watch.find((y) => y.k === keyOf(it.id, it.n));
     const no = (it.n.match(/ - ([\w/-]+)/) || [])[1];
     const platRows = Object.entries(FEES.sell).map(([k, pl]) => `<div><span>${k === "none" ? "Sell in person" : `Sell on ${esc(pl.label)}`}</span><span>${p ? money(net(p, it.t, k)) : "—"}</span></div>`).join("");
-    card.innerHTML = `<div class="grab"><span class="lab">${esc(gameOfSet(g) === "pokemon-jp" ? "Pokémon Japan" : it.t === "s" ? "Sealed" : "Card")}</span><button type="button" class="btn sm close">Close</button></div>
+    card.innerHTML = `<div class="grab"><span class="lab">${esc(gameOfSet(g) === "pokemon" ? (it.t === "s" ? "Sealed" : "Card") : `${gameLabel(gameOfSet(g))}${it.t === "s" ? " · sealed" : ""}`)}</span><button type="button" class="btn sm close">Close</button></div>
       <div class="hero">${img(it.id, 1000)}<div style="display:flex;flex-direction:column;gap:6px;min-width:0">
         <h2>${esc(cleanN(it.n))}</h2><span class="muted small">${esc(set.n)}${it.r ? ` · ${esc(it.r)}` : ""}</span>
         <span class="lab" style="margin-top:6px">Market</span><span class="big">${money(p)}</span>
@@ -473,12 +483,12 @@
       }
     };
     seg($("#d-seg"), [["flip", "Flips"], ["ride", "Momentum"], ["dip", "Dips"], ["under", "Under market"], ["movers", "Movers"], ["fall", "Falling"], ["store", "My store"]], SUB.deals, (k) => { SUB.deals = k; draw(); });
-    seg($("#d-game"), Object.entries(GAMES).map(([k, g]) => [k, g[0]]), S.set.game, (k) => { S.set.game = k; save(); draw(); });
+    gamePick($("#d-game"), () => draw());
     $("#d-budget").onchange = (e) => { D_BUDGET = +e.target.value; draw(); };
     draw();
   }
   async function drawMovers(out) {
-    const games = { pokemon: ["pokemon", "pokemon-jp"], en: ["pokemon"], jp: ["pokemon-jp"], all: ["all"] }[S.set.game] || ["pokemon"];
+    const games = (GAMES[S.set.game] || GAMES.pokemon)[1] || ["all"];
     const files = await Promise.all(games.flatMap((g) => ["cards", "sealed"].map((t) => getJSON(`movers/${t}-${g}.json`).then((d) => ({ t, d })).catch(() => null)))).then((a) => a.filter(Boolean));
     const has = (w) => files.some((f) => Object.values(f.d.windows?.[w] || {}).some((m) => (m.up || []).length || (m.down || []).length));
     const wins = [...new Set(files.flatMap((f) => Object.keys(f.d.windows || {})))].filter(has).sort((a, b) => (a === "all") - (b === "all") || +a - +b);
@@ -833,12 +843,13 @@
       <div class="form"><label class="f">Raw price from $<input class="field" id="fd-min" type="number" inputmode="decimal" min="0" value="${FIND.min}"></label>
         <label class="f">to $<input class="field" id="fd-max" type="number" inputmode="decimal" min="0" value="${FIND.max}"></label>
         <label class="f full">Search<input class="field" id="fd-q" type="search" placeholder="Card or set" value="${esc(FIND.q)}"></label></div>
+      ${GR && !hasPkm() ? `<p class="muted small" style="margin:0">Graded sold prices cover Pokémon only, so ${esc((GAMES[S.set.game] || [""])[0])} cards show what a 10 has to sell for to pay off. Switch the game in Search or Sets to Pokémon for real grade prices.</p>` : ""}
       <div id="fd-era"></div>${GR ? `<div id="fd-mult"></div><label class="toggle"><input type="checkbox" id="fd-liq"${FIND.liquid ? " checked" : ""}> Liquid only: ${esc(grader().co + " " + grader().l10)} sold 5+ times in 90 days, last sale within 30 days</label>` : ""}<div id="fd-sort"></div><div id="fd-list"></div>`;
     const draw = () => {
       const q = FIND.q.trim().toLowerCase(), onBoard = new Set(S.board.map((x) => x.k));
       let rows = gd.rows.filter((r) => !multi.has(r[0]) && gameOk(r[7]) && (FIND.era === "all" || r[8] === FIND.era) && r[3] >= FIND.min * 100 && (!FIND.max || r[3] <= FIND.max * 100)
         && (!q || (r[2] + " " + setName(r[1])).toLowerCase().includes(q)));
-      const sort = FIND.sort || (GR ? "profit" : "price"), { l10 } = grader();
+      const sort = (FIND.sort === "profit" || FIND.sort === "mult") && !hasPkm() ? "price" : FIND.sort || (GR && hasPkm() ? "profit" : "price"), { l10 } = grader();
       rows = rows.map((r) => { const gp = GR ? gradedOf(r[0]) : null, ok = solid(gp); return { r, gp: ok ? gp : null, e: gradeEval(r[3], ok ? gp.p10 : null, ok ? gp.p9 : null, ok ? gp.p8 : null) }; });
       if (GR && FIND.mult) rows = rows.filter((x) => x.gp && x.gp.p10 >= FIND.mult * x.r[3]);
       if (GR && FIND.liquid) rows = rows.filter((x) => liquid(x.gp));
