@@ -277,6 +277,7 @@ jobs:
           if [ -d data/intel-daily ]; then mkdir -p site/intel-daily && cp -r data/intel-daily/. site/intel-daily/; fi
           if [ -d data/social-deals ]; then mkdir -p site/social-deals && cp -r data/social-deals/. site/social-deals/; fi
           if [ -d data/social-howto ]; then mkdir -p site/social-howto && cp -r data/social-howto/. site/social-howto/; fi
+          if [ -d data/social-grade ]; then mkdir -p site/social-grade && cp -r data/social-grade/. site/social-grade/; fi
 
       - name: Sync Shopify prices to market
         continue-on-error: true

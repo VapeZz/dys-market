@@ -1,0 +1,50 @@
+name: Grade it? carousel
+# Builds the "Grade it?" social carousel from a spec of 5 checked cards (see tools/grade_social.py) and
+# publishes it at https://market.driveyourstyle.net/social-grade/<date>/ (kept on the data branch so the
+# nightly site build carries it).
+on:
+  workflow_dispatch:
+    inputs:
+      spec:
+        description: 'JSON: {"date","game","cards":[{"id","name","no","gid","raw","p10","sold"} x5]}'
+        required: true
+permissions:
+  contents: write
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Build slides and short
+        env:
+          SPEC: ${{ inputs.spec }}
+        run: |
+          set -e
+          pip install -q playwright==1.56.0 imageio-ffmpeg numpy pillow > /dev/null
+          python -m playwright install --with-deps chromium > /dev/null 2>&1
+          R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git clone -q --depth 1 --branch data "$R" /tmp/db
+          git clone -q --depth 1 --branch gh-pages "$R" /tmp/pages
+          printf '%s' "$SPEC" > /tmp/spec.json
+          python -c "import json; json.load(open('/tmp/spec.json'))"
+          mkdir -p /tmp/db/data/social-grade
+          python tools/grade_social.py /tmp/spec.json /tmp/pages /tmp/db/data/social-grade | tee /tmp/g.log
+          for d in /tmp/db /tmp/pages; do git -C $d config user.name "dys-market-bot"; git -C $d config user.email "dys-market-bot@users.noreply.github.com"; done
+          # data branch keeps slides + post.json (no videos); the site gets everything
+          mkdir -p /tmp/site-grade && cp -r /tmp/db/data/social-grade/. /tmp/site-grade/
+          find /tmp/db/data/social-grade -name '*.mp4' -delete
+          git -C /tmp/db add data/social-grade && git -C /tmp/db commit -q -m "Grade it? carousel" && git -C /tmp/db push -q origin data
+          for i in 1 2 3; do
+            git -C /tmp/pages fetch -q origin gh-pages && git -C /tmp/pages reset -q --hard origin/gh-pages
+            mkdir -p /tmp/pages/social-grade && cp -r /tmp/site-grade/. /tmp/pages/social-grade/
+            git -C /tmp/pages add social-grade && git -C /tmp/pages commit -q -m "Grade it? carousel" && git -C /tmp/pages push -q origin gh-pages && break
+            sleep 10
+          done
+          echo "::notice title=Grade it?::$(tail -n 1 /tmp/g.log)"
