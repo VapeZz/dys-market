@@ -1,0 +1,53 @@
+name: Kicks carousel (Cop or drop? / Did it flip?)
+# Builds the sneaker "Cop or drop?" (release day) or "Did it flip?" (weekly recap) carousel from a spec of checked pairs
+# (see tools/kicks_social.py) and publishes it at https://market.driveyourstyle.net/social-kicks/<date>/ (kept on the data branch so the
+# nightly site build carries it).
+on:
+  workflow_dispatch:
+    inputs:
+      spec:
+        description: 'JSON: {"date","mode":"drop|recap","pairs":[{"c","sold_n","sold_med","ask_n","ask_low","ask_p25"}]}'
+        required: true
+permissions:
+  contents: write
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-24.04   # Playwright 1.56 has no Chromium for ubuntu-26.04 (ubuntu-latest)
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Build slides and short
+        env:
+          SPEC: ${{ inputs.spec }}
+        run: |
+          set -e
+          pip install -q playwright==1.56.0 imageio-ffmpeg numpy pillow > /tmp/pip.log 2>&1 || { echo "::error title=pip::$(tail -c 800 /tmp/pip.log | tr '\n' ' ')"; exit 1; }
+          python -m playwright install --with-deps chromium > /tmp/pw.log 2>&1 || { echo "::error title=playwright::$(tail -c 800 /tmp/pw.log | tr '\n' ' ')"; exit 1; }
+          R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git clone -q --depth 1 --branch data "$R" /tmp/db
+          git clone -q --depth 1 --branch gh-pages "$R" /tmp/pages
+          printf '%s' "$SPEC" > /tmp/spec.json
+          python -c "import json; json.load(open('/tmp/spec.json'))"
+          mkdir -p /tmp/db/data/social-kicks
+          set +e
+          python tools/kicks_social.py /tmp/spec.json /tmp/pages /tmp/db/data/social-kicks > /tmp/g.log 2>&1; rc=$?
+          set -e
+          if [ $rc -ne 0 ]; then echo "::error title=Kicks::$(tail -c 1500 /tmp/g.log | tr '\n' ' ')"; exit 1; fi
+          for d in /tmp/db /tmp/pages; do git -C $d config user.name "dys-market-bot"; git -C $d config user.email "dys-market-bot@users.noreply.github.com"; done
+          # data branch keeps slides + post.json (no videos); the site gets everything
+          mkdir -p /tmp/site-kicks && cp -r /tmp/db/data/social-kicks/. /tmp/site-kicks/
+          find /tmp/db/data/social-kicks -name '*.mp4' -delete
+          git -C /tmp/db add data/social-kicks && git -C /tmp/db commit -q -m "Kicks carousel" && git -C /tmp/db push -q origin data
+          for i in 1 2 3; do
+            git -C /tmp/pages fetch -q origin gh-pages && git -C /tmp/pages reset -q --hard origin/gh-pages
+            mkdir -p /tmp/pages/social-kicks && cp -r /tmp/site-kicks/. /tmp/pages/social-kicks/
+            git -C /tmp/pages add social-kicks && git -C /tmp/pages commit -q -m "Kicks carousel" && git -C /tmp/pages push -q origin gh-pages && break
+            sleep 10
+          done
+          echo "::notice title=Kicks::$(tail -n 1 /tmp/g.log)"

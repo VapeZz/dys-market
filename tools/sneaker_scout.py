@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ebay  # noqa: E402
 
 KIDS = re.compile(r"\b(gs|ps|td|grade ?school|pre-?school|toddler|kids?|youth|little kids|big kids|infant|baby|crib|[0-9]{1,2}(\.5)?c|[1-7](\.5)?y)\b", re.I)
-BAD = re.compile(r"replica|\breps?\b|unauthori[sz]ed|\bua\b|laces?\b|box only|no box|insoles?|keychain|charm|sticker|poster|"
+BAD = re.compile(r"replica|\breps?\b|unauthori[sz]ed|\bua\b|laces?\b|box only|no box|no lid|missing lid|damaged box|insoles?|keychain|charm|sticker|poster|"
                  r"used|pre-?owned|worn|\bread\b|custom|\blot\b|bundle|raffle|\bdeposit\b|\bpreorder deposit\b", re.I)
 
 
@@ -33,44 +33,23 @@ def total(it):
     return p + (float(ship) if ship else 0.0)
 
 
-CODE = re.compile(r"\b[A-Z]{1,3}\d{3,5}[- ]?\d{3}\b|\b[A-Z]?\d{6}[- ]\d{3}\b")
 FILTERS = "buyingOptions:{FIXED_PRICE},conditionIds:{1000|1500},deliveryCountry:US,itemLocationCountry:US"
 
 
-def name_query(n, brand):
-    """'Air Jordan 6 "White Infrared"' -> words that every real listing title has."""
-    n = re.sub(r"[\"“”']", " ", n).replace("’", " ")
-    n = re.sub(r"^(Nike|Jordan|adidas|New Balance|Vans|PUMA)\s+(?=\w)", "", n, flags=re.I) if brand != "Jordan" else n
-    n = re.sub(r"\b(Men'?s|Women'?s|Wmns|Premium|Retro|OG|Low|Mid|High)\b", lambda m: m.group(0) if m.group(0).lower() in ("low", "mid", "high") else " ", n, flags=re.I)
-    return [w for w in re.split(r"[^A-Za-z0-9.]+", n) if w and w.upper() not in ("X", "AND", "THE", "OF")]
-
-
 def scout(row):
+    """Exact style-code matches only: colorway names repeat across releases ("Light Orewood Brown"), codes don't."""
     code = row["c"]
-    words = name_query(row.get("n") or "", row.get("b"))
-    seen, asks = set(), []
-    for q, by_code in ((code, True), (" ".join(words), False)):
-        if not q.strip():
+    d = ebay.search(code, category=None, limit=100, filters=FILTERS)
+    asks = []
+    for it in d.get("itemSummaries") or []:
+        t = it.get("title", "")
+        if norm(code) not in norm(t) or KIDS.search(t) or BAD.search(t) or not it.get("price"):
             continue
-        d = ebay.search(q, category=None, limit=100, filters=FILTERS)
-        for it in d.get("itemSummaries") or []:
-            t = it.get("title", "")
-            iid = it.get("itemId")
-            if iid in seen or KIDS.search(t) or BAD.search(t) or not it.get("price"):
-                continue
-            has_code = norm(code) in norm(t)
-            if by_code and not has_code:
-                continue
-            if not by_code and not has_code:
-                other = [c for c in CODE.findall(t.upper()) if norm(c) != norm(code)]
-                if other or not all(re.search(r"(?<![A-Z0-9])" + re.escape(w.upper()) + r"(?![A-Z0-9])", t.upper()) for w in words):
-                    continue
-            seen.add(iid)
-            v = total(it)
-            r = row.get("r") or 0
-            if r and not (0.5 * r <= v <= 6 * r):   # scams, kids sizes or "make an offer" placeholders
-                continue
-            asks.append(v)
+        v = total(it)
+        r = row.get("r") or 0
+        if r and not (0.5 * r <= v <= 6 * r):   # scams, kids sizes or "make an offer" placeholders
+            continue
+        asks.append(v)
     asks.sort()
     if not asks:
         return dict(n_ask=0)

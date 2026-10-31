@@ -109,7 +109,7 @@ def load(spec, site):
 
 
 def cover(pairs, mode, when):
-    spots = [(330, 10, 0, 5, 420), (60, 150, -9, 4, 360), (660, 150, 9, 4, 360)]
+    spots = [(330, 0, 0, 5, 380), (60, 110, -9, 4, 340), (600, 110, 9, 4, 340)]
     fan = "".join(
         f'<div style="position:absolute;left:{x}px;top:{y}px;width:{w}px;height:{w}px;transform:rotate({rot}deg);z-index:{z};'
         f'background:#f2f2f2;border-radius:28px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6)">{shoe(r)}</div>'
@@ -123,15 +123,14 @@ def cover(pairs, mode, when):
 <div class="top"><img class="logo" src="file://{LOGO}"><div class="tag">{'Release day' if mode == 'drop' else 'Resale recap'}</div></div>
 <div style="margin-top:48px;font-family:'Barlow Condensed';font-weight:800;font-size:150px;line-height:.9;text-transform:uppercase">{title}</div>
 <div style="margin-top:20px;font-size:38px;color:#d8d5cf">{sub}</div>
-<div style="position:relative;flex:1;margin-top:46px">{fan}</div>
-<div style="font-size:34px;color:#f2f0eb;margin-bottom:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{hook}</div>
-<div class="bar" style="margin-bottom:26px"></div>
+<div style="margin-top:14px;font-size:36px;line-height:1.25;color:#f2f0eb;font-weight:700;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{hook}</div>
+<div style="position:relative;height:520px;margin-top:30px">{fan}</div>
+<div class="bar" style="margin-top:auto;margin-bottom:26px"></div>
 <div class="foot"><span>Swipe for the numbers →</span><span>market.driveyourstyle.net</span></div></div>"""
 
 
 def pair_slide(p, mode, i, n):
     label, color = CALL[mode][p["call"]]
-    up = p["v"] >= p["r"]
     name = p["n"]
     what = "eBay sold" if p["src"] == "sold" else "eBay resale"
     return f"""<div class="slide">
@@ -143,7 +142,7 @@ def pair_slide(p, mode, i, n):
 <div style="margin-top:auto;display:flex;align-items:flex-end;gap:40px">
  <div><div style="font-size:28px;color:#bdb9b2">Retail</div><div style="font-family:'Barlow Condensed';font-weight:800;font-size:104px;line-height:1">{usd(p['r'])}</div></div>
  <div style="font-family:'Barlow Condensed';font-weight:800;font-size:80px;color:#bdb9b2;padding-bottom:10px">→</div>
- <div><div style="font-size:28px;color:#bdb9b2">{what}</div><div style="font-family:'Barlow Condensed';font-weight:800;font-size:104px;line-height:1;color:{'#3ee08f' if up else '#ff7a59'}">{usd(p['v'])}</div></div>
+ <div><div style="font-size:28px;color:#bdb9b2">{what}</div><div style="font-family:'Barlow Condensed';font-weight:800;font-size:104px;line-height:1;color:{color}">{usd(p['v'])}</div></div>
 </div>
 <div style="margin-top:18px;font-size:34px"><b style="color:{'#3ee08f' if p['profit'] >= 0 else '#ff7a59'}">{signed(p['profit'])}</b> <span style="color:#bdb9b2">a pair after eBay fees, shipping &amp; tax</span></div>
 <div style="margin-top:10px;font-size:26px;color:#8f8a84;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{esc(source_line(p, mode))} · {esc(p['c'])}</div></div>"""
@@ -198,7 +197,7 @@ def captions(pairs, mode, when):
         ask = "Which one are you copping? 👇"
     else:
         flips = sum(p["call"] == "cop" for p in pairs)
-        first = f"Did it flip? 📈 {flips} of last week's {len(pairs)} drops are selling over retail on eBay"
+        first = f"Did it flip? 📈 {flips} of last week's {len(pairs)} drops made money on eBay after fees"
         ask = "Did you cop any of these? 👇"
     note = ("eBay = median sold price (5+ sales) or the low end of new pairs listed. Profit after ~8% tax, eBay fees and shipping. "
             "Prices vary by size and change fast.")
@@ -214,11 +213,12 @@ def main(argv):
     day_, mode = spec["date"], spec.get("mode", "drop")
     pairs = load(spec, site)
     pairs.sort(key=lambda p: -p["profit"])
-    if len(pairs) < 2:
+    if len(pairs) < (1 if mode == "drop" else 2):
         print(f"::warning title=Kicks social::only {len(pairs)} pairs with retail and resale data; nothing built")
         return
     ds = sorted({p["d"] for p in pairs})
-    when = day(ds[0], "%a %b %d") if len(ds) == 1 else f"{day(ds[0], '%b %d')}–{day(ds[-1], '%b %d')}"
+    a, b = date.fromisoformat(ds[0]), date.fromisoformat(ds[-1])
+    when = day(ds[0], "%a %b %d") if a == b else (f"{a:%b} {a.day}–{b.day}" if a.month == b.month else f"{a:%b} {a.day}–{b:%b} {b.day}")
     first, cap, cap_tt, short = captions(pairs, mode, when)
     title = ("Cop or drop? " if mode == "drop" else "Did it flip? ") + when
     out = os.path.join(out_root, day_)

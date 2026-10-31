@@ -278,6 +278,7 @@ jobs:
           if [ -d data/social-deals ]; then mkdir -p site/social-deals && cp -r data/social-deals/. site/social-deals/; fi
           if [ -d data/social-howto ]; then mkdir -p site/social-howto && cp -r data/social-howto/. site/social-howto/; fi
           if [ -d data/social-grade ]; then mkdir -p site/social-grade && cp -r data/social-grade/. site/social-grade/; fi
+          if [ -d data/social-kicks ]; then mkdir -p site/social-kicks && cp -r data/social-kicks/. site/social-kicks/; fi
 
       - name: Link-in-bio pictures
         continue-on-error: true
