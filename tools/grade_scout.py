@@ -59,8 +59,8 @@ def main(argv):
         time.sleep(0.25)
     hits.sort(key=lambda h: -(h["p10_ask"] - h["raw"]))
     print(f"::notice title=Grade scout {game}::{calls} cards checked, {len(hits)} with PSA 10 asks {mm:g}x+ raw")
-    for h in hits[:30]:
-        print(f"::notice title=hit::{json.dumps(h, ensure_ascii=False)}")
+    # one annotation (GitHub keeps only 10 per step): id|name|number|raw|cheapest PSA 10 ask|asks|x
+    print("::notice title=hits::" + " ;; ".join(f"{h['id']}|{h['n']}|{h['no']}|{h['raw']}|{h['p10_ask']}|{h['asks']}|{h['x']}" for h in hits[:40]))
 
 
 if __name__ == "__main__":
