@@ -1,10 +1,10 @@
 name: Grade scout (eBay PSA 10 vs raw)
 # Shortlists cheap raw cards whose PSA 10 copies list on eBay for 10x+ raw, for the "Grade it?" carousel
-# (Thursdays and Saturdays). Saves data/social-grade/shortlist.json on the data branch; the posting task then
+# (Monday to Saturday). Saves data/social-grade/shortlist.json on the data branch; the posting task then
 # checks each shortlisted card's real eBay SOLD prices before anything is built or posted.
 on:
   schedule:
-    - cron: "20 10 * * 4,6"     # Thu + Sat, 3:20 am Pacific
+    - cron: "20 10 * * 1-6"     # Mon-Sat, 3:20 am Pacific
   workflow_dispatch:
     inputs:
       game:

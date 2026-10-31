@@ -25,7 +25,7 @@ from ebay_prices import best, query  # noqa: E402
 GOOD = re.compile(r"illustration|art rare|character|trainer gallery|galarian gallery|shiny|secret|hyper|ultra|special|double|"
                   r"holo|alternate|manga|leader|super rare|treasure|enchanted|legendary|epic|iconic|showcase|overnumbered|"
                   r"starlight|ghost|collector|quarter century|prismatic|god rare|\bSCR\b|\bSPR\b|\bSR\b|\bUR\b|\bSEC\b|\bAP\b", re.I)
-# every TCG on the market site; Pokémon (the biggest audience) every third post. Two posts a week = one full lap in 7 weeks.
+# every TCG on the market site; Pokémon (the biggest audience) every third post. Posting Monday to Saturday = one full lap in about 2.5 weeks.
 ROTATION = ["pokemon", "one-piece", "yugioh", "pokemon", "riftbound", "lorcana", "pokemon", "pokemon-jp", "gundam",
             "pokemon", "dragon-ball-fusion-world", "union-arena", "pokemon", "palworld"]
 
@@ -71,7 +71,7 @@ def main(argv):
         hist = json.load(open(hp)) if hp else {}
     except (OSError, ValueError):
         hist = {}
-    recent = {k for k, v in hist.items() if v >= (date.today() - timedelta(days=56)).isoformat()}
+    recent = {k for k, v in hist.items() if v >= (date.today() - timedelta(days=28)).isoformat()}
     d = os.path.join(site, "data")
     rows = json.load(open(os.path.join(d, "grading.json")))["rows"]
     try:

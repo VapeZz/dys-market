@@ -13,7 +13,7 @@ No PokemonPriceTracker data is used anywhere in these posts.
 
 Writes OUT_DIR/<date>/slide-1..7.jpg (1080x1350, Instagram/Facebook), tt-1..7.jpg (1080x1920, TikTok/Story),
 short.mp4 (YouTube Short with its own music), post.json, OUT_DIR/latest.json and OUT_DIR/history.json
-(card ids already featured, so a card doesn't come back within 8 weeks).
+(card ids already featured, so a card doesn't come back within 4 weeks).
 """
 import io
 import json
