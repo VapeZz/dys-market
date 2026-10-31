@@ -1,0 +1,43 @@
+name: Sneaker photos
+# Finds official product photos for every release on the sneaker calendar (tools/sneaker_images.py),
+# saves the cache on the data branch and puts site/data/sneaker-images.json live right away.
+# The nightly build runs the same lookup; this is for filling gaps on demand.
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+jobs:
+  photos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: |
+          set -e
+          R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git clone -q --depth 1 --branch data "$R" /tmp/db
+          git clone -q --depth 1 --branch gh-pages "$R" /tmp/pages
+          mkdir -p data site/data
+          [ -f /tmp/db/data/sneaker-images.json ] && cp /tmp/db/data/sneaker-images.json data/sneaker-images.json || true
+          cp /tmp/pages/sneakers.json site/sneakers.json
+          python tools/sneaker_images.py --report | tee /tmp/snk.log
+          echo "::notice title=Sneaker photos::$(grep '^sneaker images:' /tmp/snk.log | tail -n 1)"
+          for d in /tmp/db /tmp/pages; do git -C $d config user.name "dys-market-bot"; git -C $d config user.email "dys-market-bot@users.noreply.github.com"; done
+          mkdir -p /tmp/db/data && cp data/sneaker-images.json /tmp/db/data/sneaker-images.json
+          git -C /tmp/db add data/sneaker-images.json
+          git -C /tmp/db diff --cached --quiet || git -C /tmp/db commit -q -m "Sneaker photos"
+          for i in 1 2 3; do git -C /tmp/db push -q origin data && break; git -C /tmp/db pull -q --rebase origin data; done
+          for i in 1 2 3; do
+            git -C /tmp/pages fetch -q origin gh-pages && git -C /tmp/pages reset -q --hard origin/gh-pages
+            cp site/data/sneaker-images.json /tmp/pages/data/sneaker-images.json
+            git -C /tmp/pages add data/sneaker-images.json
+            git -C /tmp/pages diff --cached --quiet && break
+            git -C /tmp/pages commit -q -m "Sneaker photos" && git -C /tmp/pages push -q origin gh-pages && break
+            sleep 10
+          done
