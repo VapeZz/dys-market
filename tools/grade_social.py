@@ -53,8 +53,15 @@ def get(url):
     return urllib.request.urlopen(req, timeout=30).read()
 
 
-def card_png(pid, out):
-    im = Image.open(io.BytesIO(get(f"https://tcgplayer-cdn.tcgplayer.com/product/{pid}_in_1000x1000.jpg"))).convert("RGB")
+def card_png(pid, out, game="pokemon", no=""):
+    im = None
+    if game == "one-piece" and re.fullmatch(r"[A-Z]{2,3}\d{2}-\d{3}", no or ""):
+        try:   # TCGplayer's One Piece photos carry a SAMPLE watermark: use Bandai's official card image
+            im = Image.open(io.BytesIO(get(f"https://en.onepiece-cardgame.com/images/cardlist/card/{no}.png"))).convert("RGB")
+        except Exception:
+            im = None
+    if im is None:
+        im = Image.open(io.BytesIO(get(f"https://tcgplayer-cdn.tcgplayer.com/product/{pid}_in_1000x1000.jpg"))).convert("RGB")
     box = ImageChops.difference(im, Image.new("RGB", im.size, (255, 255, 255))).convert("L").point(lambda v: 255 if v > 18 else 0).getbbox()
     path = os.path.join(out, f"card-{pid}.png")
     (im.crop(box) if box else im).save(path)
@@ -181,7 +188,7 @@ def main(argv):
         s = sets.get(int(c["gid"]), {})
         set_name = re.sub(r"^[A-Z0-9]{2,6}[a-z]?:\s*", "", names.get(str(c["gid"]), [s.get("n", "")])[0]).replace("SWSH: ", "")
         cards.append(dict(c, raw=float(c["raw"]), p10=float(c["p10"]), sold=str(c["sold"]), set=set_name,
-                          img=card_png(c["id"], out), logo=logo_png(s.get("lg"), c["gid"], out)))
+                          img=card_png(c["id"], out, game, c.get("no", "")), logo=logo_png(s.get("lg"), c["gid"], out)))
     if len(cards) < 5:
         raise SystemExit("need 5 cards")
     render(cards, game, day, out)

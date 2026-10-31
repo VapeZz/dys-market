@@ -1,19 +1,27 @@
 name: Grade scout (eBay PSA 10 vs raw)
+# Shortlists cheap raw cards whose PSA 10 copies list on eBay for 10x+ raw, for the "Grade it?" carousel
+# (Thursdays and Saturdays). Saves data/social-grade/shortlist.json on the data branch; the posting task then
+# checks each shortlisted card's real eBay SOLD prices before anything is built or posted.
 on:
+  schedule:
+    - cron: "20 10 * * 4,6"     # Thu + Sat, 3:20 am Pacific
   workflow_dispatch:
     inputs:
       game:
-        description: "pokemon | one-piece | lorcana | riftbound | ..."
-        default: "pokemon"
+        description: "auto (rotation) | pokemon | one-piece | lorcana | riftbound | ..."
+        default: "auto"
       max:
         description: "cards to check (one eBay search each)"
-        default: "250"
+        default: "300"
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: nightly
+  cancel-in-progress: false
 jobs:
   scout:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -22,8 +30,14 @@ jobs:
       - env:
           EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
           EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
-          GAME: ${{ inputs.game }}
-          MAX: ${{ inputs.max }}
+          GAME: ${{ inputs.game || 'auto' }}
+          MAX: ${{ inputs.max || '300' }}
         run: |
-          git clone -q --depth 1 --branch gh-pages "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" /tmp/pages
-          python tools/grade_scout.py /tmp/pages "$GAME" --max "$MAX"
+          set -e
+          R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git clone -q --depth 1 --branch gh-pages "$R" /tmp/pages
+          git clone -q --depth 1 --branch data "$R" /tmp/db
+          mkdir -p /tmp/db/data/social-grade
+          python tools/grade_scout.py /tmp/pages "$GAME" --max "$MAX" --out /tmp/db/data/social-grade/shortlist.json --history /tmp/db/data/social-grade/history.json
+          git -C /tmp/db config user.name "dys-market-bot"; git -C /tmp/db config user.email "dys-market-bot@users.noreply.github.com"
+          git -C /tmp/db add data/social-grade/shortlist.json && (git -C /tmp/db diff --cached --quiet || (git -C /tmp/db commit -q -m "Grade scout shortlist" && git -C /tmp/db push -q origin data))
