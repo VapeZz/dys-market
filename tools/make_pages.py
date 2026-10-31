@@ -504,6 +504,7 @@ def links_page():
         ("Check what your cards are worth", "Free prices on 70,000+ cards, scan with your camera", "index.html?ref=bio", False),
         *([("🎁 Win an Elite Trainer Box", "Free monthly giveaway: build your binder to enter", "giveaway.html?ref=bio", False)] if GIVEAWAY_ON else []),
         ("Sell us your cards", "Get a cash or store-credit offer", "sell.html?ref=bio", False),
+        ("Cheap cards worth grading", "This week's 5 picks: raw vs PSA 10 sold prices, with eBay links", "social-grade/?ref=bio", False),
         ("Check centering before you grade", "Free PSA, CGC and BGS centering check from a photo", "centering.html?ref=bio", False),
         ("Sneaker release calendar", "This week's drops, our cop or wait calls, reminders", "sneakers.html?ref=bio", False),
         ("This week's market report", "Biggest card gains and drops, new sets", "blog/?ref=bio", False),

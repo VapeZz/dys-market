@@ -28,6 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from social import FONT_CSS, LOGO  # noqa: E402
 
 SITE = "https://market.driveyourstyle.net"
+EPN = "5339229587"   # eBay Partner Network campaign id (same as the market site's eBay links)
 PSA_FEE, SHIP = 59.99, 15.0        # PSA's cheapest open tier (Value tiers paused) + shipping both ways
 GAMES = {  # slug: (label, hashtags)
     "pokemon": ("Pokémon", "#pokemon #pokemoncards #pokemontcg #psa #psagrading #cardgrading #tcg"),
@@ -170,10 +171,46 @@ def captions(cards, game, day):
     first = f"A ${top['raw']:.0f} {label} card sells for {m(top['p10'], False)} in a PSA 10 👀"
     lines = [f"{i}. {c['name']} {c['no']} ({c['set']}): {m(c['raw'])} raw → {m(c['p10'], False)} PSA 10" for i, c in enumerate(cards, 1)]
     note = "PSA 10 = median eBay sold price over the last 30 days. Raw = TCGplayer market price. Not every card grades a 10, so check centering first (free centering tool at market.driveyourstyle.net)."
-    cap = f"{first}\n\n5 cheap {label} cards selling for {lo:.0f}–{hi:.0f}× raw once they grade a 10:\n\n" + "\n".join(lines) + f"\n\n{note}\n\nWhich one would you grade? 👇\n\nCheck any card's raw price free at market.driveyourstyle.net (link in bio)\n\n{tags}"
-    cap_tt = f"{first} 5 cheap {label} cards worth grading. Which one would you send in? 👇 Free prices at market.driveyourstyle.net {tags}"
+    cap = (f"{first}\n\n5 cheap {label} cards selling for {lo:.0f}–{hi:.0f}× raw once they grade a 10:\n\n" + "\n".join(lines) + f"\n\n{note}\n\nWhich one would you grade? 👇\n\n"
+           f"🛒 eBay links for all 5: market.driveyourstyle.net/social-grade (link in bio · affiliate links)\n\n{tags}")
+    cap_tt = f"{first} 5 cheap {label} cards worth grading. Which one would you send in? 👇 eBay links for all 5 in bio {tags}"
     short = f"These ${min(c['raw'] for c in cards):.0f}–${max(c['raw'] for c in cards):.0f} {label} cards sell for {lo:.0f}–{hi:.0f}× in a PSA 10 👀 Would you grade #1?"
     return first, cap, cap_tt, (short + (" #" + game.replace("-", "") if len(short) < 85 else ""))[:100]
+
+
+def ebay(q, day, sold=False):
+    """eBay search link tagged with our eBay Partner Network campaign."""
+    from urllib.parse import urlencode
+    p = {"_nkw": q, "mkcid": "1", "mkrid": "711-53200-19255-0", "siteid": "0", "campid": EPN, "customid": f"grade-{day}", "toolid": "10001", "mkevt": "1"}
+    p.update({"LH_Sold": "1", "LH_Complete": "1", "_sop": "13"} if sold else {"LH_BIN": "1", "_sop": "15"})
+    return "https://www.ebay.com/sch/i.html?" + urlencode(p)
+
+
+def page(post, cards, game, day):
+    """market.driveyourstyle.net/social-grade/<date>/: the 5 cards with affiliate links (what 'link in bio' opens)."""
+    from html import escape as e
+    label = GAMES[game][0]
+    jp = " japanese" if game == "pokemon-jp" else ""
+    d = date.fromisoformat(day)
+    rows = "".join(f"""<article class="c"><img src="https://tcgplayer-cdn.tcgplayer.com/product/{c['id']}_in_1000x1000.jpg" alt="{e(c['name'])}" loading="lazy">
+<div><h2>{i}. {e(c['name'])} <small>{e(c['no'])} · {e(c['set'])}</small></h2>
+<p class="p"><span>Raw <b>{m(c['raw'])}</b></span><span>PSA 10 <b class="g">{m(c['p10'])}</b></span><span><b>{c['p10'] / c['raw']:.0f}×</b> raw</span></p>
+<p class="m">{e(c['sold'])} PSA 10s sold on eBay in the last 30 days. Gets a 10? About +{m(profit(c['raw'], c['p10']))} after the PSA fee, shipping and eBay fees.</p>
+<p class="b"><a class="btn" href="{e(ebay(f"{c['name']} {c['no']}{jp}", day))}" target="_blank" rel="sponsored noopener">Buy raw on eBay</a><a class="btn o" href="{e(ebay(f"{c['name']} {c['no']}{jp} PSA 10", day))}" target="_blank" rel="sponsored noopener">Buy a PSA 10</a><a class="btn o" href="{e(ebay(f"{c['name']} {c['no']}{jp} PSA 10", day, True))}" target="_blank" rel="sponsored noopener">See PSA 10 sales</a><a class="btn o" href="../../product.html?id={c['id']}&amp;set={c['gid']}">Price history</a></p></div></article>""" for i, c in enumerate(cards, 1))
+    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{e(post['first'])} · Drive Your Style</title><meta name="description" content="5 cheap {e(label)} cards whose PSA 10 sells for 10x+ raw, with recent eBay sold prices.">
+<meta property="og:image" content="{SITE}/social-grade/{day}/slide-1.jpg"><link rel="icon" type="image/png" href="../../assets/favicon.png">
+<style>body{{margin:0;background:#050404;color:#f2f0eb;font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}}main{{max-width:760px;margin:0 auto;padding:22px 16px 40px}}
+a{{color:#5ee7ff}}h1{{font-size:28px;line-height:1.15;margin:14px 0 6px}}.sub{{color:#bdb9b2;margin:0 0 18px}}.c{{display:grid;grid-template-columns:110px 1fr;gap:16px;padding:16px 0;border-top:1px solid #222}}
+.c img{{width:110px;border-radius:8px;background:#151515}}h2{{font-size:19px;margin:0 0 6px}}h2 small{{display:block;font-size:13px;color:#bdb9b2;font-weight:400}}
+.p{{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0 0 6px}}.g{{color:#3ee08f}}.m{{color:#bdb9b2;font-size:14px;margin:0 0 10px}}
+.b{{display:flex;flex-wrap:wrap;gap:8px;margin:0}}.btn{{display:inline-block;padding:9px 14px;border-radius:10px;background:#3ee08f;color:#050404;font-weight:700;text-decoration:none;font-size:14px}}
+.btn.o{{background:none;color:#f2f0eb;border:1px solid #444}}.f{{color:#8f8a84;font-size:13px;margin-top:24px}}.top{{display:flex;justify-content:space-between;align-items:center;font-weight:700}}
+@media(max-width:420px){{.c{{grid-template-columns:84px 1fr;gap:12px}}.c img{{width:84px}}}}</style></head>
+<body><main><div class="top"><a href="../../index.html?ref=grade" style="color:#f2f0eb;text-decoration:none">DRIVE YOUR STYLE · Market</a><a href="../../links.html">More links</a></div>
+<h1>{e(post['first'])}</h1><p class="sub">5 cheap {e(label)} cards worth grading · {d.strftime('%B %-d, %Y')}</p>{rows}
+<p class="f">PSA 10 = median eBay sold price over the last 30 days (Buy It Now and auctions). Raw = TCGplayer market price on {d.strftime('%b %-d')}. Prices change; not every card grades a 10, so check centering first with our <a href="../../centering.html">free centering tool</a>. Not financial advice.<br><br>
+Affiliate disclosure: eBay links on this page are affiliate links (eBay Partner Network). If you buy through them we may earn a small commission at no extra cost to you.</p></main></body></html>"""
 
 
 def main(argv):
@@ -203,6 +240,10 @@ def main(argv):
             "slides": [f"{url}/slide-{n}.jpg" for n in range(1, 8)], "slides_tiktok": [f"{url}/tt-{n}.jpg" for n in range(1, 8)],
             "story": f"{url}/tt-1.jpg", "short": f"{url}/short.mp4" if short else None,
             "cards": [{k: c[k] for k in ("id", "name", "no", "raw", "p10", "sold")} for c in cards]}
+    post["page"] = f"{url}/"
+    open(os.path.join(out, "index.html"), "w", encoding="utf-8").write(page(post, cards, game, day))
+    open(os.path.join(out_root, "index.html"), "w", encoding="utf-8").write(   # /social-grade/ always opens the newest picks
+        f'<!doctype html><meta charset="utf-8"><title>Cheap cards worth grading</title><meta http-equiv="refresh" content="0; url={day}/"><link rel="canonical" href="{url}/"><a href="{day}/">This week\'s picks</a>')
     for path in (os.path.join(out, "post.json"), os.path.join(out_root, "latest.json")):
         json.dump(post, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     hp = os.path.join(out_root, "history.json")
