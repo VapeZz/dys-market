@@ -172,7 +172,7 @@ def captions(cards, game, day):
     lines = [f"{i}. {c['name']} {c['no']} ({c['set']}): {m(c['raw'])} raw → {m(c['p10'], False)} PSA 10" for i, c in enumerate(cards, 1)]
     note = "PSA 10 = median eBay sold price over the last 30 days. Raw = TCGplayer market price. Not every card grades a 10, so check centering first (free centering tool at market.driveyourstyle.net)."
     cap = (f"{first}\n\n5 cheap {label} cards selling for {lo:.0f}–{hi:.0f}× raw once they grade a 10:\n\n" + "\n".join(lines) + f"\n\n{note}\n\nWhich one would you grade? 👇\n\n"
-           f"🛒 eBay links for all 5: market.driveyourstyle.net/social-grade (link in bio · affiliate links)\n\n{tags}")
+           f"🛒 eBay links for all 5 (affiliate links): market.driveyourstyle.net/social-grade (link in bio)\n\n{tags}")
     cap_tt = f"{first} 5 cheap {label} cards worth grading. Which one would you send in? 👇 eBay links for all 5 in bio {tags}"
     short = f"These ${min(c['raw'] for c in cards):.0f}–${max(c['raw'] for c in cards):.0f} {label} cards sell for {lo:.0f}–{hi:.0f}× in a PSA 10 👀 Would you grade #1?"
     return first, cap, cap_tt, (short + (" #" + game.replace("-", "") if len(short) < 85 else ""))[:100]
