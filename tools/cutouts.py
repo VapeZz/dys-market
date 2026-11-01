@@ -27,7 +27,7 @@ report, pairs = [], []
 WHITE_KINDS = {"Sealed", "OnePiece"}
 
 
-def white_out(rgba):
+def white_out(rgba, hull=False):
     import numpy as np
     from scipy import ndimage
     a = np.asarray(rgba.convert("RGB")).astype(np.int16)
@@ -39,6 +39,15 @@ def white_out(rgba):
     fg = ~bg
     fg = ndimage.binary_opening(fg, iterations=1)            # drop specks
     fg = ndimage.binary_fill_holes(fg) | (fg & ~bg)          # keep white areas inside the product
+    if hull:   # mostly-white boxes: the white of the box touches the background, so use the box's outline instead
+        from scipy.spatial import ConvexHull
+        from PIL import ImageDraw
+        ys, xs = np.nonzero(fg)
+        pts = np.column_stack([xs, ys])
+        h = ConvexHull(pts)
+        poly = Image.new("L", (fg.shape[1], fg.shape[0]), 0)
+        ImageDraw.Draw(poly).polygon([tuple(map(int, pts[v])) for v in h.vertices], fill=255)
+        fg = np.asarray(poly) > 0
     # soft edge without a white halo: shrink one pixel, then feather
     core = ndimage.binary_erosion(fg, iterations=1)
     alpha = ndimage.gaussian_filter(core.astype(np.float32), 0.7)
@@ -62,7 +71,7 @@ for it in items:
         if clear > 0.05:
             cut, how = rgba, "already transparent"
         elif it.get("k") in WHITE_KINDS:
-            cut, how = white_out(rgba), "white background removed"
+            cut, how = white_out(rgba, hull=it.get("hull")), "white background removed" + (" (box outline)" if it.get("hull") else "")
         else:
             cut, how = remove(rgba, session=sess, post_process_mask=True), "removed"
         mask = cut.getchannel("A").point(lambda v: 255 if v > 16 else 0)
