@@ -951,14 +951,24 @@
       const a = assumptions(draw), { co, l10, l9 } = grader();
       const rows = S.board.map((x, i) => {
         const raw = marketOf(x) || 0, bp = boardPrices(x), e = gradeEval(raw, bp.p10, bp.p9, bp.p8, undefined, cardOdds(x.id));
-        return { x, i, raw, e, gp: bp.gp, no: (x.n.match(/ - ([\w/-]+)/) || [])[1] || "" };
-      }).sort((a, b) => (b.e.profit ?? -1e12) - (a.e.profit ?? -1e12));
+        return { x, i, raw, e, gp: bp.gp, p10: bp.p10, no: (x.n.match(/ - ([\w/-]+)/) || [])[1] || "" };
+      });
+      // sort: priced cards first in every order except name / newest
+      const VORD = { "Safe grade": 0, "Good odds": 1, "Risky": 2, "Skip it": 3 }, pr = (r) => r.e.profit ?? -1e12;
+      const SORTS = { profit: (a, b) => pr(b) - pr(a),
+        safe: (a, b) => (VORD[a.e.v?.[1]] ?? 9) - (VORD[b.e.v?.[1]] ?? 9) || pr(b) - pr(a),
+        if9: (a, b) => (b.e.nine ?? -1e12) - (a.e.nine ?? -1e12),
+        mult: (a, b) => (b.p10 && b.raw ? b.p10 / b.raw : -1) - (a.p10 && a.raw ? a.p10 / a.raw : -1),
+        raw: (a, b) => b.raw - a.raw, added: (a, b) => a.i - b.i, az: (a, b) => cleanN(a.x.n).localeCompare(cleanN(b.x.n)) };
+      if (!SORTS[S.set.gbSort]) S.set.gbSort = "profit";
+      rows.sort(SORTS[S.set.gbSort]);
       const priced = rows.filter((r) => r.e.profit != null), best = priced.filter((r) => r.e.profit > 0);
       el.innerHTML = `${a.html}
         ${S.board.length ? `<div class="tiles"><div class="tile"><span class="lab">On your board</span><b>${S.board.length}</b><small>${priced.length} with ${esc(co)} prices</small></div>
           <div class="tile"><span class="lab">Worth grading</span><b class="up">${best.length}</b><small>expected profit</small></div>
           <div class="tile"><span class="lab">Safe grades</span><b>${priced.filter((r) => r.e.v[1] === "Safe grade").length}</b><small>a ${esc(l9)} still pays</small></div></div>` : ""}
         <div class="sec-head"><h2>Grading board</h2><button type="button" class="more" id="gb-add">+ Add cards</button></div>
+        ${S.board.length > 1 ? `<div id="gb-sort"></div>` : ""}
         ${!GR && !pptKey() ? `<p class="muted small" style="margin:0">Add your PokemonPriceTracker key in Mine → Settings and graded prices fill in by themselves.</p>` : ""}
         ${rows.length ? rows.map(({ x, i, raw, e, gp, no }) => `<div class="gcard panel">
           <button type="button" class="gc-top" data-open="${x.id}" data-g="${x.g}" data-n="${esc(x.n)}">${img(x.id)}<span class="gc-name"><span class="nm">${esc(cleanN(x.n))}</span><span class="st">${esc(setName(x.g))} · raw ${money(raw)}</span></span>
@@ -976,6 +986,8 @@
           <div class="btns"><button type="button" class="btn sm" data-log="${i}">Log result</button><button type="button" class="btn sm ghost danger" data-rm="${i}">Remove</button></div></div>`).join("")
           : `<div class="empty"><b>Build your grading board</b>Add cards from <b style="display:inline;font-size:inherit">Find</b> or tap Grade it? on any card. Enter what a 10 and a 9 sell for (tap the sold links), and the board ranks them by expected profit after every fee.</div>`}`;
       a.bind(el);
+      if ($("#gb-sort", el)) seg($("#gb-sort", el), [["profit", "Most profit"], ["safe", "Safest"], ["if9", "Best if a 9"], ["mult", "10 vs raw"], ["raw", "Raw price"], ["added", "Newest"], ["az", "A–Z"]],
+        S.set.gbSort, (k) => { S.set.gbSort = k; save(); draw(); });
       $("#gb-add", el).onclick = () => { SUB.grade = "find"; viewGrade($("#view")); };
       el.onchange = (e) => {
         const t = e.target, i10 = t.dataset.b10, i9 = t.dataset.b9;
