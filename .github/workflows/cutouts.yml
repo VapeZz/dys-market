@@ -1,0 +1,37 @@
+name: Product cut-outs
+# Removes the background from store product photos (tools/cutouts.py) and puts the PNGs and contact
+# sheets on gh-pages under _cutouts/ (temporary: the nightly build wipes it) so they can be checked and
+# then added to the products in Shopify.
+on:
+  workflow_dispatch:
+    inputs:
+      list:
+        description: 'JSON list of {"p","h","m","u"} (product id, handle, media id, image url)'
+        required: true
+permissions:
+  contents: write
+jobs:
+  cut:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - env:
+          LIST: ${{ inputs.list }}
+        run: |
+          set -e
+          pip install -q "rembg[cpu]==2.0.67" pillow-avif-plugin > /dev/null 2>&1 || pip install -q "rembg[cpu]" pillow-avif-plugin
+          python tools/cutouts.py /tmp/cut | tee /tmp/cut.log
+          echo "::notice title=Cut-outs::$(tail -n 1 /tmp/cut.log)"
+          R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git clone -q --depth 1 --branch gh-pages "$R" /tmp/pages
+          git -C /tmp/pages config user.name "dys-market-bot"; git -C /tmp/pages config user.email "dys-market-bot@users.noreply.github.com"
+          for i in 1 2 3; do
+            git -C /tmp/pages fetch -q origin gh-pages && git -C /tmp/pages reset -q --hard origin/gh-pages
+            mkdir -p /tmp/pages/_cutouts && cp /tmp/cut/* /tmp/pages/_cutouts/
+            git -C /tmp/pages add _cutouts && git -C /tmp/pages commit -q -m "Product cut-outs" && git -C /tmp/pages push -q origin gh-pages && break
+            sleep 5
+          done
