@@ -793,14 +793,14 @@
   const MIX_MIN = 5;
   function mixOf(id) {
     const c = GR?.c?.[id]; if (!c) return null;
-    const [k10, k9, k8] = GK[grader().co] || GK.PSA, g = c[1] || {};
-    const n10 = g[k10]?.[1] || 0, n9 = g[k9]?.[1] || 0, n8 = k8 ? (g[k8]?.[1] || 0) : 0, n = n10 + n9 + n8;
+    const [k10, k9, k8] = GK[grader().co] || GK.PSA, g = c[1] || {}, sk = ladderSkip(g), cnt = (k) => k && sk[k] !== "above" ? g[k]?.[1] || 0 : 0;
+    const n10 = cnt(k10), n9 = cnt(k9), n8 = cnt(k8), n = n10 + n9 + n8;
     if (n < MIX_MIN) return null;
     const b = odds(), w = n / (n + 10), o10 = w * n10 / n + (1 - w) * b.o10;
     return { o10, o9: Math.min(1 - o10, w * n9 / n + (1 - w) * b.o9), mine: false, src: "mix", n, s10: n10 / n, s9: n9 / n };
   }
   const cardOdds = (id) => (S.set.useMix !== false && id != null && mixOf(id)) || odds();
-  const oddsText = (od) => `${Math.round(od.o10 * 100)}% ${grader().l10}s, ${Math.round(od.o9 * 100)}% ${grader().l9}s · ${od.src === "mix" ? `from this card's ${od.n} graded sales` : od.src === "mine" ? "your graded results" : "your setting (not enough sales for this card)"}`;
+  const oddsText = (od) => `${Math.round(od.o10 * 100)}% ${grader().l10}s, ${Math.round(od.o9 * 100)}% ${grader().l9}s · ${od.src === "mix" ? `from this card's ${od.n} graded sales` : od.src === "mine" ? "your graded results" : S.set.useMix === false ? "your setting (per-card odds are off under Your assumptions)" : "your setting (not enough sales for this card)"}`;
   function grader() {
     const co = FEES.graders[S.set.gco] ? S.set.gco : "PSA", gr = FEES.graders[co];
     const ti = Math.min(gr.tiers.length - 1, Math.max(0, +(S.set.gtier[co] ?? 0) || 0));
@@ -849,12 +849,29 @@
       GR_ERR = ""; return GR;
     })().catch(() => { GR_ERR ||= "load"; return null; }));
   }
+  /* Grade prices that can't be right are left out of every calculation (they still show, marked):
+     a lower grade selling above a higher one is almost always a mismatched sale (a different card or a lot),
+     and a grade whose last sale is over 4 months old is no longer a price. */
+  const LADDERS = [["psa10", "psa9", "psa8"], ["cgc10", "cgc9_5", "cgc9"], ["bgs10", "bgs9_5", "bgs9"], ["tag10", "tag9"]];
+  const OLD_DAYS = 120;
+  function ladderSkip(g) {
+    const out = {};
+    for (const L of LADDERS) for (let i = 1; i < L.length; i++) {
+      const v = g[L[i]]; if (!v) continue;
+      const higher = L.slice(0, i).filter((k) => g[k] && !out[k]).map((k) => g[k][0]);
+      if (higher.length && v[0] > Math.min(...higher)) out[L[i]] = "above";
+      else if (v[3] && daysAgo(v[3]) > OLD_DAYS) out[L[i]] = "old";
+    }
+    return out;
+  }
+  const SKIP_WHY = { above: "not used: sells above a higher grade, likely a mismatched sale", old: "not used: last sale over 4 months ago" };
   // one company's graded prices for a card (cents), or null
   function gradedOf(id, co = grader().co) {
     const c = GR?.c?.[id]; if (!c) return null;
-    const [k10, k9, k8] = GK[co] || GK.PSA, g = c[1] || {}, a = g[k10], b = g[k9], d = k8 ? g[k8] : null;
+    const [k10, k9, k8] = GK[co] || GK.PSA, g = c[1] || {}, sk = ladderSkip(g), a = g[k10], b = sk[k9] ? null : g[k9], d = k8 && !sk[k8] ? g[k8] : null;
     if (!a && !b) return null;
-    return { p10: a?.[0] || null, n10: a?.[1] || 0, l10: a?.[3] || null, p9: b?.[0] || null, n9: b?.[1] || 0, p8: d?.[0] || null, at: c[0] };
+    return { p10: a?.[0] || null, n10: a?.[1] || 0, l10: a?.[3] || null, p9: b?.[0] || null, n9: b?.[1] || 0, p8: d?.[0] || null, n8: d?.[1] || 0, at: c[0],
+      skip9: sk[k9] || null, skip8: k8 ? sk[k8] || null : null };
   }
   // what the board uses: your own prices first, then PokemonPriceTracker's
   function boardPrices(x) {
@@ -876,11 +893,11 @@
     return out.sort((a, b) => b.e.profit - a.e.profit);
   }
   function gradedBlock(it, p) {
-    const c = GR?.c?.[it.id], g = c?.[1] || {}, have = GNAME.filter(([k]) => g[k]);
+    const c = GR?.c?.[it.id], g = c?.[1] || {}, have = GNAME.filter(([k]) => g[k]), sk = ladderSkip(g);
     if (!have.length) return `<section class="sec panel"><span class="lab">Graded sold prices</span><p class="muted small" style="margin:0">No graded sales on PokemonPriceTracker for this card yet${GR.c && Object.keys(GR.c).length ? "" : " (they fill in over the next updates)"}.</p></section>`;
     const bp = gradedOf(it.id), { co, l10 } = grader(), e = bp?.p10 ? gradeEval(p, bp.p10, bp.p9, bp.p8, undefined, cardOdds(it.id)) : null;
-    return `<section class="sec panel"><span class="lab">Graded sold prices · last 90 days</span>
-      <div class="kv">${have.map(([k, l]) => { const v = g[k]; return `<div><span>${l}<br><small class="muted">${v[1]} sold${v[3] ? ` · last ${esc(fmtDay(v[3]))}` : ""}</small></span><span>${money(v[0])}${p ? `<br><small class="muted">${(v[0] / p).toFixed(1)}× raw</small>` : ""}</span></div>`; }).join("")}</div>
+    return `<section class="sec panel"><span class="lab">Graded sold prices</span>
+      <div class="kv">${have.map(([k, l]) => { const v = g[k]; return `<div${sk[k] ? ' style="opacity:.6"' : ""}><span>${l}<br><small class="muted">${v[1]} sold${v[3] ? ` · last ${esc(fmtDay(v[3]))}` : ""}</small>${sk[k] ? `<br><small class="warn">${SKIP_WHY[sk[k]]}</small>` : ""}</span><span>${sk[k] === "above" ? `<s>${money(v[0])}</s>` : money(v[0])}${p ? `<br><small class="muted">${(v[0] / p).toFixed(1)}× raw</small>` : ""}</span></div>`; }).join("")}</div>
       ${e ? `<div class="verdict ${e.v[0]}"><span class="lab">Grade it with ${esc(co)}?</span><b>${e.v[1]} · ${signed(Math.round(e.profit))} expected</b><span class="small muted">If ${esc(l10)}: ${signed(Math.round(e.ten))} · if ${esc(grader().l9)}: ${signed(Math.round(e.nine))}. Odds: ${esc(oddsText(e.od))}.</span></div>` : ""}
       <p class="muted small" style="margin:0">From PokemonPriceTracker (personal use)${c[0] ? `, checked ${esc(fmtDay(c[0]))}` : ""}.</p></section>`;
   }
@@ -944,7 +961,7 @@
             ${e.v ? `<span class="chip ${e.v[0] === "good" ? "good" : e.v[0] === "bad" ? "bad" : "hot"}">${e.v[1]}</span>` : `<span class="chip">Needs prices</span>`}</button>
           <div class="gc-in"><label class="f">${esc(co)} ${esc(l10)} sells for $<input class="field" type="number" inputmode="decimal" min="0" step="0.01" data-b10="${i}" value="${dollars(x.p10)}" placeholder="${gp?.p10 ? dollars(gp.p10) + " (PPT)" : "from sold"}"></label>
             <label class="f">${esc(co)} ${esc(l9)} sells for $<input class="field" type="number" inputmode="decimal" min="0" step="0.01" data-b9="${i}" value="${dollars(x.p9)}" placeholder="${gp?.p9 ? dollars(gp.p9) + " (PPT)" : "blank = raw price"}"></label></div>
-          ${gp ? `<p class="muted small" style="margin:0">PokemonPriceTracker, last 90 days: ${esc(l10)} ${gp.p10 ? `${money(gp.p10)} (${gp.n10} sold${gp.l10 ? `, last ${fmtDay(gp.l10)}` : ""})` : "no sales"} · ${esc(l9)} ${gp.p9 ? `${money(gp.p9)} (${gp.n9} sold)` : "no sales"}.${gp.n10 && gp.n10 < 3 ? ` <span class="warn">Only ${gp.n10} sale${gp.n10 === 1 ? "" : "s"}: check the sold links.</span>` : ""} Type a price to use your own.</p>` : GR ? `<p class="muted small" style="margin:0">No ${esc(co)} sales on PokemonPriceTracker for this one yet. Use the sold links.</p>` : ""}
+          ${gp ? `<p class="muted small" style="margin:0">PokemonPriceTracker sold prices: ${esc(l10)} ${gp.p10 ? `${money(gp.p10)} (${gp.n10} sold${gp.l10 ? `, last ${fmtDay(gp.l10)}` : ""})` : "no sales"} · ${esc(l9)} ${gp.p9 ? `${money(gp.p9)} (${gp.n9} sold)` : gp.skip9 ? `<span class="warn">${SKIP_WHY[gp.skip9]}</span>` : "no sales"}.${gp.n10 && gp.n10 < 3 ? ` <span class="warn">Only ${gp.n10} sale${gp.n10 === 1 ? "" : "s"}: check the sold links.</span>` : ""} Type a price to use your own.</p>` : GR ? `<p class="muted small" style="margin:0">No ${esc(co)} sales on PokemonPriceTracker for this one yet. Use the sold links.</p>` : ""}
           <div class="links"><a class="btn sm" href="${soldUrl(x.n, no + " " + co + " " + l10)}" target="_blank" rel="noopener">${esc(co)} ${esc(l10)} sold ↗</a><a class="btn sm" href="${soldUrl(x.n, no + " " + co + " " + l9)}" target="_blank" rel="noopener">${esc(co)} ${esc(l9)} sold ↗</a>
             <a class="btn sm" href="https://www.pricecharting.com/search-products?q=${encodeURIComponent(cleanN(x.n))}&type=prices" target="_blank" rel="noopener">All grades ↗</a><a class="btn sm" href="https://www.gemrate.com/" target="_blank" rel="noopener">Gem rate ↗</a></div>
           <div class="kv">${e.profit != null ? `<div><span>Expected profit</span><span class="${cls(e.profit)}">${signed(Math.round(e.profit))}</span></div>
