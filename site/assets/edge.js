@@ -345,11 +345,28 @@
     const { co, l10 } = GR ? grader() : {};
     const mover = cards.filter((i) => (i.p || 0) >= 500).map((i) => ({ i, c: chg7(i.s) })).filter((x) => x.c != null).sort((a, b) => b.c - a.c)[0];
     if (!cards.length) SETD.type = "s";
+    // grading picks for this set: cards with steady PokemonPriceTracker graded sales, ranked by expected profit
+    // after fees and shipping, with each card's own odds (Grade tab → Your assumptions)
+    const GE = new Map();
+    if (GR) for (const i of cards) {
+      if (!i.p || GE.has(i.id)) continue;
+      const gp = gradedOf(i.id); if (!solid(gp)) continue;
+      GE.set(i.id, { i, gp, e: gradeEval(i.p, gp.p10, gp.p9, gp.p8, undefined, cardOdds(i.id)) });
+    }
+    const best = [...GE.values()].filter((x) => x.e.profit > 0).sort((a, b) => b.e.profit - a.e.profit);
+    const onBoard = () => new Set(S.board.map((x) => x.id));
+    const addChip = (i, ob) => ob.has(i.id) ? `<span class="chip good">On your board</span>` : `<span class="chip" data-addb="${i.id}|${gid}|${esc(i.n)}">+ Add to board</span>`;
+    const gradeWhy = ({ i, gp, e }, ob, short) => `<span class="why">${vchip(e.v)} ${short ? "" : `<b class="${cls(e.profit)}">${signed(Math.round(e.profit))}</b> to grade · `}${esc(co)} ${esc(l10)} ${money(gp.p10, gp.p10 >= 100000)} (<b>${(gp.p10 / i.p).toFixed(1)}×</b>, ${gp.n10} sold) · ${Math.round(e.od.o10 * 100)}% ${esc(l10)}s${e.od.src === "mix" ? "" : " (your setting)"} ${addChip(i, ob)}</span>`;
+    const gradeSec = !GR ? (pptKey() || !gameOk("pokemon") ? "" : `<p class="muted small" style="margin:0">Add your PokemonPriceTracker key in Mine → Settings to see which cards in this set are worth grading.</p>`)
+      : !GE.size ? "" : `<section class="sec" id="sd-grade"><div class="sec-head"><h2>Worth grading</h2>${best.length > 5 ? `<button type="button" class="more" id="sd-gall">All ${best.length}</button>` : ""}</div>
+        <p class="muted small" style="margin:0">${best.length ? `${best.length} of the ${GE.size} card${GE.size === 1 ? "" : "s"} with steady ${esc(co)} sales pay off` : `None of the ${GE.size} cards with steady ${esc(co)} sales pay off right now`} with ${esc(co)} ${esc(grader().tier[0])}, after grading fees, shipping and selling fees. Odds come from each card's own graded sales.</p>
+        ${best.length ? `<div class="list" id="sd-glist">${best.slice(0, 5).map((x) => rowHTML({ id: x.i.id, g: gid, n: x.i.n, sn: [x.i.no, x.i.r].filter(Boolean).join(" · ") }, `<b class="up">${signed(Math.round(x.e.profit))}</b><small class="muted">raw ${money(x.i.p)}</small>`, gradeWhy(x, onBoard(), true))).join("")}</div>` : ""}</section>`;
     v.innerHTML = `<a class="more" href="#sets">← All sets</a>
       <section class="sec"><h2 style="margin:0">${esc(d.n)}</h2><p class="muted small" style="margin:2px 0 0">${esc(gameLabel(d.k))}${d.pub ? ` · ${d.pub > localDay() ? "releases" : "released"} ${esc(fmtMon(d.pub))}` : ""} · ${cards.length} cards · ${sealed.length} sealed</p></section>
       <div class="tiles"><div class="tile"><span class="lab">Every card, one each</span><b>${money(value, true)}</b><small>${uniq.size} priced</small></div>
         <div class="tile"><span class="lab">Top card</span><b>${top?.p ? money(top.p, true) : "—"}</b><small>${esc(top ? cleanN(top.n) : "")}</small></div>
         <div class="tile"><span class="lab">Up most, 7 days</span><b class="${mover ? cls(mover.c) : ""}">${mover ? pct(mover.c) : "—"}</b><small>${esc(mover ? cleanN(mover.i.n) : "Needs a week of prices")}</small></div></div>
+      ${gradeSec}
       <div id="sd-type"></div><div class="searchbox"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
         <input id="sdq" class="field" type="search" placeholder="Card name, number or rarity" autocomplete="off" aria-label="Search this set" value=""></div>
       <div id="sd-sort"></div><div id="sd-list"></div>`;
@@ -359,11 +376,14 @@
       const q = SETD.q.trim().toLowerCase();
       let rows = (SETD.type === "s" ? sealed : cards).filter((i) => !q || (i.n + " " + (i.no || "") + " " + (i.r || "")).toLowerCase().includes(q)).map((i) => ({ i, c: chg7(i.s) }));
       if (SETD.sort === "up" || SETD.sort === "down") rows = rows.filter((x) => x.c != null);
+      if (SETD.sort === "grade") rows = rows.filter((x) => GE.has(x.i.id));
+      const ob = onBoard();
       rows.sort({ price: (a, b) => (b.i.p || 0) - (a.i.p || 0), up: (a, b) => b.c - a.c, down: (a, b) => a.c - b.c,
+        grade: (a, b) => GE.get(b.i.id).e.profit - GE.get(a.i.id).e.profit,
         num: (a, b) => num(a.i.no) - num(b.i.no) || String(a.i.no).localeCompare(String(b.i.no)) }[SETD.sort]);
       const out = rows.slice(0, SETD.n).map(({ i, c }) => {
-        const gp = GR && i.t === "c" ? gradedOf(i.id) : null;
-        const extra = gp?.p10 ? `<span class="why">${esc(co)} ${esc(l10)} ${money(gp.p10, gp.p10 >= 100000)}${i.p ? ` · <b>${(gp.p10 / i.p).toFixed(1)}×</b>` : ""} · ${gp.n10} sold in 90 days</span>` : "";
+        const gp = GR && i.t === "c" ? gradedOf(i.id) : null, ge = i.t === "c" ? GE.get(i.id) : null;
+        const extra = ge ? gradeWhy(ge, ob) : gp?.p10 ? `<span class="why">${esc(co)} ${esc(l10)} ${money(gp.p10, gp.p10 >= 100000)}${i.p ? ` · <b>${(gp.p10 / i.p).toFixed(1)}×</b>` : ""} · ${gp.n10} sold in 90 days</span>` : "";
         return rowHTML({ id: i.id, g: gid, n: i.n, sn: [i.no, i.r].filter(Boolean).join(" · ") },
           `<b>${i.p ? money(i.p) : "—"}</b>${c != null ? `<small class="${cls(c)}">${pct(c)} 7d</small>` : i.lo ? `<small class="muted">low ${money(i.lo)}</small>` : ""}`, extra);
       });
@@ -372,7 +392,19 @@
       const more = $("#sd-more"); if (more) more.onclick = () => { SETD.n += 200; draw(); };
     };
     seg($("#sd-type"), [["c", `Cards (${cards.length})`], ["s", `Sealed (${sealed.length})`]], SETD.type, (k) => { SETD.type = k; SETD.n = 120; draw(); });
-    seg($("#sd-sort"), [["price", "Price"], ["up", "Up 7d"], ["down", "Down 7d"], ["num", "Number"]], SETD.sort, (k) => { SETD.sort = k; draw(); });
+    if (SETD.sort === "grade" && !GE.size) SETD.sort = "price";
+    const sortSeg = () => seg($("#sd-sort"), [["price", "Price"], ...(GE.size ? [["grade", "Grade it"]] : []), ["up", "Up 7d"], ["down", "Down 7d"], ["num", "Number"]], SETD.sort, (k) => { SETD.sort = k; draw(); });
+    sortSeg();
+    const gall = $("#sd-gall"); if (gall) gall.onclick = () => { SETD.type = "c"; SETD.sort = "grade"; SETD.n = 120;
+      seg($("#sd-type"), [["c", `Cards (${cards.length})`], ["s", `Sealed (${sealed.length})`]], SETD.type, (k) => { SETD.type = k; SETD.n = 120; draw(); }); sortSeg(); draw(); $("#sd-type").scrollIntoView({ behavior: "smooth" }); };
+    // + Add to board chips (in the picks and the card list) don't open the card
+    const addb = (e) => {
+      const b = e.target.closest("[data-addb]"); if (!b) return;
+      e.stopPropagation();
+      const [id, g, ...n] = b.dataset.addb.split("|"); boardAdd({ id: +id, g: +g, n: n.join("|") }); toast("Added to your grading board");
+      v.querySelectorAll(`[data-addb^="${id}|"]`).forEach((c) => { c.outerHTML = `<span class="chip good">On your board</span>`; });
+    };
+    ["#sd-list", "#sd-glist"].forEach((sel) => $(sel)?.addEventListener("click", addb, true));
     let t; $("#sdq").oninput = (e) => { clearTimeout(t); t = setTimeout(() => { SETD.q = e.target.value; SETD.n = 120; draw(); }, 140); };
     draw();
   }
