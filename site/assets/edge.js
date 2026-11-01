@@ -53,7 +53,15 @@
   const daysAgo = (d) => d ? Math.max(0, Math.round((Date.now() - Date.parse(d + "T12:00:00")) / 864e5)) : null;
   const IMG = (id, size = 200) => `https://tcgplayer-cdn.tcgplayer.com/product/${encodeURIComponent(id)}_${size === 1000 ? "in_1000x1000" : size + "w"}.jpg`;
   const img = (id, size = V2 ? 400 : 200) => `<img src="${IMG(id, size)}" alt="" loading="lazy" decoding="async" data-img>`;
-  document.addEventListener("error", (e) => { if (e.target?.matches?.("img[data-img]")) { const d = document.createElement("div"); d.className = "ph"; e.target.replaceWith(d); } }, true);
+  // no photo yet (a brand-new variant, e.g. a Signature card): show the same card's other version, like the market site
+  document.addEventListener("error", (e) => {
+    const el = e.target; if (!el?.matches?.("img[data-img]")) return;
+    const none = () => { const d = document.createElement("div"); d.className = "ph"; el.replaceWith(d); };
+    const m = el.src.match(/\/product\/(\d+)_(in_1000x1000|\d+w)\.jpg/), hops = +(el.dataset.hops || 0);
+    if (!m || hops >= 2) return none();
+    el.dataset.hops = hops + 1;
+    getJSON("img-alt.json").then((a) => { const n = a[m[1]]; if (n) el.src = IMG(n, m[2] === "in_1000x1000" ? 1000 : parseInt(m[2])); else none(); }, none);
+  }, true);
   const tcgUrl = (id) => `https://www.tcgplayer.com/product/${id}?Language=all`;
   const soldUrl = (n, extra = "") => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent((cleanN(n).replace(/ \(Reverse Holofoil\)$/, "") + " " + extra).trim())}&LH_Sold=1&LH_Complete=1&_sop=13`;
   const COND = [["NM", 1], ["LP", 0.85], ["MP", 0.7], ["HP", 0.55], ["DMG", 0.4]];
