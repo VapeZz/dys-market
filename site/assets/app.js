@@ -405,6 +405,9 @@ async function pageIndex() {
   const horizon = new Date(Date.now() + 45 * 864e5).toISOString().slice(0, 10);
   $("#newsets").innerHTML = allSets.filter((s) => s.pub && s.pub <= horizon && !SPECIAL.test(s.n) && (s.lg || s.bbId || s.tc?.length))
     .sort((a, b) => b.pub.localeCompare(a.pub)).slice(0, 12).map((s) => setTile(s, meta.updated)).join("");
+  if (V2) $("#newsets").addEventListener("load", (e) => {   // new layout: a set whose picture isn't out yet is left off
+    if (e.target.tagName === "IMG" && e.target.src.startsWith("data:")) { const t = e.target.closest(".stile"); if (t) t.style.display = "none"; }
+  }, true);
   moversPanel($("#card-movers"), { kind: "cards", meta, limit: V2 ? 6 : 5 });
   moversPanel($("#sealed-movers"), { kind: "sealed", meta, limit: V2 ? 6 : 5 });
   getJSON("wanted.json").then((w) => {
