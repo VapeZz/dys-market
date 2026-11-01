@@ -33,7 +33,11 @@ jobs:
                   try:
                       pg.goto("https://market.driveyourstyle.net/" + path, wait_until="networkidle", timeout=45000)
                       pg.wait_for_timeout(2500)
-                      pg.screenshot(path=f"/tmp/shots/{name}.jpg", type="jpeg", quality=70, full_page=True)
+                      h = pg.evaluate("document.documentElement.scrollHeight")
+                      if h > 6000:   # very long pages: just the top 6000px (JPEG can't hold a huge page)
+                          pg.screenshot(path=f"/tmp/shots/{name}.jpg", type="jpeg", quality=70, full_page=True, clip={"x": 0, "y": 0, "width": 390, "height": 6000})
+                      else:
+                          pg.screenshot(path=f"/tmp/shots/{name}.jpg", type="jpeg", quality=70, full_page=True)
                       print(f"::notice title=shot::{name} ok")
                   except Exception as e:
                       print(f"::warning title=shot::{name} {e}")
