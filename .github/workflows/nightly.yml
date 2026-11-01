@@ -149,6 +149,7 @@ jobs:
         run: |
           python tools/graded.py site data/graded 2>&1 | tee /tmp/graded.log
           echo "::notice title=Graded::$(tail -n 1 /tmp/graded.log)"
+          python tools/psapop.py site data/psapop --publish-only 2>&1 | tail -n 1 || true
 
       - name: eBay Buy It Now prices (cache only; ebay.yml refreshes)
         continue-on-error: true

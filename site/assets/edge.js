@@ -422,7 +422,7 @@
     const best = [...GE.values()].filter((x) => x.e.profit > 0).sort((a, b) => b.e.profit - a.e.profit);
     const onBoard = () => new Set(S.board.map((x) => x.id));
     const addChip = (i, ob) => ob.has(i.id) ? `<span class="chip good">On your board</span>` : `<span class="chip" data-addb="${i.id}|${gid}|${esc(i.n)}">+ Add to board</span>`;
-    const gradeWhy = ({ i, gp, e }, ob, short) => `<span class="why">${vchip(e.v)} ${short ? "" : `<b class="${cls(e.profit)}">${signed(Math.round(e.profit))}</b> to grade · `}${esc(co)} ${esc(l10)} ${money(gp.p10, gp.p10 >= 100000)} (<b>${(gp.p10 / i.p).toFixed(1)}×</b>, ${gp.n10} sold) · ${Math.round(e.od.o10 * 100)}% ${esc(l10)}s${e.od.src === "mix" ? "" : " (your setting)"} ${addChip(i, ob)}</span>`;
+    const gradeWhy = ({ i, gp, e }, ob, short) => `<span class="why">${vchip(e.v)} ${short ? "" : `<b class="${cls(e.profit)}">${signed(Math.round(e.profit))}</b> to grade · `}${esc(co)} ${esc(l10)} ${money(gp.p10, gp.p10 >= 100000)} (<b>${(gp.p10 / i.p).toFixed(1)}×</b>, ${gp.n10} sold) · ${Math.round(e.od.o10 * 100)}% ${esc(l10)}s${odTag(e.od)} ${addChip(i, ob)}</span>`;
     const gradeSec = !GR ? (pptKey() || !gameOk("pokemon") ? "" : `<p class="muted small" style="margin:0">Add your PokemonPriceTracker key in Mine → Settings to see which cards in this set are worth grading.</p>`)
       : !GE.size ? "" : `<section class="sec" id="sd-grade"><div class="sec-head"><h2>Worth grading</h2>${best.length > 5 ? `<button type="button" class="more" id="sd-gall">All ${best.length}</button>` : ""}</div>
         <p class="muted small" style="margin:0">${best.length ? `${best.length} of the ${GE.size} card${GE.size === 1 ? "" : "s"} with steady ${esc(co)} sales pay off` : `None of the ${GE.size} cards with steady ${esc(co)} sales pay off right now`} with ${esc(co)} ${esc(grader().tier[0])}, after grading fees, shipping and selling fees. Odds come from each card's own graded sales.</p>
@@ -803,8 +803,18 @@
     const b = odds(), w = n / (n + 10), o10 = w * n10 / n + (1 - w) * b.o10;
     return { o10, o9: Math.min(1 - o10, w * n9 / n + (1 - w) * b.o9), mine: false, src: "mix", n, s10: n10 / n, s9: n9 / n };
   }
-  const cardOdds = (id) => (S.set.useMix !== false && id != null && mixOf(id)) || odds();
-  const oddsText = (od) => `${Math.round(od.o10 * 100)}% ${grader().l10}s, ${Math.round(od.o9 * 100)}% ${grader().l9}s · ${od.src === "mix" ? `from this card's ${od.n} graded sales` : od.src === "mine" ? "your graded results" : S.set.useMix === false ? "your setting (per-card odds are off under Your assumptions)" : "your setting (not enough sales for this card)"}`;
+  /* PSA population: the real share of every copy PSA has graded that came back 10 / 9 (PSA grader only).
+     Beats the sales mix when there are enough graded copies; small populations lean toward your setting. */
+  const POP_MIN = 20;
+  function popOf(id) {
+    if (grader().co !== "PSA") return null;
+    const c = POP?.c?.[id]; if (!c || c[1] < POP_MIN) return null;
+    const [, n, n10, n9] = c, b = odds(), w = n / (n + 20), o10 = w * n10 / n + (1 - w) * b.o10;
+    return { o10, o9: Math.min(1 - o10, w * n9 / n + (1 - w) * b.o9), mine: false, src: "pop", n, s10: n10 / n, s9: n9 / n, at: c[0] };
+  }
+  const cardOdds = (id) => (S.set.useMix !== false && id != null && (popOf(id) || mixOf(id))) || odds();
+  const odTag = (od) => od.src === "pop" ? " (PSA pop)" : od.src === "mix" ? "" : " (your setting)";
+  const oddsText = (od) => `${Math.round(od.o10 * 100)}% ${grader().l10}s, ${Math.round(od.o9 * 100)}% ${grader().l9}s · ${od.src === "pop" ? `PSA population: ${Math.round(od.s10 * 100)}% of ${od.n.toLocaleString()} graded copies are 10s (as of ${fmtDay(od.at)})` : od.src === "mix" ? `from this card's ${od.n} graded sales` : od.src === "mine" ? "your graded results" : S.set.useMix === false ? "your setting (per-card odds are off under Your assumptions)" : "your setting (not enough sales for this card)"}`;
   function grader() {
     const co = FEES.graders[S.set.gco] ? S.set.gco : "PSA", gr = FEES.graders[co];
     const ti = Math.min(gr.tiers.length - 1, Math.max(0, +(S.set.gtier[co] ?? 0) || 0));
@@ -834,7 +844,7 @@
      which stays on this phone and out of backup files. */
   const PKEY = "dys-edge-ppt";
   const pptKey = () => { try { return (localStorage.getItem(PKEY) || "").replace(/\s+/g, ""); } catch { return ""; } };   // keys never contain spaces; pasted ones sometimes do
-  let GR = null, GRP = null, GR_ERR = "";
+  let GR = null, GRP = null, GR_ERR = "", POP = null;   // POP: PSA population for the owner's top grading candidates (tools/psapop.py)
   const GK = { PSA: ["psa10", "psa9", "psa8"], CGC: ["cgc10", "cgc9", null], BGS: ["bgs9_5", "bgs9", null], TAG: ["tag10", "tag9", null] };
   const GNAME = [["psa10", "PSA 10"], ["psa9", "PSA 9"], ["psa8", "PSA 8"], ["cgc10", "CGC 10"], ["cgc9_5", "CGC 9.5"], ["cgc9", "CGC 9"], ["bgs10", "BGS 10"], ["bgs9_5", "BGS 9.5"], ["bgs9", "BGS 9"], ["tag10", "TAG 10"], ["tag9", "TAG 9"]];
   function loadGraded() {
@@ -850,7 +860,15 @@
       try { plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b.slice(7, 19), additionalData: M }, ck, b.slice(19)); }
       catch { GR_ERR = "key"; return null; }
       GR = JSON.parse(await new Response(new Blob([plain]).stream().pipeThrough(new DecompressionStream("gzip"))).text());
-      GR_ERR = ""; return GR;
+      GR_ERR = "";
+      try {   // same key; missing until the PSA job has run
+        const r2 = await fetch(`${BASE}data/edge/psapop.enc`, { cache: "no-cache" }), b2 = r2.ok ? new Uint8Array(await r2.arrayBuffer()) : new Uint8Array(0);
+        if (b2.length > 40 && !M.some((c, i) => b2[i] !== c)) {
+          const p2 = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b2.slice(7, 19), additionalData: M }, ck, b2.slice(19));
+          POP = JSON.parse(await new Response(new Blob([p2]).stream().pipeThrough(new DecompressionStream("gzip"))).text());
+        }
+      } catch { POP = null; }
+      return GR;
     })().catch(() => { GR_ERR ||= "load"; return null; }));
   }
   /* Grade prices that can't be right are left out of every calculation (they still show, marked):
@@ -924,7 +942,7 @@
     const html = `<details class="panel" id="g-asm"><summary><b>Your assumptions</b> <span class="muted small">${esc(co)} ${esc(gr.tiers[ti][0])} · ${S.set.useMix !== false && GR ? "odds per card from its sales" : `${Math.round(o.o10 * 100)}% 10s, ${Math.round(o.o9 * 100)}% 9s${o.mine ? " (your results)" : ""}`} · sell on ${esc(plat().label)}</span></summary>
       <div class="form" style="margin-top:12px"><label class="f">Grading company<select class="select" id="ga-co">${Object.keys(FEES.graders).map((c) => `<option${c === co ? " selected" : ""}>${c}</option>`).join("")}</select></label>
         <label class="f full">Service level<select class="select" id="ga-tier">${gr.tiers.map((t, i) => `<option value="${i}"${i === ti ? " selected" : ""}>${esc(tierLabel(t))}</option>`).join("")}</select></label>
-        <label class="toggle full"><input type="checkbox" id="ga-mix"${S.set.useMix !== false ? " checked" : ""}${GR ? "" : " disabled"}> Odds per card from its graded sales: the share of its last-90-day ${esc(co)} sales that were ${esc(GL[co][0])}s and ${esc(GL[co][1])}s (cards with ${MIX_MIN}+ sales). Runs a bit high, since people sell their 10s more often.${GR ? "" : " Needs your PokemonPriceTracker key."}</label>
+        <label class="toggle full"><input type="checkbox" id="ga-mix"${S.set.useMix !== false ? " checked" : ""}${GR ? "" : " disabled"}> Odds per card from its graded sales: the share of its last-90-day ${esc(co)} sales that were ${esc(GL[co][0])}s and ${esc(GL[co][1])}s (cards with ${MIX_MIN}+ sales). Runs a bit high, since people sell their 10s more often. When PSA's population is in (top grading candidates, about 45 new cards a day), PSA odds use its real gem rate instead.${GR ? "" : " Needs your PokemonPriceTracker key."}</label>
         <p class="muted small full" style="margin:0">${S.set.useMix !== false && GR ? "For cards with too few sales:" : "Your odds:"}</p>
         <label class="f">Chance of a ${esc(GL[co][0])}: <b id="ga-o10v">${S.set.o10}%</b><input type="range" id="ga-o10" min="5" max="90" step="5" value="${S.set.o10}"${o.mine ? " disabled" : ""}></label>
         <label class="f">Chance of a ${esc(GL[co][1])}: <b id="ga-o9v">${S.set.o9}%</b><input type="range" id="ga-o9" min="0" max="90" step="5" value="${S.set.o9}"${o.mine ? " disabled" : ""}></label>
@@ -1032,7 +1050,7 @@
       const out = rows.slice(0, 80).map(({ r, gp, e }) => { const k = keyOf(r[0], r[2]), be = e.be10;
         const add = onBoard.has(k) ? `<span class="chip good">On your board</span>` : `<span class="chip" data-addb="${r[0]}|${r[1]}|${esc(r[2])}">+ Add to board</span>`;
         return gp ? rowHTML({ id: r[0], g: r[1], n: r[2] }, `<b class="${cls(e.profit)}">${signed(Math.round(e.profit))}</b><small class="muted">raw ${money(r[3])} · ${esc(l10)} ${money(gp.p10, gp.p10 >= 100000)}</small>`,
-            `<span class="why">${vchip(e.v)} <b>${(gp.p10 / r[3]).toFixed(1)}×</b> · ${Math.round(e.od.o10 * 100)}% ${esc(l10)}s${e.od.src === "mix" ? "" : " (your setting)"} · ${gp.n10} sold in 90 days${gp.l10 ? `, last ${fmtDay(gp.l10)}` : ""}${gp.p9 ? ` · ${esc(grader().l9)} ${money(gp.p9)}` : ""} ${add}${gp.p10 > 40 * r[3] ? `<span class="risk">a ${esc(l10)} at ${Math.round(gp.p10 / r[3])}× raw is unusual. Check the sold listings: they may include a 1st Edition, shadowless or other printing.</span>` : ""}</span>`)
+            `<span class="why">${vchip(e.v)} <b>${(gp.p10 / r[3]).toFixed(1)}×</b> · ${Math.round(e.od.o10 * 100)}% ${esc(l10)}s${odTag(e.od)} · ${gp.n10} sold in 90 days${gp.l10 ? `, last ${fmtDay(gp.l10)}` : ""}${gp.p9 ? ` · ${esc(grader().l9)} ${money(gp.p9)}` : ""} ${add}${gp.p10 > 40 * r[3] ? `<span class="risk">a ${esc(l10)} at ${Math.round(gp.p10 / r[3])}× raw is unusual. Check the sold listings: they may include a 1st Edition, shadowless or other printing.</span>` : ""}</span>`)
           : rowHTML({ id: r[0], g: r[1], n: r[2] }, `<b>${money(r[3])}</b><small class="muted">${esc(grader().co + " " + l10)} needs ${!isFinite(be) ? "—" : `${money(Math.round(be), be >= 100000)} (${(be / r[3]).toFixed(0)}×)`}</small>`, `<span class="why">${add}</span>`); });
       $("#fd-list").innerHTML = (FIND.mult && rows.length ? `<p class="muted small" style="margin:0">${rows.length} card${rows.length === 1 ? "" : "s"} where a ${esc(grader().co + " " + l10)} sells for ${FIND.mult}×+ raw${FIND.liquid ? " and trades often" : ""}. A big multiple on a cheap card can still lose money once fees are in: the green number is profit after grading fees, shipping, selling fees and your grade odds.</p>` : "")
         + listOrEmpty(out, FIND.mult ? `No cards at ${FIND.mult}×+ yet${FIND.liquid ? " that trade often" : ""}. Graded prices for $1–$20 cards fill in over the next few days; try again soon, lower the multiple, or turn off Liquid only.` : sort === "profit" ? "No cards with enough graded sales match. Widen the price range, switch era or games, or sort by Most valuable." : "No cards match. Widen the price range or switch games.") + (rows.length > 80 ? `<p class="muted small">Showing 80 of ${rows.length}. Narrow it with search or price.</p>` : "");
@@ -1182,7 +1200,7 @@
       if (!pptKey()) { st.className = "small muted"; st.textContent = "Not set up."; return; }
       st.className = "small muted"; st.textContent = "Checking…";
       const d = await loadGraded();
-      if (d) { st.className = "small up"; st.textContent = `Unlocked: graded prices for ${Object.keys(d.c || {}).length.toLocaleString()} cards, updated ${fmtDay(d.u)}.`; return; }
+      if (d) { st.className = "small up"; st.textContent = `Unlocked: graded prices for ${Object.keys(d.c || {}).length.toLocaleString()} cards, updated ${fmtDay(d.u)}.${POP ? ` PSA population for ${Object.keys(POP.c || {}).length.toLocaleString()} cards, updated ${fmtDay(POP.u)}.` : ""}`; return; }
       st.className = "small down";
       st.textContent = { key: "That key doesn't open your graded prices yet. It has to match the key saved on GitHub (PPT_API_KEY_NEW, or PPT_API_KEY if you haven't added a new one). After you add or change it there, they unlock with the next update, within 4 hours.",
         none: "Key saved. Your graded prices aren't published yet; they arrive with the next update (every 4 hours).",
@@ -1191,9 +1209,9 @@
     $("#pp-f").onsubmit = (e) => {
       e.preventDefault(); const v = $("#pp-k").value.replace(/\s+/g, ""); if (!v) return;
       try { localStorage.setItem(PKEY, v); } catch { toast("This browser won't save it"); return; }
-      GR = null; GRP = null; GR_ERR = ""; mineSettings(el);
+      GR = null; GRP = null; GR_ERR = ""; POP = null; mineSettings(el);
     };
-    const rm = $("#pp-rm"); if (rm) rm.onclick = () => { try { localStorage.removeItem(PKEY); } catch {} GR = null; GRP = null; GR_ERR = ""; toast("Key removed from this phone"); mineSettings(el); };
+    const rm = $("#pp-rm"); if (rm) rm.onclick = () => { try { localStorage.removeItem(PKEY); } catch {} GR = null; GRP = null; GR_ERR = ""; POP = null; toast("Key removed from this phone"); mineSettings(el); };
     ppStatus();
     $("#st-f").onsubmit = (e) => {
       e.preventDefault();

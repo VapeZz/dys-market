@@ -1,0 +1,61 @@
+name: PSA population (Edge)
+
+# Daily: PSA population (grade counts) for the best grading candidates, for the owner's private DYS Edge app only.
+# PSA's free API allows 100 calls a day; their terms don't allow publishing the data, so everything is stored encrypted
+# (tools/psapop.py). Needs the PSA_TOKEN secret (made by the owner on psacard.com/publicapi/documentation).
+on:
+  schedule:
+    - cron: "40 9 * * *"
+  workflow_dispatch:
+    inputs:
+      daily:
+        description: "PSA calls allowed today (their limit is 100)"
+        default: "95"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  pop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -q cryptography
+      - name: Look up PSA populations
+        env:
+          PSA_TOKEN: ${{ secrets.PSA_TOKEN }}
+          EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
+          EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+          PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
+          PPT_API_KEY_NEW: ${{ secrets.PPT_API_KEY_NEW }}
+          PPT_API_KEY_OLD: ${{ secrets.PPT_API_KEY_OLD }}
+          PSA_DAILY: ${{ inputs.daily || '95' }}
+        run: |
+          set -e
+          R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git clone -q --depth 1 --branch data "$R" /tmp/db
+          git clone -q --depth 1 --branch gh-pages "$R" /tmp/pages
+          python tools/psapop.py /tmp/pages /tmp/db/data/psapop | tee /tmp/p.log
+          for d in /tmp/db /tmp/pages; do
+            git -C $d config user.name "dys-market-bot"; git -C $d config user.email "dys-market-bot@users.noreply.github.com"
+          done
+          git -C /tmp/db add data/psapop && (git -C /tmp/db diff --cached --quiet || (git -C /tmp/db commit -q -m "PSA pop $(date -u +%F)" && git -C /tmp/db push -q origin data))
+          # gh-pages is rebuilt by other jobs: put just our file on top of the latest
+          cp /tmp/pages/data/edge/psapop.enc /tmp/psapop.enc
+          for i in 1 2 3; do
+            git -C /tmp/pages fetch -q origin gh-pages && git -C /tmp/pages reset -q --hard origin/gh-pages
+            mkdir -p /tmp/pages/data/edge && cp /tmp/psapop.enc /tmp/pages/data/edge/psapop.enc
+            git -C /tmp/pages add data/edge/psapop.enc
+            git -C /tmp/pages diff --cached --quiet && break
+            git -C /tmp/pages commit -q -m "PSA pop $(date -u +%F)" && git -C /tmp/pages push -q origin gh-pages && break
+            sleep 5
+          done
+          echo "::notice title=PSA pop::$(tail -n 1 /tmp/p.log)"
