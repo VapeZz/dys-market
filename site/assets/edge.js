@@ -68,7 +68,7 @@
   const KEY = "dys-edge-v1";
   const DEF = { inv: [], watch: [], trade: { give: [], get: [] }, lot: [], lotExtra: 0, recent: [], board: [], sub: [], glog: [],
     set: { platform: "ebay", roi: 20, shipCard: 100, shipCard50: 500, shipSealed: 800, shipSealed100: 1500, buyCard: 150, buySealed: 600, cash: 70, trade: 85, game: "pokemon",
-      gradeShip: 1500, gco: "PSA", gtier: {}, o10: 30, o9: 50, useMyRates: false, useMix: true, boxShip: 4000 } };
+      gradeShip: 1500, gco: "PSA", gtier: {}, o10: 40, o9: 45, oddsV: 2, useMyRates: false, useMix: true, boxShip: 4000 } };
   const clone = (o) => JSON.parse(JSON.stringify(o));
   const load = () => {
     try {
@@ -80,6 +80,10 @@
   };
   let S = load();
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} };
+  /* one-time reset of the fallback grading odds to 40% 10s / 45% 9s (Oct 2026): GemRate puts TCG submissions
+     at about a 50% gem rate and PSA overall at 43%, on cards owners already picked as likely 10s, so a little under
+     that suits raw near-mint buys. Per-card odds from each card's own sales come first. */
+  if ((S.set.oddsV || 0) < 2) { Object.assign(S.set, { o10: 40, o9: 45, oddsV: 2, useMix: true }); save(); }
   const hasPkm = () => { const g = (GAMES[S.set.game] || GAMES.pokemon)[1]; return !g || g.some((x) => x.startsWith("pokemon")); };   // graded sold prices are Pokémon only
   const gameOk = (k) => { const g = (GAMES[S.set.game] || GAMES.pokemon)[1]; return !g || g.includes(k); };
   // the game picker: a dropdown (too many games for a row of buttons)
@@ -633,7 +637,7 @@
   /* ---------- Tools ---------- */
   const FLIP = { buy: "", sell: "", t: "c", plat: null };
   const GRADE = { raw: "", p10: "", p9: "", p8: "", cond: "nm", tier: "0", name: "", no: "", plat: null };
-  const ODDS = { fresh: [55, 35, "Pack fresh"], nm: [30, 50, "Near mint"], lp: [5, 35, "Light play"] };
+  const ODDS = { fresh: [55, 35, "Pack fresh"], nm: [40, 45, "Near mint"], lp: [5, 35, "Light play"] };
   async function viewTools(v) {
     v.innerHTML = `<div id="t-seg"></div><div id="t-body"></div>`;
     const draw = () => { const el = fresh($("#t-body")); ({ flip: toolFlip, lot: toolLot, trade: toolTrade, grade: toolGrade, fees: toolFees, cert: toolCert }[SUB.tools] || toolFlip)(el); };
