@@ -49,6 +49,7 @@ jobs:
           done
           git -C /tmp/db add data/psapop && (git -C /tmp/db diff --cached --quiet || (git -C /tmp/db commit -q -m "PSA pop $(date -u +%F)" && git -C /tmp/db push -q origin data))
           # gh-pages is rebuilt by other jobs: put just our file on top of the latest
+          [ -f /tmp/pages/data/edge/psapop.enc ] || { echo "::notice title=PSA pop::$(tail -n 1 /tmp/p.log)"; exit 0; }
           cp /tmp/pages/data/edge/psapop.enc /tmp/psapop.enc
           for i in 1 2 3; do
             git -C /tmp/pages fetch -q origin gh-pages && git -C /tmp/pages reset -q --hard origin/gh-pages
