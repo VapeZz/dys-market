@@ -23,7 +23,7 @@ jobs:
           LIST: ${{ inputs.list }}
         run: |
           set -e
-          pip install -q "rembg[cpu]==2.0.67" pillow-avif-plugin > /dev/null 2>&1 || pip install -q "rembg[cpu]" pillow-avif-plugin
+          pip install -q "rembg[cpu]==2.0.67" pillow-avif-plugin scipy > /dev/null 2>&1 || pip install -q "rembg[cpu]" pillow-avif-plugin scipy
           python tools/cutouts.py /tmp/cut | tee /tmp/cut.log
           echo "::notice title=Cut-outs::$(tail -n 1 /tmp/cut.log)"
           R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"

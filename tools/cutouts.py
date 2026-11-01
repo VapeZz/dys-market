@@ -22,6 +22,28 @@ os.makedirs(out, exist_ok=True)
 items = json.loads(os.environ["LIST"])
 sess = new_session("isnet-general-use")
 report, pairs = [], []
+# Packaged products (official shots on pure white): the AI model keeps the artwork's characters and drops
+# the box, so for these only the white around the product is removed (white connected to the photo's edge).
+WHITE_KINDS = {"Sealed", "OnePiece"}
+
+
+def white_out(rgba):
+    import numpy as np
+    from scipy import ndimage
+    a = np.asarray(rgba.convert("RGB")).astype(np.int16)
+    lo, hi = a.min(axis=2), a.max(axis=2)
+    whiteish = (lo >= 243) & (hi - lo <= 12)
+    lab, _ = ndimage.label(whiteish)
+    edge = np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))
+    bg = np.isin(lab, edge[edge > 0])
+    fg = ~bg
+    fg = ndimage.binary_opening(fg, iterations=1)            # drop specks
+    fg = ndimage.binary_fill_holes(fg) | (fg & ~bg)          # keep white areas inside the product
+    # soft edge without a white halo: shrink one pixel, then feather
+    core = ndimage.binary_erosion(fg, iterations=1)
+    alpha = ndimage.gaussian_filter(core.astype(np.float32), 0.7)
+    out = np.dstack([a.astype(np.uint8), (np.clip(alpha, 0, 1) * 255).astype(np.uint8)])
+    return Image.fromarray(out, "RGBA")
 
 
 def get(url):
@@ -39,6 +61,8 @@ for it in items:
         clear = sum(1 for v in alpha.getdata() if v < 250) / (rgba.width * rgba.height)
         if clear > 0.05:
             cut, how = rgba, "already transparent"
+        elif it.get("k") in WHITE_KINDS:
+            cut, how = white_out(rgba), "white background removed"
         else:
             cut, how = remove(rgba, session=sess, post_process_mask=True), "removed"
         mask = cut.getchannel("A").point(lambda v: 255 if v > 16 else 0)
