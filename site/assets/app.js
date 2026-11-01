@@ -111,6 +111,17 @@ function storeUrl(href, where) {
   if (where) u.searchParams.set("utm_content", where);
   return u.toString();
 }
+function tagLink(a) {
+  if (a.dataset.aff || !/^https?:/.test(a.getAttribute("href") || "")) return;
+  const st = storeUrl(a.href, a.dataset.where || "");
+  if (st !== a.href) { a.href = st; a.dataset.aff = "1"; return; }
+  if (!AFF_ON) return;
+  const n = affUrl(a.href); if (n !== a.href) { a.href = n; a.rel = "noopener sponsored"; a.dataset.aff = "1"; }
+}
+const tagAll = (root) => { if (root.tagName === "A") tagLink(root); root.querySelectorAll?.('a[href^="http"]').forEach(tagLink); };
+new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) tagAll(n); })
+  .observe(document.documentElement, { childList: true, subtree: true });
+document.addEventListener("DOMContentLoaded", () => tagAll(document));
 ["click", "auxclick", "contextmenu"].forEach((ev) => document.addEventListener(ev, (e) => {
   const a = e.target.closest && e.target.closest("a[href^='http']"); if (!a || a.dataset.aff) return;
   const st = storeUrl(a.href, a.dataset.where || "");
@@ -821,6 +832,7 @@ async function pageProduct() {
           <button class="btn" id="addcol" type="button"></button>
           <button class="btn" id="sellit" type="button" title="Get a cash or store-credit offer from Drive Your Style">💵 Sell to us</button>
           <a class="btn" href="https://www.tcgplayer.com/product/${id}" target="_blank" rel="noopener">View on TCGplayer ↗</a>
+          ${v.t === "s" ? `<a class="btn" href="https://www.amazon.com/s?k=${encodeURIComponent(v.n.replace(/\s*\[.*?\]|\(.*?\)/g, "").trim())}" target="_blank" rel="noopener">Check Amazon ↗</a>` : ""}
           <a class="btn" href="compare.html?a=${id}:${set.id}">Compare ⇄</a>
           <button class="btn" id="watch" type="button"></button></div>
         <div class="chart-card"><div class="chart-head"><b>Price history</b><div id="range"></div></div><div class="chart" id="chart"></div>
