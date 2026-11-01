@@ -399,7 +399,8 @@
   }
   async function viewSet(v, gid) {
     v.innerHTML = `<p class="muted">Loading set…</p>`;
-    const [d] = await Promise.all([getJSON(`set/${gid}.json`), loadGraded()]);
+    const [d, allSets] = await Promise.all([getJSON(`set/${gid}.json`), getJSON("sets.json").catch(() => []), loadGraded()]);
+    const sx = allSets.find((x) => x.id === gid) || {};
     const cards = d.items.filter((i) => i.t === "c"), sealed = d.items.filter((i) => i.t === "s");
     const uniq = new Map(); for (const i of cards) if (i.p && !uniq.has(i.id)) uniq.set(i.id, i.p);
     const value = [...uniq.values()].reduce((a, b) => a + b, 0), top = cards.reduce((a, b) => (b.p || 0) > (a?.p || 0) ? b : a, null);
@@ -423,6 +424,7 @@
         <p class="muted small" style="margin:0">${best.length ? `${best.length} of the ${GE.size} card${GE.size === 1 ? "" : "s"} with steady ${esc(co)} sales pay off` : `None of the ${GE.size} cards with steady ${esc(co)} sales pay off right now`} with ${esc(co)} ${esc(grader().tier[0])}, after grading fees, shipping and selling fees. Odds come from each card's own graded sales.</p>
         ${best.length ? `<div class="list" id="sd-glist">${best.slice(0, 5).map((x) => rowHTML({ id: x.i.id, g: gid, n: x.i.n, sn: [x.i.no, x.i.r].filter(Boolean).join(" · ") }, `<b class="up">${signed(Math.round(x.e.profit))}</b><small class="muted">raw ${money(x.i.p)}</small>`, gradeWhy(x, onBoard(), true))).join("")}</div>` : ""}</section>`;
     v.innerHTML = `<a class="more" href="#sets">← All sets</a>
+      ${sx.lg || sx.bbId ? `<div class="set-hero${sx.lg ? " logo" : ""}">${sx.lg ? `<img src="${esc(sx.lg)}" alt="${esc(d.n)} logo" onerror="this.parentNode.remove()">` : img(sx.bbId, 1000)}</div>` : ""}
       <section class="sec"><h2 style="margin:0">${esc(d.n)}</h2><p class="muted small" style="margin:2px 0 0">${esc(gameLabel(d.k))}${d.pub ? ` · ${d.pub > localDay() ? "releases" : "released"} ${esc(fmtMon(d.pub))}` : ""} · ${cards.length} cards · ${sealed.length} sealed</p></section>
       <div class="tiles"><div class="tile"><span class="lab">Every card, one each</span><b>${money(value, true)}</b><small>${uniq.size} priced</small></div>
         <div class="tile"><span class="lab">Top card</span><b>${top?.p ? money(top.p, true) : "—"}</b><small>${esc(top ? cleanN(top.n) : "")}</small></div>
