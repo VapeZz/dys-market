@@ -655,7 +655,7 @@ a:focus-visible{{outline:2px solid var(--ink);outline-offset:3px}}
 def main():
     for page, (title, desc, body) in PAGES.items():
         canon = "" if page == "index" else f"{page}.html"
-        hidden = ("importer", "demand", "buyer", "tools") + (() if GIVEAWAY_ON else ("giveaway",))   # tools: preview of the new layout, not indexed yet
+        hidden = ("importer", "demand", "buyer") + (() if GIVEAWAY_ON else ("giveaway",))
         head = HEAD.replace("<link rel=\"canonical\"", "<meta name=\"robots\" content=\"noindex\">\n<link rel=\"canonical\"") if page in hidden else HEAD
         if page == "index":   # impact.com site ownership check
             head = head.replace('<meta name="theme-color" content="#0b0d14">', '<meta name="theme-color" content="#0b0d14">\n<meta name="impact-site-verification" value="9961457d-75f1-4449-9d0a-10bb739058b9">')

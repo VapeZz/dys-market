@@ -18,13 +18,13 @@ const cleanItem = (it) => {
   return out;
 };
 const params = new URLSearchParams(location.search);
-/* new-layout preview: ?v2=1 turns it on for this browser, ?v2=0 turns it off; everyone else keeps the current layout */
+/* the current layout (5 tabs, Tools page, picture tiles); ?v2=0 brings back the old one in this browser, ?v2=1 undoes that */
 const V2 = (() => {
   try {
     if (params.get("v2") === "1") localStorage.setItem("dys-v2", "1");
-    if (params.get("v2") === "0") localStorage.removeItem("dys-v2");
-    return localStorage.getItem("dys-v2") === "1";
-  } catch (e) { return params.get("v2") === "1"; }
+    if (params.get("v2") === "0") localStorage.setItem("dys-v2", "0");
+    return localStorage.getItem("dys-v2") !== "0";
+  } catch (e) { return params.get("v2") !== "0"; }
 })();
 if (V2) document.documentElement.classList.add("v2");
 const cache = {};
@@ -218,8 +218,6 @@ function shell() {
     const v2tb = [tb[0], tb[1], tb[2], ["tools", "Tools", I('<rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/>')],
       ["collection", "Me", I('<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>')]];
     bar.innerHTML = v2tb.map(([p, l, i]) => `<a href="${p}.html"${cur(p) ? ' aria-current="page"' : ""}>${i}<span>${l}</span></a>`).join("");
-    const off = new URL(location.href); off.searchParams.set("v2", "0");
-    document.body.insertAdjacentHTML("beforeend", `<a class="v2-pill" href="${esc(off.pathname + off.search + off.hash)}" title="Go back to the current layout">Preview: new layout · <b>Turn off</b></a>`);
   } else {
     bar.innerHTML = tb.map(([p, l, i]) => `<a href="${p === "shop" ? STORE : p + ".html"}"${p === PAGE || (p === "sets" && PAGE === "set") ? ' aria-current="page"' : ""}>${i}<span>${l}</span></a>`).join("");
   }

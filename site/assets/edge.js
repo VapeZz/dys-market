@@ -7,16 +7,16 @@
   const BASE = /\/edge\/(index\.html)?$/.test(location.pathname) ? "../" : "";
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
-  /* new-layout preview (shared with the market site): ?v2=1 on, ?v2=0 off */
+  /* layout (shared with the market site): big pictures, grid view, 5 tabs; ?v2=0 or Mine > Settings brings back the old one */
   const V2 = (() => {
     try {
       const q = new URLSearchParams(location.search);
       if (q.get("v2") === "1") localStorage.setItem("dys-v2", "1");
-      if (q.get("v2") === "0") localStorage.removeItem("dys-v2");
+      if (q.get("v2") === "0") localStorage.setItem("dys-v2", "0");
       if (q.get("grid") === "1") localStorage.setItem("edge-grid", "1");
       if (q.get("grid") === "0") localStorage.setItem("edge-grid", "0");
-      return localStorage.getItem("dys-v2") === "1";
-    } catch { return false; }
+      return localStorage.getItem("dys-v2") !== "0";
+    } catch { return true; }
   })();
   if (V2) {
     document.documentElement.classList.add("v2");
@@ -34,7 +34,6 @@
       e.currentTarget.setAttribute("aria-pressed", on);
       try { localStorage.setItem("edge-grid", on ? "1" : "0"); } catch {}
     });
-    document.body.insertAdjacentHTML("beforeend", `<a class="v2-pill" href="?v2=0${location.hash}">Preview: new layout · <b>Turn off</b></a>`);
   }
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const money = (c, whole) => {
@@ -1025,9 +1024,9 @@
   }
   function mineSettings(el) {
     const s = S.set, d = (k) => dollars(s[k]);
-    setTimeout(() => { const t = $("#v2-on"); if (t) t.onchange = () => { try { t.checked ? localStorage.setItem("dys-v2", "1") : localStorage.removeItem("dys-v2"); } catch {} location.reload(); }; });
+    setTimeout(() => { const t = $("#v2-on"); if (t) t.onchange = () => { try { localStorage.setItem("dys-v2", t.checked ? "1" : "0"); } catch {} location.reload(); }; });
     el.innerHTML = `<section class="sec panel"><h2>Layout</h2>
-        <label class="toggle"><input type="checkbox" id="v2-on"${V2 ? " checked" : ""}> New layout preview: big card pictures, grid view, 5 tabs</label></section>
+        <label class="toggle"><input type="checkbox" id="v2-on"${V2 ? " checked" : ""}> Big card pictures, grid view and 5 tabs (off = the old layout)</label></section>
       <section class="sec panel"><h2>Graded prices</h2>
         <p class="muted small" style="margin:0">Enter your PokemonPriceTracker API key (the same one saved on GitHub as PPT_API_KEY) to unlock graded sold prices for PSA, CGC, BGS and TAG. The grading board fills in by itself, Find ranks real grading opportunities, and each card shows its graded prices. The key stays on this phone and isn't saved in backup files. For personal use, which your API plan covers.</p>
         <form class="btns" id="pp-f"><input class="field" id="pp-k" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="PokemonPriceTracker API key" placeholder="${pptKey() ? "Saved ✓" : "PokemonPriceTracker API key"}" style="flex:1;min-width:0"><button class="btn primary" type="submit">Save</button>${pptKey() ? `<button type="button" class="btn ghost danger" id="pp-rm">Remove</button>` : ""}</form>
