@@ -1,0 +1,51 @@
+name: Screenshots (debug)
+# Phone-size screenshots of live pages, saved to gh-pages /_shots/ (wiped by the next nightly build).
+on:
+  workflow_dispatch:
+    inputs:
+      pages:
+        description: "name=path pairs, space separated (path relative to https://market.driveyourstyle.net/)"
+        required: true
+permissions:
+  contents: write
+jobs:
+  shoot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - env:
+          PAGES: ${{ inputs.pages }}
+        run: |
+          set -e
+          pip install -q playwright==1.56.0 > /dev/null 2>&1 && python -m playwright install --with-deps chromium > /dev/null 2>&1
+          mkdir -p /tmp/shots
+          cat > s.py <<'PY'
+          import os, sys
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as p:
+              b = p.chromium.launch()
+              pg = b.new_page(viewport={"width": 390, "height": 844}, device_scale_factor=2)
+              for pair in os.environ["PAGES"].split():
+                  name, path = pair.split("=", 1)
+                  try:
+                      pg.goto("https://market.driveyourstyle.net/" + path, wait_until="networkidle", timeout=45000)
+                      pg.wait_for_timeout(2500)
+                      pg.screenshot(path=f"/tmp/shots/{name}.jpg", type="jpeg", quality=70, full_page=True)
+                      print(f"::notice title=shot::{name} ok")
+                  except Exception as e:
+                      print(f"::warning title=shot::{name} {e}")
+              b.close()
+          PY
+          python s.py
+          R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git clone -q --depth 1 --branch gh-pages "$R" /tmp/pages
+          git -C /tmp/pages config user.name "dys-market-bot"; git -C /tmp/pages config user.email "dys-market-bot@users.noreply.github.com"
+          for i in 1 2 3; do
+            git -C /tmp/pages fetch -q origin gh-pages && git -C /tmp/pages reset -q --hard origin/gh-pages
+            mkdir -p /tmp/pages/_shots && cp /tmp/shots/*.jpg /tmp/pages/_shots/
+            git -C /tmp/pages add _shots && git -C /tmp/pages commit -q -m "Screenshots" && git -C /tmp/pages push -q origin gh-pages && break
+            sleep 5
+          done
