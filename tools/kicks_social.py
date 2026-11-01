@@ -259,6 +259,13 @@ def main(argv):
     open(os.path.join(out, "index.html"), "w", encoding="utf-8").write(page(post, pairs, mode, day_))
     json.dump(post, open(os.path.join(out, "post.json"), "w"), indent=1, ensure_ascii=False)
     json.dump(post, open(os.path.join(out_root, "latest.json"), "w"), indent=1, ensure_ascii=False)
+    hpath = os.path.join(out_root, "history.json")   # which pairs were in which kind of post (no repeats)
+    try:
+        hist = json.load(open(hpath))
+    except (OSError, ValueError):
+        hist = {}
+    hist.setdefault(mode, {}).update({p["c"]: day_ for p in pairs})
+    json.dump(hist, open(hpath, "w"), indent=0)
     open(os.path.join(out_root, "index.html"), "w").write(
         f'<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url={day_}/"><link rel="canonical" href="{day_}/"><a href="{day_}/">{esc(title)}</a>')
     print(f"kicks social: {mode} {len(pairs)} pairs, {len(slides)} slides -> {out}")
