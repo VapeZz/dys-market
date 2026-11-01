@@ -221,16 +221,20 @@ a.row{text-decoration:none;color:inherit}
 .v2-pill{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(72px + env(safe-area-inset-bottom,0px));z-index:30;padding:5px 12px;border-radius:999px;background:#f2c230;color:#0b0d14;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.35)}
 .v2-pill b{text-decoration:underline}
 /* bigger pictures in every list */
-.v2 .row:not(label){grid-template-columns:64px minmax(0,1fr) auto}
-.v2 .row:not(label) > img,.v2 .row:not(label) > .ph{width:64px;height:89px;border-radius:7px}
-.v2 .gc-top{grid-template-columns:64px minmax(0,1fr) auto}
-.v2 .gc-top img,.v2 .gc-top .ph{width:64px;height:89px;border-radius:7px}
+.v2 .row:not(label){grid-template-columns:92px minmax(0,1fr) auto;gap:14px}
+.v2 .row:not(label) > img,.v2 .row:not(label) > .ph{width:92px;height:128px;border-radius:8px}
+.v2 .gc-top{grid-template-columns:92px minmax(0,1fr) auto}
+.v2 .gc-top img,.v2 .gc-top .ph{width:92px;height:128px;border-radius:8px}
+/* tapping a card: the picture fills the top of the sheet */
+.v2 .hero{grid-template-columns:1fr}
+.v2 .hero img,.v2 .hero .ph{width:min(300px,78%);justify-self:center}
 .v2 .row .nm{font-size:14.5px}
 /* grid view: card lists as 2-across picture tiles */
 .v2.grid .list:has(> .row[data-open]){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line)}
+.v2.grid .list > .row[data-open] > img{max-height:none}
 .v2.grid .list > .row[data-open]{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:10px;border:0;background:var(--surface)}
 .v2.grid .list > .row[data-open] > img,.v2.grid .list > .row[data-open] > .ph{width:100%;height:auto;aspect-ratio:5/7;border-radius:8px}
 .v2.grid .list > .row[data-open] .rt{align-items:flex-start;text-align:left;flex-direction:row;flex-wrap:wrap;gap:4px 8px}
 .v2.grid .list > .row[data-open] .why{font-size:12px}
 @media(min-width:700px){.v2.grid .list:has(> .row[data-open]){grid-template-columns:repeat(4,minmax(0,1fr))}}
-.v2 .row:not(label) > img.logo{height:64px}
+.v2 .row:not(label) > img.logo{height:92px}

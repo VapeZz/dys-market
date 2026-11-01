@@ -14,13 +14,13 @@
       if (q.get("v2") === "1") localStorage.setItem("dys-v2", "1");
       if (q.get("v2") === "0") localStorage.removeItem("dys-v2");
       if (q.get("grid") === "1") localStorage.setItem("edge-grid", "1");
-      if (q.get("grid") === "0") localStorage.removeItem("edge-grid");
+      if (q.get("grid") === "0") localStorage.setItem("edge-grid", "0");
       return localStorage.getItem("dys-v2") === "1";
     } catch { return false; }
   })();
   if (V2) {
     document.documentElement.classList.add("v2");
-    try { if (localStorage.getItem("edge-grid") === "1") document.documentElement.classList.add("grid"); } catch {}
+    try { if (localStorage.getItem("edge-grid") !== "0") document.documentElement.classList.add("grid"); } catch { document.documentElement.classList.add("grid"); }
     // 5 tabs at the bottom; Sets and Tools move to the top bar next to a list / grid switch
     const SV = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
     document.querySelectorAll('.tabs a[data-tab="sets"], .tabs a[data-tab="tools"]').forEach((a) => a.remove());
@@ -32,7 +32,7 @@
     document.querySelector(".hd-grid")?.addEventListener("click", (e) => {
       const on = document.documentElement.classList.toggle("grid");
       e.currentTarget.setAttribute("aria-pressed", on);
-      try { on ? localStorage.setItem("edge-grid", "1") : localStorage.removeItem("edge-grid"); } catch {}
+      try { localStorage.setItem("edge-grid", on ? "1" : "0"); } catch {}
     });
     document.body.insertAdjacentHTML("beforeend", `<a class="v2-pill" href="?v2=0${location.hash}">Preview: new layout · <b>Turn off</b></a>`);
   }
@@ -1007,7 +1007,10 @@
   }
   function mineSettings(el) {
     const s = S.set, d = (k) => dollars(s[k]);
-    el.innerHTML = `<section class="sec panel"><h2>Graded prices</h2>
+    setTimeout(() => { const t = $("#v2-on"); if (t) t.onchange = () => { try { t.checked ? localStorage.setItem("dys-v2", "1") : localStorage.removeItem("dys-v2"); } catch {} location.reload(); }; });
+    el.innerHTML = `<section class="sec panel"><h2>Layout</h2>
+        <label class="toggle"><input type="checkbox" id="v2-on"${V2 ? " checked" : ""}> New layout preview: big card pictures, grid view, 5 tabs</label></section>
+      <section class="sec panel"><h2>Graded prices</h2>
         <p class="muted small" style="margin:0">Enter your PokemonPriceTracker API key (the same one saved on GitHub as PPT_API_KEY) to unlock graded sold prices for PSA, CGC, BGS and TAG. The grading board fills in by itself, Find ranks real grading opportunities, and each card shows its graded prices. The key stays on this phone and isn't saved in backup files. For personal use, which your API plan covers.</p>
         <form class="btns" id="pp-f"><input class="field" id="pp-k" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="PokemonPriceTracker API key" placeholder="${pptKey() ? "Saved ✓" : "PokemonPriceTracker API key"}" style="flex:1;min-width:0"><button class="btn primary" type="submit">Save</button>${pptKey() ? `<button type="button" class="btn ghost danger" id="pp-rm">Remove</button>` : ""}</form>
         <p class="small" id="pp-st" style="margin:0"></p></section>
