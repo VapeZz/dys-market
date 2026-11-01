@@ -1119,6 +1119,8 @@ body[data-page="cards"] .movers .thumb{width:96px;height:134px;border-radius:8px
 .gcalc .gsel .select{width:100%;min-width:0}
 .gp-liq.ok{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent)}
 .gr-links a{color:var(--accent)}
+.gr-links a.gr-buy{font-weight:700;color:var(--ink);border:1px solid var(--line-strong);border-radius:999px;padding:3px 10px}
+.gr-links a.gr-buy:hover{border-color:var(--accent)}
 .gr-how{margin-top:18px;font-size:13.5px;line-height:1.6}
 .gr-how summary{cursor:pointer}
 @media(max-width:600px){.gr-controls{grid-template-columns:1fr 1fr;gap:10px}.gr-f{font-size:12px}.gr-f:has(input[type=range]){grid-column:1/-1}}

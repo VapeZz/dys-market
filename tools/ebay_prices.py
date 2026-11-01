@@ -25,6 +25,7 @@ import sealed  # noqa: E402  (eBay's API terms: keep only working copies, don't 
 PER_RUN = int(os.environ.get("EBAY_PER_RUN", "450"))
 STALE_DAYS = int(os.environ.get("EBAY_STALE_DAYS", "5"))
 SHOW_DAYS = 7          # don't show listings checked longer ago than this
+PSA10_FROM = int(os.environ.get("EBAY_PSA10_FROM", "1500"))   # also look up PSA 10 listings for cards from $15 (Grading Insights)
 BAD = re.compile(r"proxy|custom|orica|fan ?art|replica|reprint|digital|\bcode\b|\blot\b|bundle|choose|you pick|pick your|playset|\b\d+ ?x\b|\bx ?\d+\b|"
                  r"jumbo|oversize|metal|gold ?plated|art card|sticker|sleeve|empty|binder|display|booster|sealed|mystery|repack|\bread\b", re.I)
 GRADED = re.compile(r"\b(psa|bgs|cgc|tag|beckett|sgc|ace|graded|slab|gem ?mint)\b", re.I)
@@ -130,7 +131,7 @@ def main(argv):
         for r in cands[:PER_RUN]:
             pid, ent = str(r[0]), {"at": today}
             try:
-                for graded in ([False, True] if r[3] >= 3000 else [False]):
+                for graded in ([False, True] if r[3] >= PSA10_FROM else [False]):
                     calls += 1
                     d = ebay.search(query(r, graded), filters="buyingOptions:{FIXED_PRICE},deliveryCountry:US,itemLocationCountry:US,"
                                     + ("conditionIds:{2750}" if graded else "conditionIds:{4000}"))

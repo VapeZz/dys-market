@@ -1947,16 +1947,21 @@ const upNote = (co, grade, tier, u) => u.over ? `A ${co} ${grade} here is worth 
    Ranks cards by expected profit after grading fees (with upcharges), shipping and selling fees, from real graded sold prices. */
 const GCOS = { PSA: "PSA", CGC: "CGC", BGS: "BGS", TAG: "TAG" };
 async function pageGrading() {
-  const [meta, gd, graded, fees] = await Promise.all([getJSON("meta.json"), getJSON("grading.json"), getJSON("graded.json").catch(() => ({ cards: {} })), gradeFees()]);
+  const [meta, gd, graded, fees, ebj] = await Promise.all([getJSON("meta.json"), getJSON("grading.json"), getJSON("graded.json").catch(() => ({ cards: {} })), gradeFees(),
+    getJSON("ebay.json").catch(() => ({ cards: {} }))]);
+  const eb = ebj.cards || {};
   const GK = { PSA: ["psa10", "psa9", "10", "9"], CGC: ["cgc10", "cgc9", "10", "9"], BGS: ["bgs9_5", "bgs9", "9.5", "9"], TAG: ["tag10", "tag9", "10", "9"] };
   const KEY = "dys-grading5", today = meta.updated;
-  let st = { co: "PSA", tier: {}, fee: 25, ship: SHIP_DEFAULT, sell: "ebay", o10: 30, o9: 50, x9: 1.0, game: "all", era: "all", min: 20, max: 5000, sort: "profit", q: "", only: true, liq: true };
+  let st = { co: "PSA", tier: {}, fee: 25, ship: SHIP_DEFAULT, sell: "ebay", o10: 30, o9: 50, x9: 1.0, game: "all", era: "modern", min: 20, max: 1000, sort: "profit", q: "", only: true, liq: true, ebOnly: true };
   try {
     const old = JSON.parse(localStorage.getItem("dys-grading4") || "{}");    // keep filters from the old version, not its out-of-date fees
     for (const k of ["co", "o10", "o9", "x9", "game", "era", "min", "max", "sort", "q", "only"]) if (k in old) st[k] = old[k];
     st = { ...st, ...JSON.parse(localStorage.getItem(KEY) || "{}") };
   } catch {}
   const live = Object.keys(graded.cards || {}).length > 0;    // graded sold prices can be switched off (pipeline/config.py)
+  // without them: live eBay listings (cheapest PSA 10 Buy It Now per card, tools/ebay_prices.py) show what a 10 is going for
+  const ebMode = !live && Object.values(eb).some((c) => c.p10);
+  const ebDays = (d) => { const n = Math.round((Date.parse(today) - Date.parse(d)) / 864e5); return n <= 0 ? "today" : n === 1 ? "yesterday" : `${n} days ago`; };
   if (!fees.graders[st.co]) st.co = "PSA";
   if (!fees.sell[st.sell]) st.sell = "ebay";
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch {} };
@@ -1979,7 +1984,8 @@ async function pageGrading() {
     <label class="gr-f">to $<input class="field" type="number" min="0" step="1" data-k="max" value="${st.max}"></label>
     <label class="gr-f">Search<input class="field" type="search" data-k="q" value="${esc(st.q)}" placeholder="Card or set"></label>
     ${live ? `<div class="gr-toggles"><label class="toggle"><input type="checkbox" data-k="only"${st.only ? " checked" : ""}> Only cards with graded sold prices</label>
-      <label class="toggle"><input type="checkbox" data-k="liq"${st.liq ? " checked" : ""}> Hide slow sellers</label></div>` : ""}`;
+      <label class="toggle"><input type="checkbox" data-k="liq"${st.liq ? " checked" : ""}> Hide slow sellers</label></div>`
+      : ebMode ? `<div class="gr-toggles" id="gr-eb-t"><label class="toggle"><input type="checkbox" data-k="ebOnly"${st.ebOnly ? " checked" : ""}> Only cards with PSA 10s for sale on eBay</label></div>` : ""}`;
   const multi = new Set(); { const c = {}; for (const r of gd.rows) { c[r[0]] = (c[r[0]] || 0) + 1; if (c[r[0]] > 1) multi.add(r[0]); } }
   const draw = () => {
     const o10 = st.o10 / 100, o9 = Math.min(1 - o10, st.o9 / 100);
@@ -1999,18 +2005,31 @@ async function pageGrading() {
       if (live && st.only && !G10) continue;
       const liq = liqOf(G10, today);
       if (live && st.liq && liq?.k === "slow") { slowHidden++; continue; }
+      const e = ebMode ? eb[id] : null;
+      let E10 = e?.p10 && st.co === "PSA" ? e.p10 : null;
+      if (E10 && !(E10[0] >= p * 1.1 && E10[0] <= p * 40)) E10 = null;      // mismatched or wishful listing
+      if (ebMode && st.co === "PSA" && st.ebOnly && !E10) continue;
       const buy = Math.min(p, lo || p);      // you'd buy at the lowest listing today
-      const m = gradeMath({ buy, v10: G10 ? G10[0] : null, v9: G9 ? G9[0] : p * (st.x9 || 1), low: p * 0.7, o10, o9, fee, ship, pl });
-      const up = custom ? null : upTier(gr, ti, G10?.[0]);
-      list.push({ id, g, n, p, r, no, buy, ...m, mult: m.be10 / p, g10: G10 ? G10[0] : null, g9: G9 ? G9[0] : null, trend: G10 ? G10[3] : "", liq, up });
+      const v10 = G10 ? G10[0] : E10 ? E10[0] : null;
+      const m = gradeMath({ buy, v10, v9: G9 ? G9[0] : p * (st.x9 || 1), low: p * 0.7, o10, o9, fee, ship, pl });
+      const up = custom ? null : upTier(gr, ti, v10);
+      list.push({ id, g, n, p, r, no, buy, ...m, mult: m.be10 / p, g10: G10 ? G10[0] : null, g9: G9 ? G9[0] : null, trend: G10 ? G10[3] : "", liq, up,
+        e10: E10, er: e?.r || null, eat: e?.at || "" });
     }
     const by = { value: (a, b) => b.p - a.p, deal: (a, b) => (a.buy / a.p) - (b.buy / b.p) || b.p - a.p, liq: (a, b) => (b.liq?.rate ?? -1) - (a.liq?.rate ?? -1) || (b.profit ?? -1e12) - (a.profit ?? -1e12),
-      profit: (a, b) => (b.profit ?? -1e12) - (a.profit ?? -1e12), roi: (a, b) => (b.roi ?? -1e9) - (a.roi ?? -1e9) };
-    list.sort(by[live ? (["profit", "roi", "liq", "value"].includes(st.sort) ? st.sort : "profit") : st.sort === "deal" ? "deal" : "value"]);
+      profit: (a, b) => (b.profit ?? -1e12) - (a.profit ?? -1e12), roi: (a, b) => (b.roi ?? -1e9) - (a.roi ?? -1e9),
+      x10: (a, b) => (b.e10 ? b.e10[0] / b.buy : -1) - (a.e10 ? a.e10[0] / a.buy : -1) };
+    // one lonely listing can be a wishful price: cards with 2+ PSA 10s listed rank first
+    if (ebMode && st.co === "PSA") for (const k of ["profit", "x10"]) { const f = by[k]; by[k] = (a, b) => ((b.e10?.[1] || 0) >= 2) - ((a.e10?.[1] || 0) >= 2) || f(a, b); }
+    const ebSorts = ["profit", "x10", "value", "deal"];
+    list.sort(by[live ? (["profit", "roi", "liq", "value"].includes(st.sort) ? st.sort : "profit")
+      : ebMode && st.co === "PSA" ? (ebSorts.includes(st.sort) ? st.sort : "profit") : st.sort === "deal" ? "deal" : "value"]);
+    const ebT = $("#gr-eb-t"); if (ebT) ebT.hidden = st.co !== "PSA";
     const nG = Object.keys(graded.cards || {}).length;
     $("#gr-status").innerHTML = `<b>${esc(st.co)} ${custom ? "at your price" : esc(tier[0])}</b>${custom ? ` ${money(Math.round(st.fee * 100))} a card` : `: ${money(tier[1])} a card, about ${esc(tier[3])} business days${gr.upcharge ? ", upcharged when a grade is worth more than the tier covers" : ""}`}. `
       + `Sale prices are after <b>${esc(pl.label)}</b>${st.sell === "none" ? "" : " selling fees"}. ${gr.note && !custom ? esc(gr.note) + " " : ""}Fees checked ${esc(fmtShort(fees.checked))}.<br>`
       + (live ? `Graded sold prices for <b>${nG.toLocaleString()} Pokémon cards</b> (updated ${esc(fmtShort(graded.updated))}). <b>${list.length.toLocaleString()} cards</b> match${slowHidden ? `, ${slowHidden.toLocaleString()} slow sellers hidden` : ""}. `
+        : ebMode && st.co === "PSA" ? `<b>PSA 10 on eBay</b> = the cheapest PSA 10 Buy It Now listing on eBay, shipping included, checked in the last week. Those are asking prices, not sales: tap <b>PSA 10 sold</b> to see what they really went for. <b>${list.length.toLocaleString()} cards</b> match. `
         : `<b>${list.length.toLocaleString()} cards</b> match. `)
       + `<b>Break-even ${esc(st.co)} ${l10}</b> is what a ${l10} must sell for before grading pays off at your odds${live ? "" : `: check it against recent sales with the <b>${esc(st.co)} ${l10} sold</b> link`}.`;
     const sold = (n, no, gr) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(`${cleanCard(n)}${no && !cleanCard(n).includes(no.split("/")[0]) ? " " + no : ""} ${gr}`)}&LH_Sold=1&LH_Complete=1&_sop=13`;
@@ -2024,20 +2043,24 @@ async function pageGrading() {
           <div><span class="pb-lab">ALL-IN COST</span><b>${money(Math.round(x.total))}</b><small class="muted">incl. ${money(Math.round(x.grading))} grading</small></div>
           <div><span class="pb-lab">BREAK-EVEN ${esc(st.co)} ${l10}</span>${be(x)}</div>
           ${x.g9 ? `<div><span class="pb-lab">${esc(st.co)} ${l9} SOLD</span><b>${money(x.g9)}</b></div>` : ""}
+          ${x.e10 && !x.g10 ? `<div><span class="pb-lab">PSA 10 ON EBAY</span><b>${money(x.e10[0])}</b><small class="muted">${(x.e10[0] / x.p).toFixed(1)}× raw · ${x.e10[1]} listed · ${esc(ebDays(x.eat))}</small></div>
+          <div><span class="pb-lab">PROFIT AT THAT PRICE</span><b class="${x.profit >= 0 ? "up" : "down"}">${x.profit >= 0 ? "+" : "−"}${money(Math.abs(Math.round(x.profit)))}</b><small class="muted">at your odds, after every fee</small></div>` : ""}
           ${x.g10 ? `<div><span class="pb-lab">${esc(st.co)} ${l10} SOLD</span><b>${money(x.g10)}</b><small class="muted">${(x.g10 / x.p).toFixed(1)}× raw · ${esc(x.liq.sub)}${x.trend === "up" ? " · ▲" : x.trend === "down" ? " · ▼" : ""}</small></div>
           <div><span class="pb-lab">EXP. PROFIT</span><b class="${x.profit >= 0 ? "up" : "down"}">${x.profit >= 0 ? "+" : "−"}${money(Math.abs(Math.round(x.profit)))}</b><small class="muted">${x.roi >= 0 ? "+" : ""}${Math.round(x.roi * 100)}% after fees</small></div>` : ""}</div>
         ${x.up ? `<p class="gr-note">${esc(upNote(st.co, l10, tier[0], x.up))}</p>` : ""}
-        <div class="gr-links"><a href="${sold(x.n, x.no, st.co + " " + l10)}" target="_blank" rel="noopener">${esc(st.co)} ${l10} sold ↗</a><a href="${sold(x.n, x.no, st.co + " " + l9)}" target="_blank" rel="noopener">${esc(st.co)} ${l9} sold ↗</a><a href="centering.html">Check centering →</a><a href="${prodUrl(x.id, x.g)}#gcalc">Full calculator →</a></div></div></div>`).join("")
+        <div class="gr-links">${ebMode ? `<a class="gr-buy" href="${esc(x.er ? x.er[2] : ebayBuy(x.n, x.no, ""))}" target="_blank" rel="sponsored noopener">Buy raw on eBay ↗</a>${st.co === "PSA" ? `<a class="gr-buy" href="${esc(x.e10 ? x.e10[2] : ebayBuy(x.n, x.no, "PSA 10"))}" target="_blank" rel="sponsored noopener">${x.e10 ? "Cheapest PSA 10 ↗" : "PSA 10s for sale ↗"}</a>` : ""}` : ""}<a href="${sold(x.n, x.no, st.co + " " + l10)}" target="_blank" rel="noopener">${esc(st.co)} ${l10} sold ↗</a><a href="${sold(x.n, x.no, st.co + " " + l9)}" target="_blank" rel="noopener">${esc(st.co)} ${l9} sold ↗</a><a href="centering.html">Check centering →</a><a href="${prodUrl(x.id, x.g)}#gcalc">Full calculator →</a></div></div></div>`).join("")
       : `<p class="panel empty-note">No cards match. Widen the price range, switch era, pick another game${st.liq ? ", or show slow sellers" : ""}.</p>`;
   };
   $("#gr-controls").addEventListener("input", (e) => {
     const k = e.target.dataset.k; if (!k) return;
     if (k === "tier") st.tier[st.co] = e.target.value === "custom" ? "custom" : Number(e.target.value);
-    else st[k] = ["only", "liq"].includes(k) ? e.target.checked : ["game", "co", "q", "era", "sell"].includes(k) ? e.target.value : Number(e.target.value) || 0;
+    else st[k] = ["only", "liq", "ebOnly"].includes(k) ? e.target.checked : ["game", "co", "q", "era", "sell"].includes(k) ? e.target.value : Number(e.target.value) || 0;
     if (k === "co") $("#gr-tier").innerHTML = tierOpts();
     save(); draw();
   });
   if (live) tabs($("#gr-sort"), [["profit", "Best profit"], ["roi", "Best return %"], ["liq", "Sells fastest"], ["value", "Most valuable"]], ["profit", "roi", "liq", "value"].includes(st.sort) ? st.sort : "profit", (v) => { st.sort = v; save(); draw(); });
+  else if (ebMode) tabs($("#gr-sort"), [["profit", "Best profit"], ["x10", "Biggest PSA 10 gap"], ["value", "Most valuable"], ["deal", "Cheapest vs market"]],
+    ["profit", "x10", "value", "deal"].includes(st.sort) ? st.sort : "profit", (v) => { st.sort = v; save(); draw(); });
   else tabs($("#gr-sort"), [["value", "Most valuable"], ["deal", "Cheapest vs market"]], st.sort === "deal" ? "deal" : "value", (v) => { st.sort = v; save(); draw(); });
   draw();
 }
@@ -2046,6 +2069,7 @@ async function pageGrading() {
 const GRADES = [["PSA", ["10", "9", "8", "7", "6", "5"]], ["CGC", ["10 Pristine", "10", "9.5", "9", "8.5", "8"]], ["BGS", ["10 Black Label", "10", "9.5", "9", "8.5"]],
   ["SGC", ["10", "9.5", "9", "8"]], ["TAG", ["10", "9", "8"]], ["ACE", ["10", "9", "8"]]];
 const gradeOpts = (cur) => `<option value=""${cur ? "" : " selected"}>Raw</option>` + GRADES.map(([co, gs]) => `<optgroup label="${co}">${gs.map((g) => { const v = `${co} ${g}`; return `<option value="${v}"${v === cur ? " selected" : ""}>${v}</option>`; }).join("")}</optgroup>`).join("") + `<option value="Other slab"${cur === "Other slab" ? " selected" : ""}>Other slab</option>`;
+const ebayBuy = (n, no, gr) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(`${cleanCard(n)}${no && !cleanCard(n).includes(no.split("/")[0]) ? " " + no : ""}${gr ? " " + gr : ""}`)}&LH_BIN=1&_sop=15`;
 const cleanCard = (n) => n.replace(/ \((Holofoil|Normal|Foil|Reverse Holofoil)\)$/, "").replace(/ - (\S+)$/, " $1");
 const soldUrl = (name, gr) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(`${cleanCard(name)} ${gr === "Other slab" ? "graded" : gr}`)}&LH_Sold=1&LH_Complete=1&_sop=13`;
 const sumOwned = () => { const m = new Map(); for (const x of colGet().items) { const k = `${x.id}|${printCode(subOf(x.n || ""))}`; m.set(k, (m.get(k) || 0) + x.qty); } return m; };
