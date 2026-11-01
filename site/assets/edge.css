@@ -244,3 +244,6 @@ a.row{text-decoration:none;color:inherit}
 .v2 .row:not(label) > .rt{grid-column:2;align-items:baseline;text-align:left;flex-direction:row;flex-wrap:wrap;gap:2px 10px}
 .v2 .row:not(label) > .rt b{font-size:16px}
 .v2 .row:not(label) .why{grid-column:2}
+/* set rows: square picture (logo or booster box) instead of a card-shaped one */
+.v2 a.row[href^="#sets/"]{grid-template-columns:84px minmax(0,1fr)}
+.v2 a.row[href^="#sets/"] > img,.v2 a.row[href^="#sets/"] > .ph{width:84px;height:84px;grid-row:1/span 2;align-self:center}

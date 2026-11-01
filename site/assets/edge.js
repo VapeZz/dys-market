@@ -297,33 +297,94 @@
     run();
     if (!PICK) q.focus({ preventScroll: true });
   }
-  /* ---------- Sets: every set with its box price and weekly move; tap one for all its cards ---------- */
-  const SETV = { q: "", sort: "new" }, SETD = { type: "c", sort: "price", q: "", n: 120 };
+  /* ---------- Sets: every set with its box price and weekly move; tap one for all its cards ----------
+     Grouped by series like the market site's Sets page; promos, events, decks and other specials sit apart */
+  const ERAS = {
+    "pokemon": [["2025-09-20", "Mega Evolution"], ["2023-03-25", "Scarlet & Violet"], ["2020-02-01", "Sword & Shield"], ["2017-01-28", "Sun & Moon"], ["2014-02-01", "XY"],
+      ["2011-04-20", "Black & White"], ["2010-02-01", "HeartGold & SoulSilver"], ["2007-05-01", "Diamond & Pearl / Platinum"], ["2003-06-01", "EX"], ["2001-12-01", "e-Card & Legendary"], ["2000-12-01", "Neo"], ["1990-01-01", "Classic"]],
+    "pokemon-jp": [["2025-08-01", "Mega (M)"], ["2023-01-15", "Scarlet & Violet (SV)"], ["2019-12-01", "Sword & Shield (S)"], ["2016-12-01", "Sun & Moon (SM)"], ["2013-12-01", "XY"],
+      ["2010-09-15", "Black & White (BW)"], ["2009-12-01", "LEGEND"], ["2006-09-01", "Diamond & Pearl / Platinum"], ["2001-01-01", "ADV, PCG & e-Series"], ["1990-01-01", "Classic"]],
+  };
+  const PROMO_GROUP = "Promos & Special Sets";
+  const SPECIAL = /promo|mcdonald|trainer kit|battle academy|trick or trade|prize pack|league|championship|jumbo|deck kit|exclusive|first partner|my first battle|trading card game classic|tcg classic|starter (set|deck)|start deck|deck set|battle deck|theme deck|deck build box|gift box|special box|world championship|play! pokemon|kids|placement/i;
+  function eraOf(s) {
+    if (s.k === "one-piece") {
+      const a = (s.a || "").toUpperCase(), n = s.n.toLowerCase();
+      if (/release event|promo|tournament|pre-release|judge/.test(n)) return "Promos & Events";
+      if (a.startsWith("OP")) return "Booster Sets";
+      if (a.startsWith("EB")) return "Extra Boosters";
+      if (a.startsWith("PRB")) return "Premium Boosters";
+      if (a.startsWith("ST") || a.startsWith("SD")) return "Starter Decks";
+      return "Other";
+    }
+    if (s.k === "union-arena") {   // grouped by series (Chainsaw Man, Jujutsu Kaisen, ...)
+      const n = s.n.toLowerCase();
+      if (/promo|judge|event|tournament|championship/.test(n)) return "Promos & Events";
+      if (/starter|deck|bundle|sleeve|collection|set$/.test(n)) return "Products & Extras";
+      return "Booster Sets";
+    }
+    if (s.k === "yugioh") {   // by era, with decks/tins/promos apart
+      const n = s.n.toLowerCase();
+      if (/promo|tournament|prize|championship|judge|sneak peek|participation/.test(n)) return "Promos & Events";
+      if (/structure deck|starter deck|speed duel|tin|box|collection|pack|bundle|mega|duelist pack|deck/.test(n) && !/booster/.test(n)) return "Decks, Tins & Collections";
+      const y = (s.pub || "").slice(0, 4);
+      return !y ? "Other" : y >= "2023" ? "Booster Sets · 2023–now" : y >= "2017" ? "Booster Sets · 2017–2022" : y >= "2010" ? "Booster Sets · 2010–2016" : "Booster Sets · 2002–2009";
+    }
+    if (["lorcana", "riftbound", "palworld", "gundam", "dragon-ball-fusion-world"].includes(s.k)) {   // newer games: main sets vs. everything else, newest first
+      const n = s.n.toLowerCase();
+      if (/promo|judge|organized play|prototype|championship|event|league/.test(n)) return "Promos & Events";
+      if (/illumineer|quest|starter|deck|bundle|gift|sleeve|collection|tin|box set/.test(n) && !/^bp\d/i.test(s.n)) return "Products & Extras";
+      return "Main Sets";
+    }
+    if (SPECIAL.test(s.n)) return PROMO_GROUP;
+    if (!s.pub) return "Other";
+    const e = (ERAS[s.k] || []).find(([d]) => s.pub >= d);
+    return e ? e[1] : "Other";
+  }
+  // the specials tab, split by what they are
+  const specialKind = (x) => { const n = x.n.toLowerCase();
+    return /championship|league|prize pack|tournament|event|play! pokemon|pre-?release|judge|staff|world/.test(n) ? "Events & tournaments"
+      : /promo|mcdonald|trick or trade|jumbo/.test(n) ? "Promos"
+      : /deck|starter|start set|battle academy|trainer kit|kit\b|first partner|my first battle/.test(n) ? "Decks & starter sets" : "Other specials"; };
+  const SPECIAL_ERAS = new Set([PROMO_GROUP, "Promos & Events", "Products & Extras", "Decks, Tins & Collections", "Starter Decks", "Other"]);
+  const SETV = { q: "", sort: "new", kind: "main" }, SETD = { type: "c", sort: "price", q: "", n: 120 };
   const fmtMon = (d) => d ? new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+  const SETS_GAMES = () => { const g = (GAMES[S.set.game] || GAMES.pokemon)[1]; return g ? g.length : 99; };
   const gameLabel = (k) => (META?.games || []).find((g) => g.slug === k)?.label || k;
   async function viewSets(v) {
     const gid = +((location.hash || "").split("/")[1] || 0);
     if (gid) return viewSet(v, gid);
     v.innerHTML = `<div class="searchbox"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
         <input id="sq" class="field" type="search" placeholder="Set name or code" autocomplete="off" aria-label="Find a set" value="${esc(SETV.q)}"></div>
-      <div id="ss-game"></div><div id="ss-sort"></div><div id="ss-list"><p class="muted small">Loading sets…</p></div>`;
+      <div id="ss-game"></div><div id="ss-kind"></div><div id="ss-sort"></div><div id="ss-list"><p class="muted small">Loading sets…</p></div>`;
     const sets = await getJSON("sets.json"), today = localDay();
     const draw = () => {
       const q = SETV.q.trim().toLowerCase();
-      let rows = sets.filter((x) => gameOk(x.k) && (!q || (x.n + " " + (x.a || "")).toLowerCase().includes(q)));
+      // searching looks through both lists; otherwise series sets and specials are kept apart
+      let rows = sets.filter((x) => gameOk(x.k) && (q ? (x.n + " " + (x.a || "")).toLowerCase().includes(q) : SPECIAL_ERAS.has(eraOf(x)) === (SETV.kind === "special")));
       const by = { new: (a, b) => (b.pub || "").localeCompare(a.pub || ""), box: (a, b) => (b.bb || 0) - (a.bb || 0),
         up: (a, b) => (b.c7 ?? -1e9) - (a.c7 ?? -1e9), down: (a, b) => (a.c7 ?? 1e9) - (b.c7 ?? 1e9), az: (a, b) => a.n.localeCompare(b.n) }[SETV.sort];
       if (SETV.sort === "box" || SETV.sort === "up" || SETV.sort === "down") rows = rows.filter((x) => SETV.sort === "box" ? x.bb : x.c7 != null);
       rows.sort(by);
-      const out = rows.slice(0, 150).map((x) => {
+      const rowOf = (x) => {
         const pic = x.lg ? `<img class="logo" src="${esc(x.lg)}" alt="" loading="lazy" onerror="this.outerHTML='<span class=&quot;ph abbr&quot;>${(x.a || x.n).replace(/[^\w ]/g, "").slice(0, 5)}</span>'">` : x.bbId ? img(x.bbId) : `<span class="ph abbr">${esc((x.a || x.n).slice(0, 5))}</span>`;
         return `<a class="row" href="#sets/${x.id}">${pic}<span style="min-width:0;display:flex;flex-direction:column;gap:2px"><span class="nm">${esc(x.n)}</span>
           <span class="st">${esc(gameLabel(x.k))}${x.pub ? ` · ${esc(fmtMon(x.pub))}` : ""}${x.np ? ` · ${x.np} products` : ""}</span></span>
           <span class="rt">${x.pub && x.pub > today ? `<span class="chip hot">Upcoming</span>` : ""}${x.bb ? `<b>${money(x.bb)}</b><small class="muted">${/booster box/i.test(x.bbN || "") ? "box" : "sealed"}</small>` : ""}${x.c7 != null ? `<small class="${cls(x.c7)}">${pct(x.c7)} 7d</small>` : ""}</span></a>`;
-      });
-      $("#ss-list").innerHTML = listOrEmpty(out, "No sets match. Try another name or switch games.") + (rows.length > 150 ? `<p class="muted small">Showing 150 of ${rows.length}. Search to find the rest.</p>` : "");
+      };
+      const grouped = SETV.sort === "new", cap = grouped ? 1000 : 150, shown = rows.slice(0, cap);
+      if (grouped && shown.length) {   // newest first, one block per series (Mega Evolution, Scarlet & Violet, ...)
+        const groups = new Map();
+        for (const x of shown) { const era = eraOf(x), g = (SETS_GAMES() > 1 ? gameLabel(x.k) + " · " : "") + (SPECIAL_ERAS.has(era) ? specialKind(x) : era); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(x); }
+        $("#ss-list").innerHTML = [...groups].map(([g, list]) => `<section class="sec"><div class="sec-head"><h2>${esc(g)}</h2><span class="muted small">${list.length} set${list.length === 1 ? "" : "s"}</span></div><div class="list">${list.map(rowOf).join("")}</div></section>`).join("");
+      } else {
+        $("#ss-list").innerHTML = listOrEmpty(shown.map(rowOf), "No sets match. Try another name or switch games.");
+      }
+      if (!shown.length) $("#ss-list").innerHTML = `<div class="empty">No sets match. Try another name or switch games.</div>`;
+      if (rows.length > cap) $("#ss-list").insertAdjacentHTML("beforeend", `<p class="muted small">Showing ${cap} of ${rows.length}. Search to find the rest.</p>`);
     };
     gamePick($("#ss-game"), () => draw());
+    seg($("#ss-kind"), [["main", "Series sets"], ["special", "Promos, events & specials"]], SETV.kind, (k) => { SETV.kind = k; draw(); });
     seg($("#ss-sort"), [["new", "Newest"], ["box", "Box price"], ["up", "Up this week"], ["down", "Down this week"], ["az", "A–Z"]], SETV.sort, (k) => { SETV.sort = k; draw(); });
     let t; $("#sq").oninput = (e) => { clearTimeout(t); t = setTimeout(() => { SETV.q = e.target.value; draw(); }, 140); };
     draw();
