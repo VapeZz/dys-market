@@ -55,15 +55,21 @@ def psa_get(path, cache):
     used = cache["calls"].get(TODAY, 0)
     if used >= PSA_DAILY:
         raise Stop(f"daily PSA limit reached ({PSA_DAILY})")
-    tok = re.sub(r"\s+", "", os.environ.get("PSA_TOKEN") or "")
-    req = urllib.request.Request(PSA + path, headers={"Authorization": "bearer " + tok, "Accept": "application/json"})
+    # pasted tokens sometimes carry the "bearer " prefix, quotes or line breaks
+    tok = re.sub(r"^bearer", "", re.sub(r"[\s\"']+", "", os.environ.get("PSA_TOKEN") or ""), flags=re.I)
+    req = urllib.request.Request(PSA + path, headers={"Authorization": "bearer " + tok, "Accept": "application/json",
+                                                       "User-Agent": "DYS-Market/1.0 (+https://market.driveyourstyle.net)"})
     cache["calls"][TODAY] = used + 1
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             body = r.read()
     except urllib.error.HTTPError as e:
         if e.code in (401, 403, 500):
-            raise Stop(f"PSA said HTTP {e.code} (token expired or rejected? make a new one and update PSA_TOKEN)")
+            raw = e.read()[:400].decode("utf-8", "replace")
+            hint = ("blocked by PSA's firewall (Cloudflare), not the token" if re.search(r"cloudflare|cf-ray|attention required|just a moment", raw + str(e.headers), re.I)
+                    else "token expired or rejected? make a new one and update PSA_TOKEN")
+            print(f"psa debug: HTTP {e.code} server={e.headers.get('server')} token_len={len(tok)} body={re.sub(r'\s+', ' ', raw)[:200]!r}")
+            raise Stop(f"PSA said HTTP {e.code} ({hint})")
         if e.code == 429:
             raise Stop("PSA rate limit (HTTP 429)")
         return None
