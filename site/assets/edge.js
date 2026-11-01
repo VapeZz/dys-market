@@ -69,7 +69,7 @@
   const KEY = "dys-edge-v1";
   const DEF = { inv: [], watch: [], trade: { give: [], get: [] }, lot: [], lotExtra: 0, recent: [], board: [], sub: [], glog: [],
     set: { platform: "ebay", roi: 20, shipCard: 100, shipCard50: 500, shipSealed: 800, shipSealed100: 1500, buyCard: 150, buySealed: 600, cash: 70, trade: 85, game: "pokemon",
-      gradeShip: 1500, gco: "PSA", gtier: {}, o10: 30, o9: 50, useMyRates: false, boxShip: 4000 } };
+      gradeShip: 1500, gco: "PSA", gtier: {}, o10: 30, o9: 50, useMyRates: false, useMix: true, boxShip: 4000 } };
   const clone = (o) => JSON.parse(JSON.stringify(o));
   const load = () => {
     try {
@@ -226,7 +226,7 @@
     await loadIndex();
     drawPortfolio($("#t-port"));
     await loadGraded();
-    const gb = S.board.map((x) => { const bp = boardPrices(x); return { x, e: gradeEval(marketOf(x) || 0, bp.p10, bp.p9, bp.p8) }; }).filter((r) => r.e.profit > 0).sort((a, b) => b.e.profit - a.e.profit).slice(0, 3);
+    const gb = S.board.map((x) => { const bp = boardPrices(x); return { x, e: gradeEval(marketOf(x) || 0, bp.p10, bp.p9, bp.p8, undefined, cardOdds(x.id)) }; }).filter((r) => r.e.profit > 0).sort((a, b) => b.e.profit - a.e.profit).slice(0, 3);
     const mine = new Set(S.board.map((x) => String(x.id)));
     if (gb.length < 3 && GR) for (const o of (await opportunities()) || []) { if (gb.length >= 3 || o.e.profit <= 0) break; if (!mine.has(String(o.r[0]))) gb.push({ x: { id: o.r[0], g: o.r[1], n: o.r[2] }, e: o.e }); }
     if (gb.length) { $("#t-grade").hidden = false; $("#t-grade").innerHTML = `<div class="sec-head"><h2>Best to grade</h2><a class="more" href="#grade" id="t-grade-more">${GR ? "All opportunities" : "Grading board"}</a></div>
@@ -692,15 +692,29 @@
     const ten = L.filter((x) => parseFloat(x.grade) >= 10).length, nine = L.filter((x) => { const g = parseFloat(x.grade); return g >= 9 && g < 10; }).length;
     return { o10: ten / L.length, o9: nine / L.length, n: L.length };
   }
-  function odds() { const m = S.set.useMyRates ? myRates() : null; return m ? { o10: m.o10, o9: m.o9, mine: true } : { o10: S.set.o10 / 100, o9: Math.min(1 - S.set.o10 / 100, S.set.o9 / 100), mine: false }; }
+  function odds() { const m = S.set.useMyRates ? myRates() : null; return m ? { o10: m.o10, o9: m.o9, mine: true, src: "mine" } : { o10: S.set.o10 / 100, o9: Math.min(1 - S.set.o10 / 100, S.set.o9 / 100), mine: false, src: "guess" }; }
+  /* Per-card odds from PokemonPriceTracker: the share of a card's graded sales (last 90 days) that were 10s and 9s.
+     Small samples lean toward your own setting so a handful of sales can't swing it to 0% or 100%.
+     It runs high (people sell their 10s more often than their 9s), so it ranks cards well but isn't a true gem rate. */
+  const MIX_MIN = 5;
+  function mixOf(id) {
+    const c = GR?.c?.[id]; if (!c) return null;
+    const [k10, k9, k8] = GK[grader().co] || GK.PSA, g = c[1] || {};
+    const n10 = g[k10]?.[1] || 0, n9 = g[k9]?.[1] || 0, n8 = k8 ? (g[k8]?.[1] || 0) : 0, n = n10 + n9 + n8;
+    if (n < MIX_MIN) return null;
+    const b = odds(), w = n / (n + 10), o10 = w * n10 / n + (1 - w) * b.o10;
+    return { o10, o9: Math.min(1 - o10, w * n9 / n + (1 - w) * b.o9), mine: false, src: "mix", n, s10: n10 / n, s9: n9 / n };
+  }
+  const cardOdds = (id) => (S.set.useMix !== false && id != null && mixOf(id)) || odds();
+  const oddsText = (od) => `${Math.round(od.o10 * 100)}% ${grader().l10}s, ${Math.round(od.o9 * 100)}% ${grader().l9}s · ${od.src === "mix" ? `from this card's ${od.n} graded sales` : od.src === "mine" ? "your graded results" : "your setting (not enough sales for this card)"}`;
   function grader() {
     const co = FEES.graders[S.set.gco] ? S.set.gco : "PSA", gr = FEES.graders[co];
     const ti = Math.min(gr.tiers.length - 1, Math.max(0, +(S.set.gtier[co] ?? 0) || 0));
     return { co, gr, ti, tier: gr.tiers[ti], l10: GL[co]?.[0] || "10", l9: GL[co]?.[1] || "9" };
   }
   // expected result of grading one card worth `raw` (market value you give up), from the graded prices you entered
-  function gradeEval(raw, p10, p9, p8, shipEach = S.set.gradeShip) {
-    const { gr, ti } = grader(), { o10, o9 } = odds(), o8 = Math.max(0, 1 - o10 - o9), pl = plat();
+  function gradeEval(raw, p10, p9, p8, shipEach = S.set.gradeShip, od = odds()) {
+    const { gr, ti } = grader(), { o10, o9 } = od, o8 = Math.max(0, 1 - o10 - o9), pl = plat();
     p9 = p9 || raw; p8 = p8 || Math.round(raw * 0.7);
     const fee = (v) => feeAt(gr, ti, v), out = (v) => netSale(pl, v) - fee(v) - shipEach - raw;
     const k = raw + shipEach + o9 * (fee(p9) - netSale(pl, p9)) + o8 * (fee(p8) - netSale(pl, p8));
@@ -710,11 +724,11 @@
       if (!(o10 > 0) || !ok(1e9)) be10 = Infinity;
       else { let lo = 0, hi = 1e9; for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (ok(m)) hi = m; else lo = m; } be10 = hi; }
     }
-    if (!p10) return { be10 };
+    if (!p10) return { be10, od };
     const profit = o10 * out(p10) + o9 * out(p9) + o8 * out(p8), nine = out(p9), ten = out(p10);
     const v = profit > raw * 0.15 && nine >= 0 ? ["good", "Safe grade"] : profit > raw * 0.15 ? ["good", "Good odds"] : profit > 0 ? ["meh", "Risky"] : ["bad", "Skip it"];
     const up = gr.upcharge && tierFor(gr, p10) > ti ? gr.tiers[tierFor(gr, p10)] : null;
-    return { be10, profit, nine, ten, v, up, grading: o10 * fee(p10) + o9 * fee(p9) + o8 * fee(p8) };
+    return { be10, profit, nine, ten, v, up, od, grading: o10 * fee(p10) + o9 * fee(p9) + o8 * fee(p8) };
   }
   const tierLabel = (t) => `${t[0]} · ${money(t[1])}${t[2] ? ` · cards up to ${money(t[2], true)}` : ""}${t[3] ? ` · ~${t[3]} days` : ""}`;
   /* Graded sold prices from PokemonPriceTracker, for this phone only (personal use, on the owner's API plan).
@@ -763,17 +777,17 @@
     for (const r of gd.rows) {
       if (seen[r[0]] > 1 || !gameOk(r[7])) continue;
       const gp = gradedOf(r[0]); if (!solid(gp)) continue;
-      out.push({ r, gp, e: gradeEval(r[3], gp.p10, gp.p9, gp.p8) });
+      out.push({ r, gp, e: gradeEval(r[3], gp.p10, gp.p9, gp.p8, undefined, cardOdds(r[0])) });
     }
     return out.sort((a, b) => b.e.profit - a.e.profit);
   }
   function gradedBlock(it, p) {
     const c = GR?.c?.[it.id], g = c?.[1] || {}, have = GNAME.filter(([k]) => g[k]);
     if (!have.length) return `<section class="sec panel"><span class="lab">Graded sold prices</span><p class="muted small" style="margin:0">No graded sales on PokemonPriceTracker for this card yet${GR.c && Object.keys(GR.c).length ? "" : " (they fill in over the next updates)"}.</p></section>`;
-    const bp = gradedOf(it.id), { co, l10 } = grader(), e = bp?.p10 ? gradeEval(p, bp.p10, bp.p9, bp.p8) : null;
+    const bp = gradedOf(it.id), { co, l10 } = grader(), e = bp?.p10 ? gradeEval(p, bp.p10, bp.p9, bp.p8, undefined, cardOdds(it.id)) : null;
     return `<section class="sec panel"><span class="lab">Graded sold prices · last 90 days</span>
       <div class="kv">${have.map(([k, l]) => { const v = g[k]; return `<div><span>${l}<br><small class="muted">${v[1]} sold${v[3] ? ` · last ${esc(fmtDay(v[3]))}` : ""}</small></span><span>${money(v[0])}${p ? `<br><small class="muted">${(v[0] / p).toFixed(1)}× raw</small>` : ""}</span></div>`; }).join("")}</div>
-      ${e ? `<div class="verdict ${e.v[0]}"><span class="lab">Grade it with ${esc(co)}?</span><b>${e.v[1]} · ${signed(Math.round(e.profit))} expected</b><span class="small muted">If ${esc(l10)}: ${signed(Math.round(e.ten))} · if ${esc(grader().l9)}: ${signed(Math.round(e.nine))}. At your assumptions in the Grade tab.</span></div>` : ""}
+      ${e ? `<div class="verdict ${e.v[0]}"><span class="lab">Grade it with ${esc(co)}?</span><b>${e.v[1]} · ${signed(Math.round(e.profit))} expected</b><span class="small muted">If ${esc(l10)}: ${signed(Math.round(e.ten))} · if ${esc(grader().l9)}: ${signed(Math.round(e.nine))}. Odds: ${esc(oddsText(e.od))}.</span></div>` : ""}
       <p class="muted small" style="margin:0">From PokemonPriceTracker (personal use)${c[0] ? `, checked ${esc(fmtDay(c[0]))}` : ""}.</p></section>`;
   }
   const vchip = (v) => `<span class="chip ${v[0] === "good" ? "good" : v[0] === "bad" ? "bad" : "hot"}">${v[1]}</span>`;
@@ -792,9 +806,11 @@
   }
   function assumptions(onChange) {
     const { co, gr, ti } = grader(), m = myRates(), o = odds();
-    const html = `<details class="panel" id="g-asm"><summary><b>Your assumptions</b> <span class="muted small">${esc(co)} ${esc(gr.tiers[ti][0])} · ${Math.round(o.o10 * 100)}% 10s, ${Math.round(o.o9 * 100)}% 9s${o.mine ? " (your results)" : ""} · sell on ${esc(plat().label)}</span></summary>
+    const html = `<details class="panel" id="g-asm"><summary><b>Your assumptions</b> <span class="muted small">${esc(co)} ${esc(gr.tiers[ti][0])} · ${S.set.useMix !== false && GR ? "odds per card from its sales" : `${Math.round(o.o10 * 100)}% 10s, ${Math.round(o.o9 * 100)}% 9s${o.mine ? " (your results)" : ""}`} · sell on ${esc(plat().label)}</span></summary>
       <div class="form" style="margin-top:12px"><label class="f">Grading company<select class="select" id="ga-co">${Object.keys(FEES.graders).map((c) => `<option${c === co ? " selected" : ""}>${c}</option>`).join("")}</select></label>
         <label class="f full">Service level<select class="select" id="ga-tier">${gr.tiers.map((t, i) => `<option value="${i}"${i === ti ? " selected" : ""}>${esc(tierLabel(t))}</option>`).join("")}</select></label>
+        <label class="toggle full"><input type="checkbox" id="ga-mix"${S.set.useMix !== false ? " checked" : ""}${GR ? "" : " disabled"}> Odds per card from its graded sales: the share of its last-90-day ${esc(co)} sales that were ${esc(GL[co][0])}s and ${esc(GL[co][1])}s (cards with ${MIX_MIN}+ sales). Runs a bit high, since people sell their 10s more often.${GR ? "" : " Needs your PokemonPriceTracker key."}</label>
+        <p class="muted small full" style="margin:0">${S.set.useMix !== false && GR ? "For cards with too few sales:" : "Your odds:"}</p>
         <label class="f">Chance of a ${esc(GL[co][0])}: <b id="ga-o10v">${S.set.o10}%</b><input type="range" id="ga-o10" min="5" max="90" step="5" value="${S.set.o10}"${o.mine ? " disabled" : ""}></label>
         <label class="f">Chance of a ${esc(GL[co][1])}: <b id="ga-o9v">${S.set.o9}%</b><input type="range" id="ga-o9" min="0" max="90" step="5" value="${S.set.o9}"${o.mine ? " disabled" : ""}></label>
         <label class="f">Shipping + insurance per card, both ways $<input class="field" id="ga-ship" type="number" inputmode="decimal" min="0" step="1" value="${dollars(S.set.gradeShip)}"></label>
@@ -811,6 +827,7 @@
       $("#ga-ship", root).onchange = (e) => { S.set.gradeShip = cents(e.target.value); save(); onChange(); };
       $("#ga-plat", root).onchange = (e) => { S.set.platform = e.target.value; save(); onChange(); };
       $("#ga-mine", root).onchange = (e) => { S.set.useMyRates = e.target.checked; save(); onChange(); };
+      $("#ga-mix", root).onchange = (e) => { S.set.useMix = e.target.checked; save(); onChange(); };
     };
     return { html, bind };
   }
@@ -818,7 +835,7 @@
     const draw = () => {
       const a = assumptions(draw), { co, l10, l9 } = grader();
       const rows = S.board.map((x, i) => {
-        const raw = marketOf(x) || 0, bp = boardPrices(x), e = gradeEval(raw, bp.p10, bp.p9, bp.p8);
+        const raw = marketOf(x) || 0, bp = boardPrices(x), e = gradeEval(raw, bp.p10, bp.p9, bp.p8, undefined, cardOdds(x.id));
         return { x, i, raw, e, gp: bp.gp, no: (x.n.match(/ - ([\w/-]+)/) || [])[1] || "" };
       }).sort((a, b) => (b.e.profit ?? -1e12) - (a.e.profit ?? -1e12));
       const priced = rows.filter((r) => r.e.profit != null), best = priced.filter((r) => r.e.profit > 0);
@@ -838,7 +855,8 @@
             <a class="btn sm" href="https://www.pricecharting.com/search-products?q=${encodeURIComponent(cleanN(x.n))}&type=prices" target="_blank" rel="noopener">All grades ↗</a><a class="btn sm" href="https://www.gemrate.com/" target="_blank" rel="noopener">Gem rate ↗</a></div>
           <div class="kv">${e.profit != null ? `<div><span>Expected profit</span><span class="${cls(e.profit)}">${signed(Math.round(e.profit))}</span></div>
             <div><span>If ${esc(l10)} / if ${esc(l9)}</span><span><span class="up">${signed(Math.round(e.ten))}</span> / <span class="${cls(e.nine)}">${signed(Math.round(e.nine))}</span></span></div>` : ""}
-            <div><span>${esc(l10)} needs to sell for</span><span>${beText(e.be10, raw)}</span></div></div>
+            <div><span>${esc(l10)} needs to sell for</span><span>${beText(e.be10, raw)}</span></div>
+            <div><span>Odds used</span><span class="small">${esc(oddsText(e.od))}</span></div></div>
           ${e.up ? `<p class="muted small" style="margin:0">A ${esc(l10)} here is upcharged to ${esc(e.up[0])} (${money(e.up[1])}); counted.</p>` : ""}
           <div class="btns"><button type="button" class="btn sm" data-log="${i}">Log result</button><button type="button" class="btn sm ghost danger" data-rm="${i}">Remove</button></div></div>`).join("")
           : `<div class="empty"><b>Build your grading board</b>Add cards from <b style="display:inline;font-size:inherit">Find</b> or tap Grade it? on any card. Enter what a 10 and a 9 sell for (tap the sold links), and the board ranks them by expected profit after every fee.</div>`}`;
@@ -879,7 +897,7 @@
       let rows = gd.rows.filter((r) => !multi.has(r[0]) && gameOk(r[7]) && (FIND.era === "all" || r[8] === FIND.era) && r[3] >= FIND.min * 100 && (!FIND.max || r[3] <= FIND.max * 100)
         && (!q || (r[2] + " " + setName(r[1])).toLowerCase().includes(q)));
       const sort = (FIND.sort === "profit" || FIND.sort === "mult") && !hasPkm() ? "price" : FIND.sort || (GR && hasPkm() ? "profit" : "price"), { l10 } = grader();
-      rows = rows.map((r) => { const gp = GR ? gradedOf(r[0]) : null, ok = solid(gp); return { r, gp: ok ? gp : null, e: gradeEval(r[3], ok ? gp.p10 : null, ok ? gp.p9 : null, ok ? gp.p8 : null) }; });
+      rows = rows.map((r) => { const gp = GR ? gradedOf(r[0]) : null, ok = solid(gp); return { r, gp: ok ? gp : null, e: gradeEval(r[3], ok ? gp.p10 : null, ok ? gp.p9 : null, ok ? gp.p8 : null, undefined, cardOdds(r[0])) }; });
       if (GR && FIND.mult) rows = rows.filter((x) => x.gp && x.gp.p10 >= FIND.mult * x.r[3]);
       if (GR && FIND.liquid) rows = rows.filter((x) => liquid(x.gp));
       if (sort === "profit" || sort === "mult") rows = rows.filter((x) => x.gp);
@@ -887,7 +905,7 @@
       const out = rows.slice(0, 80).map(({ r, gp, e }) => { const k = keyOf(r[0], r[2]), be = e.be10;
         const add = onBoard.has(k) ? `<span class="chip good">On your board</span>` : `<span class="chip" data-addb="${r[0]}|${r[1]}|${esc(r[2])}">+ Add to board</span>`;
         return gp ? rowHTML({ id: r[0], g: r[1], n: r[2] }, `<b class="${cls(e.profit)}">${signed(Math.round(e.profit))}</b><small class="muted">raw ${money(r[3])} · ${esc(l10)} ${money(gp.p10, gp.p10 >= 100000)}</small>`,
-            `<span class="why">${vchip(e.v)} <b>${(gp.p10 / r[3]).toFixed(1)}×</b> · ${gp.n10} sold in 90 days${gp.l10 ? `, last ${fmtDay(gp.l10)}` : ""}${gp.p9 ? ` · ${esc(grader().l9)} ${money(gp.p9)}` : ""} ${add}${gp.p10 > 40 * r[3] ? `<span class="risk">a ${esc(l10)} at ${Math.round(gp.p10 / r[3])}× raw is unusual. Check the sold listings: they may include a 1st Edition, shadowless or other printing.</span>` : ""}</span>`)
+            `<span class="why">${vchip(e.v)} <b>${(gp.p10 / r[3]).toFixed(1)}×</b> · ${Math.round(e.od.o10 * 100)}% ${esc(l10)}s${e.od.src === "mix" ? "" : " (your setting)"} · ${gp.n10} sold in 90 days${gp.l10 ? `, last ${fmtDay(gp.l10)}` : ""}${gp.p9 ? ` · ${esc(grader().l9)} ${money(gp.p9)}` : ""} ${add}${gp.p10 > 40 * r[3] ? `<span class="risk">a ${esc(l10)} at ${Math.round(gp.p10 / r[3])}× raw is unusual. Check the sold listings: they may include a 1st Edition, shadowless or other printing.</span>` : ""}</span>`)
           : rowHTML({ id: r[0], g: r[1], n: r[2] }, `<b>${money(r[3])}</b><small class="muted">${esc(grader().co + " " + l10)} needs ${!isFinite(be) ? "—" : `${money(Math.round(be), be >= 100000)} (${(be / r[3]).toFixed(0)}×)`}</small>`, `<span class="why">${add}</span>`); });
       $("#fd-list").innerHTML = (FIND.mult && rows.length ? `<p class="muted small" style="margin:0">${rows.length} card${rows.length === 1 ? "" : "s"} where a ${esc(grader().co + " " + l10)} sells for ${FIND.mult}×+ raw${FIND.liquid ? " and trades often" : ""}. A big multiple on a cheap card can still lose money once fees are in: the green number is profit after grading fees, shipping, selling fees and your grade odds.</p>` : "")
         + listOrEmpty(out, FIND.mult ? `No cards at ${FIND.mult}×+ yet${FIND.liquid ? " that trade often" : ""}. Graded prices for $1–$20 cards fill in over the next few days; try again soon, lower the multiple, or turn off Liquid only.` : sort === "profit" ? "No cards with enough graded sales match. Widen the price range, switch era or games, or sort by Most valuable." : "No cards match. Widen the price range or switch games.") + (rows.length > 80 ? `<p class="muted small">Showing 80 of ${rows.length}. Narrow it with search or price.</p>` : "");
@@ -914,13 +932,13 @@
     const draw = () => {
       const a = assumptions(draw), { co, gr, tier, l10, l9 } = grader();
       const box = S.set.boxShip, picked = S.board.filter((x) => S.sub.includes(x.k));
-      const per = picked.map((x) => { const raw = marketOf(x) || 0, bp = boardPrices(x); return { x, raw, e: gradeEval(raw, bp.p10, bp.p9, bp.p8, 0) }; });
+      const per = picked.map((x) => { const raw = marketOf(x) || 0, bp = boardPrices(x); return { x, raw, e: gradeEval(raw, bp.p10, bp.p9, bp.p8, 0, cardOdds(x.id)) }; });
       const base = picked.length * tier[1], exp = per.reduce((s, r) => s + (r.e.grading ?? tier[1]), 0);
       const profit = per.reduce((s, r) => s + (r.e.profit ?? 0), 0) - box, worst = per.reduce((s, r) => s + (r.e.nine ?? 0), 0) - box;
       const missing = per.filter((r) => r.e.profit == null).length;
       el.innerHTML = `${a.html}<section class="sec panel"><h2>Plan a submission</h2>
         <p class="muted small" style="margin:0">Tick the cards from your board to send together. Shipping and insurance are for the whole box.</p>
-        <div class="list">${S.board.length ? S.board.map((x) => { const raw = marketOf(x) || 0, bp = boardPrices(x), e = gradeEval(raw, bp.p10, bp.p9, bp.p8, 0);
+        <div class="list">${S.board.length ? S.board.map((x) => { const raw = marketOf(x) || 0, bp = boardPrices(x), e = gradeEval(raw, bp.p10, bp.p9, bp.p8, 0, cardOdds(x.id));
           return `<label class="row" style="grid-template-columns:24px 44px minmax(0,1fr) auto;cursor:pointer"><input type="checkbox" data-sub="${esc(x.k)}"${S.sub.includes(x.k) ? " checked" : ""}>${img(x.id)}
             <span style="min-width:0"><span class="nm">${esc(cleanN(x.n))}</span><span class="st">raw ${money(raw)}</span></span><span class="rt">${e.v ? `<span class="chip ${e.v[0] === "good" ? "good" : e.v[0] === "bad" ? "bad" : "hot"}">${e.v[1]}</span>` : `<small class="muted">no ${esc(l10)} price</small>`}</span></label>`; }).join("")
           : `<p class="muted small" style="padding:12px">Your board is empty. Add cards in Find first.</p>`}</div>
