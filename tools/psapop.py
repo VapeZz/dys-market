@@ -66,7 +66,8 @@ def psa_get(path, cache):
     except urllib.error.HTTPError as e:
         if e.code in (401, 403, 500):
             raw = e.read()[:400].decode("utf-8", "replace")
-            hint = ("blocked by PSA's firewall (Cloudflare), not the token" if re.search(r"cloudflare|cf-ray|attention required|just a moment", raw + str(e.headers), re.I)
+            hint = ("PSA hasn't approved this account for API access yet; the job keeps trying daily" if re.search(r"approved customers", raw, re.I)
+                    else "blocked by PSA's firewall, not the token" if re.search(r"attention required|just a moment|cf-chl", raw, re.I)
                     else "token expired or rejected? make a new one and update PSA_TOKEN")
             print(f"psa debug: HTTP {e.code} server={e.headers.get('server')} token_len={len(tok)} body={re.sub(r'\s+', ' ', raw)[:200]!r}")
             raise Stop(f"PSA said HTTP {e.code} ({hint})")
@@ -265,7 +266,7 @@ def main(argv):
            f"{cache['calls'].get(TODAY, 0)} PSA calls today; {len(edge)} cards with PSA population")
     print(msg + (f" (stopped: {why})" if why else ""))
     if why.startswith("PSA said"):
-        print(f"::error title=PSA pop::{why}")
+        print(f"::{'warning' if 'approved' in why else 'error'} title=PSA pop::{why}")
 
 
 if __name__ == "__main__":
