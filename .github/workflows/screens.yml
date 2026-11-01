@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       pages:
-        description: "name=path pairs, space separated (path relative to https://market.driveyourstyle.net/)"
+        description: "name=path pairs, space separated (path relative to https://market.driveyourstyle.net/, or a full https:// URL); names ending in -desk are shot at desktop size"
         required: true
 permissions:
   contents: write
@@ -27,15 +27,18 @@ jobs:
           from playwright.sync_api import sync_playwright
           with sync_playwright() as p:
               b = p.chromium.launch()
-              pg = b.new_page(viewport={"width": 390, "height": 844}, device_scale_factor=2)
+              phone = b.new_page(viewport={"width": 390, "height": 844}, device_scale_factor=2)
+              desk = b.new_page(viewport={"width": 1280, "height": 800}, device_scale_factor=1)
               for pair in os.environ["PAGES"].split():
                   name, path = pair.split("=", 1)
+                  pg = desk if name.endswith("-desk") else phone   # names ending in -desk: desktop size
+                  w = 1280 if pg is desk else 390
                   try:
-                      pg.goto("https://market.driveyourstyle.net/" + path, wait_until="networkidle", timeout=45000)
+                      pg.goto(path if path.startswith("http") else "https://market.driveyourstyle.net/" + path, wait_until="networkidle", timeout=45000)
                       pg.wait_for_timeout(2500)
                       h = pg.evaluate("document.documentElement.scrollHeight")
                       if h > 6000:   # very long pages: just the top 6000px (JPEG can't hold a huge page)
-                          pg.screenshot(path=f"/tmp/shots/{name}.jpg", type="jpeg", quality=70, full_page=True, clip={"x": 0, "y": 0, "width": 390, "height": 6000})
+                          pg.screenshot(path=f"/tmp/shots/{name}.jpg", type="jpeg", quality=70, full_page=True, clip={"x": 0, "y": 0, "width": w, "height": 6000})
                       else:
                           pg.screenshot(path=f"/tmp/shots/{name}.jpg", type="jpeg", quality=70, full_page=True)
                       print(f"::notice title=shot::{name} ok")
