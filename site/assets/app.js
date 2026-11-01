@@ -18,6 +18,15 @@ const cleanItem = (it) => {
   return out;
 };
 const params = new URLSearchParams(location.search);
+/* new-layout preview: ?v2=1 turns it on for this browser, ?v2=0 turns it off; everyone else keeps the current layout */
+const V2 = (() => {
+  try {
+    if (params.get("v2") === "1") localStorage.setItem("dys-v2", "1");
+    if (params.get("v2") === "0") localStorage.removeItem("dys-v2");
+    return localStorage.getItem("dys-v2") === "1";
+  } catch (e) { return params.get("v2") === "1"; }
+})();
+if (V2) document.documentElement.classList.add("v2");
 const cache = {};
 const getJSON = (path) => (cache[path] ||= fetch(`data/${path}`, { cache: "no-cache" }).then((r) => {
   if (!r.ok) throw new Error(`${path}: ${r.status}`);
@@ -168,7 +177,7 @@ const SEARCH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" strok
 // header links that fold into the ☰ menu on narrower desktops: 1 = below 1800px, 2 = below 1440px
 const NAV_TIER = { search: 1, compare: 1, centering: 1, calendar: 1, sneakers: 1, watchlist: 1, about: 1, giveaway: 1, trends: 2, collectors: 2 };
 function shell() {
-  const links = [["intel", "Intel"], ["sets", "Sets"], ["trends", "Trends"], ["cards", "Movers"], ["search", "Search"], ["compare", "Compare"], ["centering", "Centering"], ["grading", "Grading"], ["calendar", "Calendar"], ["sneakers", "Sneakers"], ["watchlist", "Want list"], ["collection", "My Collection"], ["collectors", "Collectors"], ...(GIVEAWAY_ON ? [["giveaway", "🎁 Giveaway"]] : []), ["about", "About"]];
+  const links = V2 ? [["intel", "Intel"], ["sets", "Sets"], ["cards", "Movers"], ["grading", "Grading"], ["sneakers", "Sneakers"], ["tools", "All tools"], ["collection", "My Collection"]] : [["intel", "Intel"], ["sets", "Sets"], ["trends", "Trends"], ["cards", "Movers"], ["search", "Search"], ["compare", "Compare"], ["centering", "Centering"], ["grading", "Grading"], ["calendar", "Calendar"], ["sneakers", "Sneakers"], ["watchlist", "Want list"], ["collection", "My Collection"], ["collectors", "Collectors"], ...(GIVEAWAY_ON ? [["giveaway", "🎁 Giveaway"]] : []), ["about", "About"]];
   $("#top").outerHTML = `<header class="top"><div class="wrap">
     <a class="brand" href="index.html" aria-label="Drive Your Style Market Insights home"><img class="logo-img logo-on-dark" src="assets/logo-light.png" alt="Drive Your Style" width="61" height="40"><img class="logo-img logo-on-light" src="assets/logo-dark.png" alt="" width="61" height="40"><span class="brand-sub">Market<br>Insights</span></a>
     <nav class="nav" id="nav">${links.map(([p, l]) => `<a href="${p}.html"${NAV_TIER[p] ? ` class="nav-x${NAV_TIER[p]}"` : ""}${p === PAGE ? ' aria-current="page"' : ""}>${l}</a>`).join("")}
@@ -203,7 +212,17 @@ function shell() {
     ["intel", "Intel", I('<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>')],
     ["shop", "Shop", I('<path d="M6 7h12l-1 13H7z"/><path d="M9 7a3 3 0 0 1 6 0"/>')]];
   const bar = document.createElement("nav"); bar.className = "tabbar"; bar.setAttribute("aria-label", "Main");
-  bar.innerHTML = tb.map(([p, l, i]) => `<a href="${p === "shop" ? STORE : p + ".html"}"${p === PAGE || (p === "sets" && PAGE === "set") ? ' aria-current="page"' : ""}>${i}<span>${l}</span></a>`).join("");
+  if (V2) {   // 5 tabs: everything that isn't Home / Search / Sets / Me lives on the Tools page
+    const TOOLS = new Set(["tools", "grading", "centering", "sell", "sneakers", "calendar", "supplies", "intel", "trends", "cards", "compare", "collectors"]);
+    const cur = (p) => p === PAGE || (p === "sets" && PAGE === "set") || (p === "tools" && TOOLS.has(PAGE)) || (p === "collection" && PAGE === "watchlist");
+    const v2tb = [tb[0], tb[1], tb[2], ["tools", "Tools", I('<rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/>')],
+      ["collection", "Me", I('<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>')]];
+    bar.innerHTML = v2tb.map(([p, l, i]) => `<a href="${p}.html"${cur(p) ? ' aria-current="page"' : ""}>${i}<span>${l}</span></a>`).join("");
+    const off = new URL(location.href); off.searchParams.set("v2", "0");
+    document.body.insertAdjacentHTML("beforeend", `<a class="v2-pill" href="${esc(off.pathname + off.search + off.hash)}" title="Go back to the current layout">Preview: new layout · <b>Turn off</b></a>`);
+  } else {
+    bar.innerHTML = tb.map(([p, l, i]) => `<a href="${p === "shop" ? STORE : p + ".html"}"${p === PAGE || (p === "sets" && PAGE === "set") ? ' aria-current="page"' : ""}>${i}<span>${l}</span></a>`).join("");
+  }
   document.body.appendChild(bar);
   document.querySelectorAll(".theme-switch button").forEach((b) => b.addEventListener("click", () => setTheme(b.dataset.t)));
   setTheme(getTheme());
@@ -282,8 +301,26 @@ function startsOn(meta, win) {
   const d = new Date(new Date(meta.first + "T12:00:00Z").getTime() + Number(win) * 864e5).toISOString().slice(0, 10);
   return d > meta.updated ? ` Price tracking began ${fmtDate(meta.first)}, so this view fills in around ${fmtDate(d)}.` : "";
 }
+/* new layout: movers as picture tiles, 2 across on phones */
+function moverTile(id, name, gid, now, old, p, i, meta) {
+  return `<a class="mtile" href="${prodUrl(id, gid)}"><span class="mt-img">${imgTag(id, "", 400)}<span class="mt-rank">${i + 1}</span>${p != null ? `<span class="mt-chg ${p > 0 ? "up" : p < 0 ? "down" : ""}">${p > 0 ? "▲" : p < 0 ? "▼" : ""} ${Math.abs(p).toFixed(0)}%</span>` : ""}</span>
+    <b class="mt-n">${esc(name)}</b><span class="mt-s">${esc(meta.groups[gid]?.[0] || "")}</span>
+    <span class="mt-p"><b>${money(now)}</b>${old != null ? `<span class="muted">from ${money(old)}</span>` : ""}</span>${STK.has(id) ? `<span class="instock-tag">In stock</span>` : ""}</a>`;
+}
+function v2Dirs() {   // phones: one panel at a time (Gains | Drops) instead of two long stacked lists
+  if (!V2) return;
+  document.querySelectorAll(".movers:not([data-v2d])").forEach((m) => {
+    m.dataset.v2d = "1";
+    const t = document.createElement("div"); t.className = "v2-dir"; t.setAttribute("role", "group");
+    t.innerHTML = `<button type="button" data-d="up" aria-pressed="true">▲ Gains</button><button type="button" data-d="down" aria-pressed="false">▼ Drops</button>`;
+    t.addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; m.classList.toggle("dir-down", b.dataset.d === "down");
+      t.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b)); });
+    m.before(t);
+  });
+}
 function moverRows(list, meta, limit, win) {
   if (!list || !list.length) return `<div class="empty-note">Not enough price history for this view yet.${win ? startsOn(meta, win) : ""}</div>`;
+  if (V2) return list.slice(0, limit).map((r, i) => moverTile(r[0], r[1], r[2], r[3], r[4], r[5], i, meta)).join("");
   return list.slice(0, limit).map((r, i) => {
     const [id, name, gid, now, old, p] = r;
     return `<a class="row" href="${prodUrl(id, gid)}"><span class="rank">${i + 1}</span>${imgTag(id)}
@@ -293,6 +330,7 @@ function moverRows(list, meta, limit, win) {
 }
 const BAND_TOP = { "5": 2000, "20": 10000 };
 function topRows(list, meta, offset) {
+  if (V2) return list.map((r, i) => moverTile(r[0], r[1], r[2], r[3], null, null, offset + i, meta)).join("");
   return list.map((r, i) => `<a class="row" href="${prodUrl(r[0], r[2])}"><span class="rank">${offset + i + 1}</span>${imgTag(r[0])}
     <span class="name"><b>${esc(r[1])}</b><span>${esc(meta.groups[r[2]]?.[0] || "")}</span></span>
     <span class="figs"><b>${money(r[3])}</b></span></a>`).join("");
@@ -300,6 +338,7 @@ function topRows(list, meta, offset) {
 function moversPanel(container, { kind, meta, limit = 10, thresholds = false, defaultThr = "5" }) {
   const games = [["all", "All games"], ...meta.games.map((g) => [g.slug, g.label])];
   let game = "all", win = meta.anchors?.["7"] ? "7" : meta.anchors?.all ? "all" : "7", thr = defaultThr;
+  container.dataset.kind = kind;
   container.innerHTML = `<div class="controls"><div data-g></div><div data-w></div>${thresholds ? "<div data-t></div>" : ""}</div>
     <div class="movers"><div class="panel"><h3><span class="chg up">▲</span> Biggest gains</h3><div data-up></div></div>
     <div class="panel"><h3><span class="chg down">▼</span> Biggest drops</h3><div data-down></div></div></div>`;
@@ -325,6 +364,7 @@ function moversPanel(container, { kind, meta, limit = 10, thresholds = false, de
   tabs($("[data-g]", container), games, game, (v) => { game = v; draw(); });
   tabs($("[data-w]", container), WINDOWS, win, (v) => { win = v; draw(); });
   if (thresholds) tabs($("[data-t]", container), [["5", "$5+"], ["20", "$20+"], ["100", "$100+"]], thr, (v) => { thr = v; draw(); });
+  v2Dirs();
   draw();
 }
 function setsTable(rows, meta, opts = {}) {
@@ -337,7 +377,25 @@ function setsTable(rows, meta, opts = {}) {
 }
 
 /* ---------- pages ---------- */
+/* new layout, home: search, tools, today's brief and big-picture trending first; games and the sign-up boxes lower and smaller */
+function v2Home() {
+  const main = $("main"), sec = (sel) => $(sel)?.closest("section");
+  const th = $(".tools-head"); if (th) th.innerHTML = `<h2>Tools</h2><a class="more" href="tools.html">All tools →</a>`;
+  const order = [".hero-deal", ".tools-block", "#intel-block", "#card-movers", "#stock-block", "#newsets", "#gtiles", "#sealed-movers", "#wanted-block", "#report-block"]
+    .map((s) => (s.startsWith("#") && !/-block$/.test(s) ? sec(s) : $(s))).filter(Boolean);
+  const ctas = [...main.querySelectorAll(".cta")];
+  const stats = $("#stats")?.closest(".wrap");
+  order.forEach((el) => main.appendChild(el));
+  if (ctas.length) {
+    const box = document.createElement("section"); box.className = "block"; box.innerHTML = `<div class="wrap"><div class="cta3"></div></div>`;
+    ctas.forEach((c) => { const old = c.closest("section"); $(".cta3", box).appendChild(c); old?.remove(); });
+    main.appendChild(box);
+  }
+  if (stats) main.appendChild(stats);
+  const gh = sec("#gtiles"); if (gh && !gh.querySelector(".block-head")) $(".wrap", gh).insertAdjacentHTML("afterbegin", `<div class="block-head"><div><h2>Browse by game</h2></div><a class="more" href="sets.html">All sets →</a></div>`);
+}
 async function pageIndex() {
+  if (V2) v2Home();
   const meta = await getJSON("meta.json");
   $("#stats").textContent = `Tracking ${meta.cards.toLocaleString()} cards and ${meta.sealed.toLocaleString()} sealed products across ${meta.sets.toLocaleString()} sets · prices updated ${fmtDate(meta.updated)}`;
   const allSets = await getJSON("sets.json");
@@ -347,8 +405,8 @@ async function pageIndex() {
   const horizon = new Date(Date.now() + 45 * 864e5).toISOString().slice(0, 10);
   $("#newsets").innerHTML = allSets.filter((s) => s.pub && s.pub <= horizon && !SPECIAL.test(s.n) && (s.lg || s.bbId || s.tc?.length))
     .sort((a, b) => b.pub.localeCompare(a.pub)).slice(0, 12).map((s) => setTile(s, meta.updated)).join("");
-  moversPanel($("#card-movers"), { kind: "cards", meta, limit: 5 });
-  moversPanel($("#sealed-movers"), { kind: "sealed", meta, limit: 5 });
+  moversPanel($("#card-movers"), { kind: "cards", meta, limit: V2 ? 6 : 5 });
+  moversPanel($("#sealed-movers"), { kind: "sealed", meta, limit: V2 ? 6 : 5 });
   getJSON("wanted.json").then((w) => {
     const top = (w.top || []).map((i) => ({ ...i, id: safeId(i.id), g: safeId(i.g), c: Math.max(0, parseInt(i.c, 10) || 0) })).filter((i) => i.id).slice(0, 12); if (!top.length) return;
     $("#wanted-block").hidden = false;
@@ -845,6 +903,7 @@ async function pageTrends() {
 }
 
 async function pageCards() {
+  v2Dirs();
   getJSON("intel.json").then((d) => { const gm = [...(d.graded?.up || []), ...(d.graded?.down || [])];
     if (gm.length && $("#gmov")) { $("#gmov").hidden = false; $("#gmov-row").innerHTML = gm.map(gmCard).join(""); } }).catch(() => {});
   const [meta, sets] = await Promise.all([getJSON("meta.json"), getJSON("sets.json")]);

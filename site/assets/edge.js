@@ -7,6 +7,35 @@
   const BASE = /\/edge\/(index\.html)?$/.test(location.pathname) ? "../" : "";
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  /* new-layout preview (shared with the market site): ?v2=1 on, ?v2=0 off */
+  const V2 = (() => {
+    try {
+      const q = new URLSearchParams(location.search);
+      if (q.get("v2") === "1") localStorage.setItem("dys-v2", "1");
+      if (q.get("v2") === "0") localStorage.removeItem("dys-v2");
+      if (q.get("grid") === "1") localStorage.setItem("edge-grid", "1");
+      if (q.get("grid") === "0") localStorage.removeItem("edge-grid");
+      return localStorage.getItem("dys-v2") === "1";
+    } catch { return false; }
+  })();
+  if (V2) {
+    document.documentElement.classList.add("v2");
+    try { if (localStorage.getItem("edge-grid") === "1") document.documentElement.classList.add("grid"); } catch {}
+    // 5 tabs at the bottom; Sets and Tools move to the top bar next to a list / grid switch
+    const SV = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+    document.querySelectorAll('.tabs a[data-tab="sets"], .tabs a[data-tab="tools"]').forEach((a) => a.remove());
+    const asof = document.getElementById("asof");
+    asof?.insertAdjacentHTML("afterend", `<div class="hd-acts">
+      <a href="#sets" data-tab="sets" aria-label="Sets" title="Sets">${SV('<rect x="3.5" y="7" width="12" height="14" rx="2"/><path d="M7.5 7V5a1.5 1.5 0 0 1 1.5-1.5h10A1.5 1.5 0 0 1 20.5 5v11a1.5 1.5 0 0 1-1.5 1.5h-3.5"/>')}</a>
+      <a href="#tools" data-tab="tools" aria-label="Tools" title="Tools">${SV('<rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2"/>')}</a>
+      <button type="button" class="hd-grid" aria-label="Show cards as a grid" title="List or grid" aria-pressed="${document.documentElement.classList.contains("grid")}">${SV('<rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/>')}</button></div>`);
+    document.querySelector(".hd-grid")?.addEventListener("click", (e) => {
+      const on = document.documentElement.classList.toggle("grid");
+      e.currentTarget.setAttribute("aria-pressed", on);
+      try { on ? localStorage.setItem("edge-grid", "1") : localStorage.removeItem("edge-grid"); } catch {}
+    });
+    document.body.insertAdjacentHTML("beforeend", `<a class="v2-pill" href="?v2=0${location.hash}">Preview: new layout · <b>Turn off</b></a>`);
+  }
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const money = (c, whole) => {
     if (c == null || !isFinite(c)) return "—";
@@ -24,7 +53,7 @@
   const fmtDay = (d) => d ? new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
   const daysAgo = (d) => d ? Math.max(0, Math.round((Date.now() - Date.parse(d + "T12:00:00")) / 864e5)) : null;
   const IMG = (id, size = 200) => `https://tcgplayer-cdn.tcgplayer.com/product/${encodeURIComponent(id)}_${size === 1000 ? "in_1000x1000" : size + "w"}.jpg`;
-  const img = (id, size = 200) => `<img src="${IMG(id, size)}" alt="" loading="lazy" decoding="async" data-img>`;
+  const img = (id, size = V2 ? 400 : 200) => `<img src="${IMG(id, size)}" alt="" loading="lazy" decoding="async" data-img>`;
   document.addEventListener("error", (e) => { if (e.target?.matches?.("img[data-img]")) { const d = document.createElement("div"); d.className = "ph"; e.target.replaceWith(d); } }, true);
   const tcgUrl = (id) => `https://www.tcgplayer.com/product/${id}?Language=all`;
   const soldUrl = (n, extra = "") => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent((cleanN(n).replace(/ \(Reverse Holofoil\)$/, "") + " " + extra).trim())}&LH_Sold=1&LH_Complete=1&_sop=13`;
@@ -151,7 +180,7 @@
     const h = (location.hash || "").slice(1).split("/")[0];
     TAB = TABS[h] ? h : "today";
     if (TAB !== "search") PICK = null;
-    $$(".tabs a").forEach((a) => a.setAttribute("aria-current", a.dataset.tab === TAB ? "page" : "false"));
+    $$(".tabs a, .hd-acts a").forEach((a) => a.setAttribute("aria-current", a.dataset.tab === TAB ? "page" : "false"));
     const v = $("#view"); v.innerHTML = ""; window.scrollTo(0, 0);
     TABS[TAB](v).catch((err) => { console.error(err); v.innerHTML = `<div class="empty"><b>Couldn't load the market data</b>Check your connection and reopen the app.</div>`; });
   }

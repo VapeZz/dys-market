@@ -101,6 +101,38 @@ def supplies_body():
 
 SUPPLIES_BODY = supplies_body()
 
+# tools.html: every tool on one page (the "Tools" tab of the new layout)
+_I = lambda d: f'<span class="tool-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{d}</svg></span>'
+HUB = [
+    ("Check prices", [
+        ("search.html", "Price check", "Search or scan any card", '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>'),
+        ("cards.html", "Card movers", "Biggest gains and drops", '<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>'),
+        ("trends.html", "Sealed trends", "Booster boxes, ETBs, bundles", '<path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/>'),
+        ("compare.html", "Compare", "Two products side by side", '<rect x="3" y="5" width="7" height="14" rx="1.5"/><rect x="14" y="5" width="7" height="14" rx="1.5"/>'),
+        ("intel.html", "Market intel", "Today's market brief", '<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>'),
+        ("blog/", "Market reports", "The weekly write-up", '<path d="M5 4h11l3 3v13H5z"/><path d="M8 10h8M8 14h8M8 18h5"/>'),
+    ]),
+    ("Grading", [
+        ("grading.html", "Grading Insights", "Which cards pay to grade", '<path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/>'),
+        ("centering.html", "Centering check", "Snap a photo, get the grade", '<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M12 8v8M8 12h8"/>'),
+        ("supplies.html", "Grading supplies", "Sleeves, Card Savers, mailers", '<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4"/>'),
+    ]),
+    ("Your cards", [
+        ("collection.html", "My Collection", "What your binder is worth", '<path d="M4 6h16v12H4z"/><path d="M4 10h16"/>'),
+        ("watchlist.html", "Want list", "Set the most you'd pay", '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>'),
+        ("sell.html", "Sell to us", "Cash or store credit", '<path d="M12 3v18M17 7.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2.2 2.6 5 3 5 1.1 5 3-2.2 3-5 3-5-1.1-5-3"/>'),
+        ("collectors.html", "Collectors", "Public binders to browse", '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c1-3.5 3.5-5.5 6.5-5.5s5.5 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.6.9 2.7 2.6 3 5.2"/>'),
+    ]),
+    ("Drops", [
+        ("calendar.html", "Release calendar", "Every set, every game", '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>'),
+        ("sneakers.html", "Sneaker drops", "Release dates and resale", '<path d="M3 16c0-2 1-3 2.5-3.5L9 11l2-4 2.5 1.5c1 3 3 4 6 4.5A2.5 2.5 0 0 1 22 15.5V17H3z"/><path d="M3 17v2h19v-2"/>'),
+        ("https://driveyourstyle.net", "Shop the store", "Sealed, singles, sneakers", '<path d="M6 7h12l-1 13H7z"/><path d="M9 7a3 3 0 0 1 6 0"/>'),
+    ]),
+]
+TOOLS_BODY = '<div class="wrap"><section class="block" style="padding-bottom:4px"><h1 class="in-h">Tools</h1><p class="muted" style="margin:-6px 0 0">Free, no sign-up needed.</p></section>' + "".join(
+    f'<section class="block hub-sec"><h2>{h}</h2><div class="hub">' + "".join(f'<a class="tool" href="{u}">{_I(d)}<b>{t}</b><span>{s}</span></a>' for u, t, s, d in items) + "</div></section>"
+    for h, items in HUB) + "</div>"
+
 PAGES = {
 "index": ("Market Insights · Drive Your Style",
           "Nightly market prices, biggest movers and set values for Pokémon, One Piece, Lorcana, Riftbound, Gundam, Union Arena, Yu-Gi-Oh!, Dragon Ball and Palworld sealed product and cards.", f'''
@@ -527,6 +559,8 @@ PAGES = {
   <h3>Changes and law</h3>
   <p>We may update this page; the effective date above shows the latest version. These terms are governed by the laws of Nevada, USA. Questions: <b>customerservice@driveyourstyle.net</b>.</p>
 </article></div>'''),
+"tools": ("Tools · Drive Your Style Market Insights",
+          "Free card tools: price check and scan, movers, sealed trends, Grading Insights, centering check, collection tracker, want list, release calendar and sneaker drops.", TOOLS_BODY),
 "supplies": ("Card grading & storage supplies · Drive Your Style",
              "What you need to send cards to PSA, CGC or BGS and to store, display and ship them: penny sleeves, Card Saver 1, team bags, top loaders, binders and more.", SUPPLIES_BODY),
 "about": ("About the data · Drive Your Style Market Insights", "Where Drive Your Style market prices come from.", '''
@@ -621,7 +655,7 @@ a:focus-visible{{outline:2px solid var(--ink);outline-offset:3px}}
 def main():
     for page, (title, desc, body) in PAGES.items():
         canon = "" if page == "index" else f"{page}.html"
-        hidden = ("importer", "demand", "buyer") + (() if GIVEAWAY_ON else ("giveaway",))
+        hidden = ("importer", "demand", "buyer", "tools") + (() if GIVEAWAY_ON else ("giveaway",))   # tools: preview of the new layout, not indexed yet
         head = HEAD.replace("<link rel=\"canonical\"", "<meta name=\"robots\" content=\"noindex\">\n<link rel=\"canonical\"") if page in hidden else HEAD
         if page == "index":   # impact.com site ownership check
             head = head.replace('<meta name="theme-color" content="#0b0d14">', '<meta name="theme-color" content="#0b0d14">\n<meta name="impact-site-verification" value="9961457d-75f1-4449-9d0a-10bb739058b9">')
