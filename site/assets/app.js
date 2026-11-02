@@ -774,7 +774,7 @@ function priceBreak(v, base) {
       <div><span class="pb-lab">MID LISTING</span><b>${v.md ? money(v.md) : "—"}</b><span class="muted pb-sm">typical asking</span></div></div>
     ${v.t === "c" ? `<div class="pb-cond">${COND.map(([c, f]) => `<div class="${c === "NM" ? "on" : ""}"><b>${c}</b><span>${v.p * f >= 10000 ? "$" + Math.round(v.p * f / 100).toLocaleString("en-US") : money(Math.round(v.p * f))}</span></div>`).join("")}</div>
     <p class="muted pb-sm" style="margin:6px 0 0">Condition prices are estimates from the Near Mint market price.</p>` : ""}
-    <div class="pb-btns"><a class="btn" href="${sold}" target="_blank" rel="noopener">Search eBay sold ↗</a><a class="btn" href="https://www.tcgplayer.com/product/${v.id}" target="_blank" rel="noopener">See on TCGplayer ↗</a></div></div>`;
+    <div class="pb-btns"><a class="btn primary" href="${ebayBuy(v.n, v.t === "c" ? v.no : "", v.t === "c" ? "-psa -cgc -bgs -sgc -graded -slab" : "")}" target="_blank" rel="sponsored noopener" data-where="product-buy">Buy on eBay ↗</a>${v.t === "c" ? `<a class="btn" href="${ebayBuy(v.n, v.no, "PSA 10")}" target="_blank" rel="sponsored noopener" data-where="product-buy-psa10">Buy PSA 10 on eBay ↗</a>` : ""}<a class="btn" href="${sold}" target="_blank" rel="noopener">Search eBay sold ↗</a><a class="btn" href="https://www.tcgplayer.com/product/${v.id}" target="_blank" rel="noopener">See on TCGplayer ↗</a></div></div>`;
 }
 
 /* "In stock at Drive Your Style" tiles for a list of set items that have i.dys */
