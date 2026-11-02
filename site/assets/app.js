@@ -760,7 +760,7 @@ async function gradeCalc(el, rawCents, id, gr) {
 
 /* DeckTradr-style price breakdown: live lowest listing vs recent-sales market, a blended value, spread and condition estimates */
 const COND = [["NM", 1], ["LP", 0.85], ["MP", 0.7], ["HP", 0.55], ["DMG", 0.4]];
-function priceBreak(v, base) {
+function priceBreak(v, base, game = "") {
   if (v.p == null) return "";
   const parts = [[v.p, 2], [v.lo, 1], [v.md, 1]].filter(([x]) => x);
   const blend = Math.round(parts.reduce((a, [x, w]) => a + x * w, 0) / parts.reduce((a, [, w]) => a + w, 0));
@@ -774,7 +774,7 @@ function priceBreak(v, base) {
       <div><span class="pb-lab">MID LISTING</span><b>${v.md ? money(v.md) : "—"}</b><span class="muted pb-sm">typical asking</span></div></div>
     ${v.t === "c" ? `<div class="pb-cond">${COND.map(([c, f]) => `<div class="${c === "NM" ? "on" : ""}"><b>${c}</b><span>${v.p * f >= 10000 ? "$" + Math.round(v.p * f / 100).toLocaleString("en-US") : money(Math.round(v.p * f))}</span></div>`).join("")}</div>
     <p class="muted pb-sm" style="margin:6px 0 0">Condition prices are estimates from the Near Mint market price.</p>` : ""}
-    <div class="pb-btns"><a class="btn primary" href="${ebayBuy(v.n, v.t === "c" ? v.no : "", v.t === "c" ? "-psa -cgc -bgs -sgc -graded -slab" : "")}" target="_blank" rel="sponsored noopener" data-where="product-buy">Buy on eBay ↗</a>${v.t === "c" ? `<a class="btn" href="${ebayBuy(v.n, v.no, "PSA 10")}" target="_blank" rel="sponsored noopener" data-where="product-buy-psa10">Buy PSA 10 on eBay ↗</a>` : ""}<a class="btn" href="${sold}" target="_blank" rel="noopener">Search eBay sold ↗</a><a class="btn" href="https://www.tcgplayer.com/product/${v.id}" target="_blank" rel="noopener">See on TCGplayer ↗</a></div></div>`;
+    <div class="pb-btns"><a class="btn primary" href="${ebayFind(v.n, v.no, { p: v.p, game, kind: v.t })}" target="_blank" rel="sponsored noopener" data-where="product-buy">Buy on eBay ↗</a>${v.t === "c" ? `<a class="btn" href="${ebayFind(v.n, v.no, { game, grade: "PSA 10" })}" target="_blank" rel="sponsored noopener" data-where="product-buy-psa10">Buy PSA 10 on eBay ↗</a>` : ""}<a class="btn" href="${sold}" target="_blank" rel="noopener">Search eBay sold ↗</a><a class="btn" href="https://www.tcgplayer.com/product/${v.id}" target="_blank" rel="noopener">See on TCGplayer ↗</a></div></div>`;
 }
 
 /* "In stock at Drive Your Style" tiles for a list of set items that have i.dys */
@@ -826,7 +826,7 @@ async function pageProduct() {
         ${v.dys && below(v.dys.p, v.p) ? `<p style="margin:6px 0 0">${BELOW} <span class="muted">Our price ${money(v.dys.p)} is ${Math.round((1 - v.dys.p / v.p) * 100)}% under market</span></p>` : ""}
         ${v.dys ? dysBuyBox(v) : ""}
         <div class="kpis">${[["7", "7 days"], ["30", "30 days"], ["90", "90 days"], ["a", `Since ${fmtShort(meta.first)}`]].map(([k, l]) => `<div class="kpi"><div class="l">${l}</div>${chg(v.ch?.[k])}</div>`).join("")}</div>
-        ${priceBreak(v, base)}${ebayRow(ebc, v.p)}
+        ${priceBreak(v, base, set.k)}${ebayRow(ebc, v.p)}
         <div class="btns">${v.dys ? ""
           : `<a class="btn primary" href="mailto:customerservice@driveyourstyle.net?subject=${encodeURIComponent("Request: " + v.n)}&body=${encodeURIComponent(`Hi Drive Your Style,\n\nI'm interested in: ${v.n} (${set.n}).\nMarket price today: ${money(v.p)}\nQuantity: 1\n\nPlease let me know if you can get it.\n\nThanks!`)}">Request from Drive Your Style</a>`}
           <button class="btn" id="addcol" type="button"></button>
@@ -2141,6 +2141,24 @@ async function pageGrading() {
 const GRADES = [["PSA", ["10", "9", "8", "7", "6", "5"]], ["CGC", ["10 Pristine", "10", "9.5", "9", "8.5", "8"]], ["BGS", ["10 Black Label", "10", "9.5", "9", "8.5"]],
   ["SGC", ["10", "9.5", "9", "8"]], ["TAG", ["10", "9", "8"]], ["ACE", ["10", "9", "8"]]];
 const gradeOpts = (cur) => `<option value=""${cur ? "" : " selected"}>Raw</option>` + GRADES.map(([co, gs]) => `<optgroup label="${co}">${gs.map((g) => { const v = `${co} ${g}`; return `<option value="${v}"${v === cur ? " selected" : ""}>${v}</option>`; }).join("")}</optgroup>`).join("") + `<option value="Other slab"${cur === "Other slab" ? " selected" : ""}>Other slab</option>`;
+// eBay Buy It Now search for buying one product, cheapest first. Cheapest-first eBay results fill up with junk, so:
+// singles only (CCG Individual Cards), no slabs / cases / proxies / lots / pick-your-card listings, no other-language
+// copies (unless the card is Japanese), reverse holos searched as reverse holos, and a price floor (40% of market for
+// cards, 60% for sealed) so cheap look-alikes can't push the real listings down.
+function ebayFind(n, no, { p = 0, game = "", grade = "", kind = "c" } = {}) {
+  const jp = /-jp$/.test(game || ""), card = kind !== "s", nm = String(n || "");
+  let q = nm.replace(/ \((Holofoil|Normal|Foil|Reverse Holofoil)\)$/, "").replace(/ \(Foil\)/, "").replace(/ - (\S+)$/, " $1").replace(/[()[\]]/g, " ");
+  if (/\(Reverse Holofoil\)$/.test(nm)) q += " reverse holo";
+  if (card && no && !q.includes(String(no).split("/")[0])) q += " " + no;
+  if (jp) q += " japanese";
+  if (grade) q += " " + grade;
+  else q += card ? " -psa -cgc -bgs -sgc -tag -graded -slab -case -display -proxy -custom -orica -lot -choose -pick -singles" + (/\(Normal\)$/.test(nm) ? " -reverse" : "")
+    : ' -empty -opened -promo -lot -"no cards" -psa -cgc -bgs -graded' + ["various", "kids", "mystery", "repack", "custom", "deck", "digital", "code"].filter((w) => !new RegExp(`\\b${w}\\b`, "i").test(nm)).map((w) => " -" + w).join("");
+  if (!jp) q += " -japanese -korean -chinese -spanish -french -german -italian -portuguese";
+  const u = new URLSearchParams({ _nkw: q.replace(/\s+/g, " ").trim(), LH_BIN: "1", _sop: "15", _sacat: card ? "183454" : "2536" });
+  if (!grade && p >= 500) u.set("_udlo", String(Math.floor(p * (card ? 0.4 : 0.6) / 100)));
+  return "https://www.ebay.com/sch/i.html?" + u;
+}
 const ebayBuy = (n, no, gr) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(`${cleanCard(n)}${no && !cleanCard(n).includes(no.split("/")[0]) ? " " + no : ""}${gr ? " " + gr : ""}`)}&LH_BIN=1&_sop=15`;
 const cleanCard = (n) => n.replace(/ \((Holofoil|Normal|Foil|Reverse Holofoil)\)$/, "").replace(/ - (\S+)$/, " $1");
 const soldUrl = (name, gr) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(`${cleanCard(name)} ${gr === "Other slab" ? "graded" : gr}`)}&LH_Sold=1&LH_Complete=1&_sop=13`;

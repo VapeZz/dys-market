@@ -63,8 +63,25 @@
     getJSON("img-alt.json").then((a) => { const n = a[m[1]]; if (n) el.src = IMG(n, m[2] === "in_1000x1000" ? 1000 : parseInt(m[2])); else none(); }, none);
   }, true);
   const tcgUrl = (id) => `https://www.tcgplayer.com/product/${id}?Language=all`;
-  // live Buy It Now listings, cheapest first (price + shipping); raw cards leave out slabs
-  const buyUrl = (n, extra = "", raw = false) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent((cleanN(n).replace(/ \(Reverse Holofoil\)$/, "") + " " + extra + (raw ? " -psa -cgc -bgs -sgc -graded -slab" : "")).trim())}&LH_BIN=1&_sop=15`;
+  // eBay Buy It Now search for buying one product, cheapest first. Cheapest-first eBay results fill up with junk, so:
+  // singles only (CCG Individual Cards), no slabs / cases / proxies / lots / pick-your-card listings, no other-language
+  // copies (unless the card is Japanese), reverse holos searched as reverse holos, and a price floor (40% of market for
+  // cards, 60% for sealed) so cheap look-alikes can't push the real listings down.
+  const buyUrl = (n, no = "", { p = 0, g = null, grade = "", kind = "c" } = {}) => {
+    const game = g != null ? gameOfSet(g) : "";
+    const jp = /-jp$/.test(game || ""), card = kind !== "s", nm = String(n || "");
+    let q = nm.replace(/ \((Holofoil|Normal|Foil|Reverse Holofoil)\)$/, "").replace(/ \(Foil\)/, "").replace(/ - (\S+)$/, " $1").replace(/[()[\]]/g, " ");
+    if (/\(Reverse Holofoil\)$/.test(nm)) q += " reverse holo";
+    if (card && no && !q.includes(String(no).split("/")[0])) q += " " + no;
+    if (jp) q += " japanese";
+    if (grade) q += " " + grade;
+    else q += card ? " -psa -cgc -bgs -sgc -tag -graded -slab -case -display -proxy -custom -orica -lot -choose -pick -singles" + (/\(Normal\)$/.test(nm) ? " -reverse" : "")
+      : ' -empty -opened -promo -lot -"no cards" -psa -cgc -bgs -graded' + ["various", "kids", "mystery", "repack", "custom", "deck", "digital", "code"].filter((w) => !new RegExp(`\\b${w}\\b`, "i").test(nm)).map((w) => " -" + w).join("");
+    if (!jp) q += " -japanese -korean -chinese -spanish -french -german -italian -portuguese";
+    const u = new URLSearchParams({ _nkw: q.replace(/\s+/g, " ").trim(), LH_BIN: "1", _sop: "15", _sacat: card ? "183454" : "2536" });
+    if (!grade && p >= 500) u.set("_udlo", String(Math.floor(p * (card ? 0.4 : 0.6) / 100)));
+    return "https://www.ebay.com/sch/i.html?" + u;
+  };
   const soldUrl = (n, extra = "") => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent((cleanN(n).replace(/ \(Reverse Holofoil\)$/, "") + " " + extra).trim())}&LH_Sold=1&LH_Complete=1&_sop=13`;
   const COND = [["NM", 1], ["LP", 0.85], ["MP", 0.7], ["HP", 0.55], ["DMG", 0.4]];
   const condX = (c, t) => t === "s" ? 1 : (COND.find((x) => x[0] === c) || COND[0])[1];
@@ -539,8 +556,8 @@
         <button type="button" class="btn" data-add="lot">Add to lot offer</button>${it.t === "c" ? `<button type="button" class="btn" id="c-grade">${S.board.some((y) => y.k === keyOf(it.id, it.n)) ? "On grading board" : "Grade it?"}</button>` : ""}</div>
         <div id="c-form"></div></section>
       <section class="sec"><span class="lab">Buy</span><div class="links">
-        <a class="btn sm" href="${buyUrl(it.n, no || "", it.t === "c")}" target="_blank" rel="noopener">Buy on eBay ↗</a>
-        ${it.t === "c" ? `<a class="btn sm" href="${buyUrl(it.n, (no || "") + " PSA 10")}" target="_blank" rel="noopener">Buy PSA 10 ↗</a>` : ""}
+        <a class="btn sm" href="${buyUrl(it.n, it.no || no || "", { p: it.p, g, kind: it.t })}" target="_blank" rel="noopener">Buy on eBay ↗</a>
+        ${it.t === "c" ? `<a class="btn sm" href="${buyUrl(it.n, it.no || no || "", { g, grade: "PSA 10" })}" target="_blank" rel="noopener">Buy PSA 10 ↗</a>` : ""}
         <a class="btn sm" href="${tcgUrl(it.id)}" target="_blank" rel="noopener">TCGplayer ↗</a></div></section>
       <section class="sec"><span class="lab">Check elsewhere</span><div class="links">
         <a class="btn sm" href="${soldUrl(it.n, no || "")}" target="_blank" rel="noopener">eBay sold ↗</a>
@@ -745,7 +762,7 @@
         <label class="f full">Condition<select class="select" data-g="cond">${Object.entries(ODDS).map(([k, o]) => `<option value="${k}"${k === GRADE.cond ? " selected" : ""}>${o[2]} (${o[0]}% 10s, ${o[1]}% 9s)</option>`).join("")}</select></label>
         <label class="f full">PSA service<select class="select" data-g="tier">${psa.tiers.map((t, i) => `<option value="${i}"${String(GRADE.tier) === String(i) ? " selected" : ""}>${esc(t[0])} · ${money(t[1])}${t[2] ? ` · up to ${money(t[2], true)}` : ""}</option>`).join("")}</select></label>
         <label class="f full">Sell the slab on${platSelect("gr-p", GRADE.plat)}</label></div>
-      <div class="links">${GRADE.name ? `<a class="btn sm" href="${buyUrl(GRADE.name, GRADE.no, true)}" target="_blank" rel="noopener">Buy raw on eBay ↗</a><a class="btn sm" href="${soldUrl(GRADE.name, GRADE.no + " PSA 10")}" target="_blank" rel="noopener">PSA 10 sold ↗</a><a class="btn sm" href="${soldUrl(GRADE.name, GRADE.no + " PSA 9")}" target="_blank" rel="noopener">PSA 9 sold ↗</a>` : ""}<a class="btn sm" href="${BASE}centering.html" target="_blank" rel="noopener">Check centering ↗</a></div>
+      <div class="links">${GRADE.name ? `<a class="btn sm" href="${buyUrl(GRADE.name, GRADE.no, { p: cents(GRADE.raw) })}" target="_blank" rel="noopener">Buy raw on eBay ↗</a><a class="btn sm" href="${soldUrl(GRADE.name, GRADE.no + " PSA 10")}" target="_blank" rel="noopener">PSA 10 sold ↗</a><a class="btn sm" href="${soldUrl(GRADE.name, GRADE.no + " PSA 9")}" target="_blank" rel="noopener">PSA 9 sold ↗</a>` : ""}<a class="btn sm" href="${BASE}centering.html" target="_blank" rel="noopener">Check centering ↗</a></div>
       <div id="gr-out"></div></section>`;
     const calc = () => {
       $$("[data-g]", el).forEach((i) => { GRADE[i.dataset.g] = i.value; }); GRADE.plat = $("#gr-p").value;
@@ -1007,7 +1024,7 @@
           <div class="gc-in"><label class="f">${esc(co)} ${esc(l10)} sells for $<input class="field" type="number" inputmode="decimal" min="0" step="0.01" data-b10="${i}" value="${dollars(x.p10)}" placeholder="${gp?.p10 ? dollars(gp.p10) + " (PPT)" : "from sold"}"></label>
             <label class="f">${esc(co)} ${esc(l9)} sells for $<input class="field" type="number" inputmode="decimal" min="0" step="0.01" data-b9="${i}" value="${dollars(x.p9)}" placeholder="${gp?.p9 ? dollars(gp.p9) + " (PPT)" : "blank = raw price"}"></label></div>
           ${gp ? `<p class="muted small" style="margin:0">PokemonPriceTracker sold prices: ${esc(l10)} ${gp.p10 ? `${money(gp.p10)} (${gp.n10} sold${gp.l10 ? `, last ${fmtDay(gp.l10)}` : ""})` : "no sales"} · ${esc(l9)} ${gp.p9 ? `${money(gp.p9)} (${gp.n9} sold)` : gp.skip9 ? `<span class="warn">${SKIP_WHY[gp.skip9]}</span>` : "no sales"}.${gp.n10 && gp.n10 < 3 ? ` <span class="warn">Only ${gp.n10} sale${gp.n10 === 1 ? "" : "s"}: check the sold links.</span>` : ""} Type a price to use your own.</p>` : GR ? `<p class="muted small" style="margin:0">No ${esc(co)} sales on PokemonPriceTracker for this one yet. Use the sold links.</p>` : ""}
-          <div class="links"><a class="btn sm" href="${buyUrl(x.n, no, true)}" target="_blank" rel="noopener">Buy raw on eBay ↗</a><a class="btn sm" href="${soldUrl(x.n, no + " " + co + " " + l10)}" target="_blank" rel="noopener">${esc(co)} ${esc(l10)} sold ↗</a><a class="btn sm" href="${soldUrl(x.n, no + " " + co + " " + l9)}" target="_blank" rel="noopener">${esc(co)} ${esc(l9)} sold ↗</a>
+          <div class="links"><a class="btn sm" href="${buyUrl(x.n, no, { p: raw, g: x.g })}" target="_blank" rel="noopener">Buy raw on eBay ↗</a><a class="btn sm" href="${soldUrl(x.n, no + " " + co + " " + l10)}" target="_blank" rel="noopener">${esc(co)} ${esc(l10)} sold ↗</a><a class="btn sm" href="${soldUrl(x.n, no + " " + co + " " + l9)}" target="_blank" rel="noopener">${esc(co)} ${esc(l9)} sold ↗</a>
             <a class="btn sm" href="https://www.pricecharting.com/search-products?q=${encodeURIComponent(cleanN(x.n))}&type=prices" target="_blank" rel="noopener">All grades ↗</a><a class="btn sm" href="https://www.gemrate.com/" target="_blank" rel="noopener">Gem rate ↗</a></div>
           <div class="kv">${e.profit != null ? `<div><span>Expected profit</span><span class="${cls(e.profit)}">${signed(Math.round(e.profit))}</span></div>
             <div><span>If ${esc(l10)} / if ${esc(l9)}</span><span><span class="up">${signed(Math.round(e.ten))}</span> / <span class="${cls(e.nine)}">${signed(Math.round(e.nine))}</span></span></div>` : ""}
