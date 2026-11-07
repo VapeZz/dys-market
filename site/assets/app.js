@@ -186,7 +186,7 @@ document.documentElement.dataset.theme = getTheme();
 /* ---------- shell ---------- */
 const SEARCH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>`;
 // One menu for the whole site: the desktop header dropdowns, the tablet ☰ Menu and the phone Menu tab all use NAV,
-// so every page has one name and one place. [page, label, one-liner, icon path]; the 3rd item lists pages that belong to the group.
+// so every page has one name and one place. tools/make_pages.py reads NAV too (Tools page, home shortcuts), so edit names here only. [page, label, one-liner, icon path]; the 3rd item lists pages that belong to the group.
 const NI = (d) => `<span class="tool-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg></span>`;
 const NAV = [
   ["Prices", [
@@ -205,7 +205,7 @@ const NAV = [
   ["Learn", [
     ["investing", "Investing playbook", "Strategy, grading math, when to sell", '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5M9 8h6M9 12h4"/>'],
     ["intel", "Market brief", "What's moving today", '<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>'],
-    ["blog/", "Weekly market report", "The Sunday write-up", '<path d="M5 4h11l3 3v13H5z"/><path d="M8 10h8M8 14h8M8 18h5"/>'],
+    ["blog/", "Market reports", "The weekly write-up, every Sunday", '<path d="M5 4h11l3 3v13H5z"/><path d="M8 10h8M8 14h8M8 18h5"/>'],
     ["about", "Where our data comes from", "How prices and movers work", '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>'],
   ], ["blog"]],
   ["My cards", [
@@ -245,7 +245,7 @@ function shell() {
       <p id="updated-line"></p>${AFF_ON ? `<p>Some outbound links (eBay, Amazon, TCGplayer, StockX, GOAT) are affiliate links. If you buy through them we may earn a small commission at no extra cost to you. As an Amazon Associate we earn from qualifying purchases.</p>` : ""}
     </div>
     <div>
-      <p><a href="${STORE}">Shop Drive Your Style</a> · <a href="sell.html">Sell to us</a> ·${GIVEAWAY_ON ? ` <a href="giveaway.html">Monthly giveaway</a> ·` : ""} <a href="blog/">Market reports</a> · <a href="investing.html">Investing playbook</a> · <a href="centering.html">Centering check</a> · <a href="about.html">Where this data comes from</a> · <a href="legal.html">Privacy &amp; Terms</a></p>
+      <p><a href="${STORE}">Shop Drive Your Style</a> · <a href="sell.html">Sell to us</a> ·${GIVEAWAY_ON ? ` <a href="giveaway.html">Monthly giveaway</a> ·` : ""} <a href="blog/">Market reports</a> · <a href="investing.html">Investing playbook</a> · <a href="centering.html">Centering check</a> · <a href="about.html">Where our data comes from</a> · <a href="legal.html">Privacy &amp; Terms</a></p>
       <div class="socials" aria-label="Follow Drive Your Style">${SOCIALS.map(([n, u, d]) => `<a href="${u}" target="_blank" rel="noopener" aria-label="${n}" title="${n}"><svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg></a>`).join("")}</div>
       <div class="theme-switch" role="group" aria-label="Theme"><button data-t="dark">Dark</button><button data-t="light">Light</button></div>
     </div></div></footer>`;
@@ -465,7 +465,7 @@ function setsTable(rows, meta, opts = {}) {
 /* new layout, home: search, tools, today's brief and big-picture trending first; games and the sign-up boxes lower and smaller */
 function v2Home() {
   const main = $("main"), sec = (sel) => $(sel)?.closest("section");
-  const th = $(".tools-head"); if (th) th.innerHTML = `<h2>Tools</h2><a class="more" href="tools.html">All tools →</a>`;
+  const th = $(".tools-head"); if (th) th.innerHTML = `<h2>Tools</h2><a class="more" href="tools.html">Everything on the site →</a>`;
   const order = [".hero-deal", ".tools-block", "#intel-block", "#card-movers", "#stock-block", "#newsets", "#gtiles", "#sealed-movers", "#wanted-block", "#report-block"]
     .map((s) => (s.startsWith("#") && !/-block$/.test(s) ? sec(s) : $(s))).filter(Boolean);
   const ctas = [...main.querySelectorAll(".cta")];
@@ -1947,7 +1947,7 @@ async function pageIntel() {
     <h2>${esc(d.brief.head)}</h2><p>${esc(d.brief.body)}</p>
     <div class="in-share"><button class="btn" type="button" id="in-share">Share today's brief</button></div>`;
   $("#in-share").addEventListener("click", async () => {
-    const data = { title: "Drive Your Style Market Intel", text: d.brief.head, url: location.origin + location.pathname + "?ref=share" };
+    const data = { title: "Drive Your Style Market brief", text: d.brief.head, url: location.origin + location.pathname + "?ref=share" };
     try { if (navigator.share) await navigator.share(data); else { await navigator.clipboard.writeText(`${data.text} ${data.url}`); toast("Link copied"); } } catch {}
   });
 
@@ -2360,7 +2360,7 @@ async function pageCollection() {
     const paid = paidItems.reduce((a, i) => a + i.paid * i.qty, 0);
     const paidValue = paidItems.reduce((a, i) => a + (i.mkt || 0) * i.qty, 0);
     const count = items.reduce((a, i) => a + i.qty, 0);
-    $("#title").textContent = prof ? prof.a : col.name || (shared ? "Shared collection" : "My collection");
+    $("#title").textContent = prof ? prof.a : col.name || (shared ? "Shared collection" : "My Collection");
     $("#stats").innerHTML = (prof ? [
       [money(value), "Collection value"], [count.toLocaleString(), "Items"], [String(new Set(items.map((i) => i.g)).size), "Sets"],
       [String(items.filter((i) => i.gr).reduce((a, i) => a + i.qty, 0)), "Graded slabs"],
@@ -2460,7 +2460,7 @@ async function pageCollection() {
   if (!shared) {
     const input = $("#add-q"), out = $("#add-results");
     $("#name").value = col.name || "";
-    $("#name").addEventListener("input", (e) => { col.name = e.target.value.slice(0, 60); save(); $("#title").textContent = col.name || "My collection"; });
+    $("#name").addEventListener("input", (e) => { col.name = e.target.value.slice(0, 60); save(); $("#title").textContent = col.name || "My Collection"; });
     input.addEventListener("input", () => {
       const q = input.value.trim().toLowerCase().replace(/é/g, "e");
       if (q.length < 2) { out.classList.remove("open"); return; }
@@ -2480,7 +2480,7 @@ async function pageCollection() {
     document.addEventListener("click", (e) => { if (!$("#add-box").contains(e.target)) out.classList.remove("open"); });
     $("#share").addEventListener("click", async () => {
       const url = `${location.origin}${location.pathname}#c=${b64e({ n: col.name, i: col.items.map((i) => [i.id, i.g, i.qty, printCode(subOf(i.n || "")), ...(i.gr ? [i.gr, i.gv ?? null] : [])]) })}`;
-      try { if (navigator.share) { await navigator.share({ title: col.name || "My collection", url }); return; } } catch { return; }
+      try { if (navigator.share) { await navigator.share({ title: col.name || "My Collection", url }); return; } } catch { return; }
       try { await navigator.clipboard.writeText(url); $("#added").textContent = "Share link copied"; } catch { prompt("Copy your share link:", url); }
     });
     $("#backup").addEventListener("click", () => {

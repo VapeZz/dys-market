@@ -1,5 +1,6 @@
 """Regenerates site/*.html from one shared template. Run: python tools/make_pages.py"""
 import os
+import re
 from datetime import date
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -91,7 +92,7 @@ def supplies_body():
         out.append(f'<section class="block" style="padding-top:8px"><div class="block-head"><div><h2>{h}</h2><p>{sub}</p></div></div><div class="sup-grid">{cards}</div></section>')
     return f"""
 <div class="wrap"><section class="block" style="padding-bottom:0">
-  <span class="in-kicker">GRADING · STORAGE · SHIPPING</span><h1 class="in-h">Card supplies</h1>
+  <span class="in-kicker">GRADING · STORAGE · SHIPPING</span><h1 class="in-h">Grading supplies</h1>
   <p class="muted" style="max-width:760px;margin:-6px 0 6px">What we use to send cards to PSA, CGC and BGS, and to store and ship them. Not sure a card is worth grading yet? Check it with <a href="grading.html">Grading Insights</a> and the <a href="centering.html">centering check</a> first.</p>
   <p class="muted" style="font-size:13px;margin:0">Links go to Amazon. As an Amazon Associate we earn from qualifying purchases, at no extra cost to you.</p>
 </section>
@@ -103,43 +104,42 @@ SUPPLIES_BODY = supplies_body()
 
 # tools.html: every tool on one page (the "Tools" tab of the new layout)
 _I = lambda d: f'<span class="tool-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{d}</svg></span>'
-HUB = [
-    ("Check prices", [
-        ("search.html", "Price check", "Search or scan any card", '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>'),
-        ("cards.html", "Card movers", "Biggest gains and drops", '<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>'),
-        ("trends.html", "Sealed trends", "Booster boxes, ETBs, bundles", '<path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/>'),
-        ("compare.html", "Compare", "Two products side by side", '<rect x="3" y="5" width="7" height="14" rx="1.5"/><rect x="14" y="5" width="7" height="14" rx="1.5"/>'),
-        ("intel.html", "Market intel", "Today's market brief", '<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>'),
-        ("blog/", "Market reports", "The weekly write-up", '<path d="M5 4h11l3 3v13H5z"/><path d="M8 10h8M8 14h8M8 18h5"/>'),
-    ]),
-    ("Grading", [
-        ("grading.html", "Grading Insights", "Which cards pay to grade", '<path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/>'),
-        ("centering.html", "Centering check", "Snap a photo, get the grade", '<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M12 8v8M8 12h8"/>'),
-        ("supplies.html", "Grading supplies", "Sleeves, Card Savers, mailers", '<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4"/>'),
-    ]),
-    ("Your cards", [
-        ("collection.html", "My Collection", "What your binder is worth", '<path d="M4 6h16v12H4z"/><path d="M4 10h16"/>'),
-        ("watchlist.html", "Want list", "Set the most you'd pay", '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>'),
-        ("sell.html", "Sell to us", "Cash or store credit", '<path d="M12 3v18M17 7.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2.2 2.6 5 3 5 1.1 5 3-2.2 3-5 3-5-1.1-5-3"/>'),
-        ("collectors.html", "Collectors", "Public binders to browse", '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c1-3.5 3.5-5.5 6.5-5.5s5.5 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.6.9 2.7 2.6 3 5.2"/>'),
-    ]),
-    ("Drops", [
-        ("calendar.html", "Release calendar", "Every set, every game", '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>'),
-        ("sneakers.html", "Sneaker drops", "Release dates and resale", '<path d="M3 16c0-2 1-3 2.5-3.5L9 11l2-4 2.5 1.5c1 3 3 4 6 4.5A2.5 2.5 0 0 1 22 15.5V17H3z"/><path d="M3 17v2h19v-2"/>'),
-        ("https://driveyourstyle.net", "Shop the store", "Sealed, singles, sneakers", '<path d="M6 7h12l-1 13H7z"/><path d="M9 7a3 3 0 0 1 6 0"/>'),
-    ]),
-    ("Learn", [
-        ("investing.html", "Investing playbook", "Strategy, grading math, when to sell", '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5M9 8h6M9 12h4"/>'),
-        ("about.html", "Where our data comes from", "How prices and movers work", '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>'),
-    ]),
-]
-TOOLS_BODY = '<div class="wrap"><section class="block" style="padding-bottom:4px"><h1 class="in-h">Tools</h1><p class="muted" style="margin:-6px 0 0">Free, no sign-up needed.</p></section>' + "".join(
+
+
+def nav_from_app():
+    """The site menu (NAV in site/assets/app.js) as [(group, [(href, label, one-liner, icon path)])], so the Tools page and the
+    home shortcuts always use the same names as the header menu."""
+    js = open(os.path.join(ROOT, "site", "assets", "app.js"), encoding="utf-8").read()
+    block = js[js.index("const NAV = ["):js.index("const NAV_SNEAKERS")]
+    item = re.compile(r"""\["([\w/]+)", "([^"]+)", "([^"]*)", '([^']*)'\]""")
+    href = lambda pg: pg if pg.endswith("/") else f"{pg}.html"
+    groups = []
+    for g in re.finditer(r'\n  \["([^"]+)", \[(.*?)\n  \], \[', block, re.S):
+        items = [(href(m[1]), m[2], m[3], m[4]) for m in item.finditer(g[2]) if GIVEAWAY_ON or m[1] != "giveaway"]
+        groups.append((g[1], items))
+    sn = item.search(js[js.index("const NAV_SNEAKERS"):])
+    groups.append(("Sneakers", [(href(sn[1]), sn[2], sn[3], sn[4]),
+                                ("https://driveyourstyle.net", "Shop the store", "Sealed, singles, sneakers", '<path d="M6 7h12l-1 13H7z"/><path d="M9 7a3 3 0 0 1 6 0"/>')]))
+    assert len(groups) == 5 and all(i for _, i in groups), "couldn't read NAV from app.js"
+    return groups
+
+
+HUB = nav_from_app()
+HOME_TOOLS = ["search.html", "grading.html", "centering.html", "collection.html", "watchlist.html", "intel.html", "calendar.html", "sell.html"]
+NAV_ITEM = {u: (t, d, ic) for _, items in HUB for u, t, d, ic in items}
+
+
+def tool_tile(u):
+    t, d, ic = NAV_ITEM[u]
+    return f'<a class="tool" href="{u}">{_I(ic)}<b>{t}</b><span>{d}</span></a>'
+
+
+TOOLS_BODY = '<div class="wrap"><section class="block" style="padding-bottom:4px"><h1 class="in-h">All tools</h1><p class="muted" style="margin:-6px 0 0">Everything on the site, in the same groups as the menu. Free, no sign-up needed.</p></section>' + "".join(
     f'<section class="block hub-sec"><h2>{h}</h2><div class="hub">' + "".join(f'<a class="tool" href="{u}">{_I(d)}<b>{t}</b><span>{s}</span></a>' for u, t, s, d in items) + "</div></section>"
     for h, items in HUB) + "</div>"
 
 
 # investing.html: the card investing playbook (long-form guide, with a live sealed-movers board filled in by app.js)
-_HUB_ICON = {u: d for _, items in HUB for u, _t, _s, d in items}
 _PB_ICON = lambda d: f'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{d}</svg>'
 PB_CHAPTERS = [("lanes", "Pick your lane"), ("cycle", "How prices move"), ("grading", "Does grading pay?"),
                ("risk", "Protect the downside"), ("sell", "Know when to sell"), ("routine", "Your weekly routine"), ("faq", "Questions")]
@@ -203,7 +203,7 @@ PB_RISKS = [
     ("Fakes & reseals", "Counterfeit cards and resealed packs show up most on expensive items.", "Buy big-ticket cards graded or from sellers with a long record. Check shrink wrap seams and logos.", None),
     ("Hype spikes", "A price that doubles in a week on a handful of sales often gives most of it back.", "Wait for the number of sales to catch up before you chase.", ("cards.html", "Card movers")),
     ("Fee drag", "Selling fees, shipping and grading take a big bite out of cheaper cards.", "Price every buy after fees, not before.", None),
-    ("Condition damage", "Heat, humidity and loose storage turn a 10 into an 8 while it sits in a drawer.", "Sleeves, top loaders or Card Savers, and a cool, dry spot.", ("supplies.html", "Card supplies")),
+    ("Condition damage", "Heat, humidity and loose storage turn a 10 into an 8 while it sits in a drawer.", "Sleeves, top loaders or Card Savers, and a cool, dry spot.", ("supplies.html", "Grading supplies")),
     ("Cash tied up", "Money in a box you can't sell for three years can't buy the next deal.", "Keep part of your budget free for buys that come up.", None),
 ]
 PB_SELL = ["It hit the price you set when you bought it.", "It jumped fast on only a few sales.", "A reprint or new print run was announced.",
@@ -236,10 +236,7 @@ PB_FAQ = [
     ("Is this financial advice?",
      "No. This page explains how the card market tends to work. Cards can lose value, and past prices don't promise future ones. Only put in money you're comfortable holding for a long time."),
 ]
-PB_TOOLS = [("search.html", "Price check", "Search or scan any card"), ("trends.html", "Sealed trends", "Booster boxes, ETBs, bundles"),
-            ("cards.html", "Card movers", "Biggest gains and drops"), ("grading.html", "Grading Insights", "Which cards pay to grade"),
-            ("centering.html", "Centering check", "Snap a photo, get the grade"), ("collection.html", "My Collection", "What your binder is worth"),
-            ("watchlist.html", "Want list", "Set the most you'd pay"), ("sell.html", "Sell to us", "Cash or store credit")]
+PB_TOOLS = ["search.html", "trends.html", "cards.html", "grading.html", "centering.html", "collection.html", "watchlist.html", "sell.html"]
 PB_TITLE = "Pokémon Card Investing Playbook · Drive Your Style Market Insights"
 PB_DESC = "A plain-English playbook for investing in Pokémon and TCG cards: pick a strategy, read the price cycle, run the grading math, avoid common losses and know when to sell."
 
@@ -304,7 +301,7 @@ def investing_body():
         '<a class="pb-where-row pb-where-us" href="sell.html"><b>Drive Your Style</b><span>One offer for the whole stack, cash or store credit. <em>Get an offer →</em></span></a>'
     steps = "".join(f'<a class="pb-step" href="{u}"><span class="pb-step-n">{i}</span><b>{t}</b><span>{s}</span></a>' for i, (u, t, s) in enumerate(PB_STEPS, 1))
     faq = "".join(f'<details class="pb-faq"><summary>{q}</summary><p>{a}</p></details>' for q, a in PB_FAQ)
-    tools = "".join(f'<a class="tool" href="{u}">{_I(_HUB_ICON[u])}<b>{t}</b><span>{s}</span></a>' for u, t, s in PB_TOOLS)
+    tools = "".join(tool_tile(u) for u in PB_TOOLS)
     ld = json.dumps([
         {"@context": "https://schema.org", "@type": "Article", "headline": "The card investing playbook", "description": PB_DESC,
          "author": {"@type": "Organization", "name": "Drive Your Style"}, "publisher": {"@type": "Organization", "name": "Drive Your Style", "url": "https://driveyourstyle.net"},
@@ -369,7 +366,7 @@ PAGES = {
   </div>
   <a class="hd-fan" id="hd-fan" href="cards.html" aria-label="See today's biggest movers"></a>
 </div></section>
-<section class="block tools-block"><div class="wrap"><div class="tools-head"><h2>Free tools</h2><span class="muted">No sign-up needed</span></div><div class="tools" aria-label="Free tools"><a class="tool" href="search.html"><span class="tool-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span><b>Price check</b><span>Any card in 5 seconds</span></a><a class="tool" href="grading.html"><span class="tool-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/></svg></span><b>Worth grading?</b><span>Break-even PSA 10 price</span></a><a class="tool" href="centering.html"><span class="tool-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg></span><b>Centering check</b><span>Snap a photo, get the grade</span></a><a class="tool" href="collection.html"><span class="tool-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="M4 10h16"/></svg></span><b>My binder</b><span>Value updates every night</span></a><a class="tool" href="watchlist.html"><span class="tool-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></span><b>Want list</b><span>Set the most you'd pay</span></a><a class="tool" href="intel.html"><span class="tool-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg></span><b>Market intel</b><span>What's rising today</span></a><a class="tool" href="calendar.html"><span class="tool-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg></span><b>Release dates</b><span>Every set, 10 games</span></a><a class="tool" href="sell.html"><span class="tool-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M17 7.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2.2 2.6 5 3 5 1.1 5 3-2.2 3-5 3-5-1.1-5-3"/></svg></span><b>Sell to us</b><span>Cash or store credit</span></a></div></div></section>
+<section class="block tools-block"><div class="wrap"><div class="tools-head"><h2>Free tools</h2><span class="muted">No sign-up needed</span></div><div class="tools" aria-label="Free tools">{"".join(tool_tile(u) for u in HOME_TOOLS)}</div></div></section>
 <section class="block" style="padding-top:4px"><div class="wrap"><div class="gtiles" id="gtiles"></div></div></section>
 @@GWBANNER@@<section class="block" id="intel-block" hidden style="padding-top:0;padding-bottom:12px"><div class="wrap"><div class="hi-grid">
   <a class="in-card hi-brief" href="intel.html"><span class="in-tag"><span class="in-dot"></span>DAILY MARKET BRIEF · <span id="hi-date"></span></span><b id="intel-head"></b><span class="hi-more">Read the brief →</span></a>
@@ -435,10 +432,10 @@ PAGES = {
 </section></div>'''),
 "product": ("Price history · Drive Your Style Market Insights", "Market price history.", '''
 <div class="wrap"><div class="crumbs" id="crumbs"></div><div class="prod" id="prod"><div class="skeleton" style="height:320px"></div></div></div>'''),
-"trends": ("Trends · Drive Your Style Market Insights",
+"trends": ("Sealed trends · Drive Your Style Market Insights",
            "Biggest sealed product price movers across Pokémon, One Piece, Lorcana, Riftbound, Gundam, Union Arena, Yu-Gi-Oh!, Dragon Ball and Palworld.", '''
 <div class="wrap"><section class="block">
-  <div class="block-head"><div><h1 style="font-size:36px">Trends</h1><p>The 50 biggest sealed price moves for each game and time window. Defaults to products over $20.</p></div></div>
+  <div class="block-head"><div><h1 style="font-size:36px">Sealed trends</h1><p>The 50 biggest sealed price moves for each game and time window. Defaults to products over $20.</p></div></div>
   <div id="sealed"></div>
 </section></div>'''),
 "cards": ("Card movers · Drive Your Style Market Insights", "Biggest single card price movers by game and set.", f'''
@@ -451,9 +448,9 @@ PAGES = {
   <div id="gmov" class="block" hidden style="padding:0 0 18px"><h2 style="font-size:20px;margin:0 0 4px">PSA 10 movers</h2><p class="muted" style="margin:0 0 10px;font-size:13px">Graded Pokémon cards: PSA 10 sold price this week vs the 90-day average.</p><div class="in-row" id="gmov-row"></div></div>
   {MOVERS}
 </section></div>'''),
-"search": ("Card search · Drive Your Style Market Insights", "Search every Pokémon, Pokémon Japan, One Piece, Lorcana, Riftbound, Gundam, Union Arena, Yu-Gi-Oh!, Dragon Ball and Palworld card and sealed product by name, set, number or rarity, with today's market price.", '''
+"search": ("Price check: search or scan any card · Drive Your Style Market Insights", "Search every Pokémon, Pokémon Japan, One Piece, Lorcana, Riftbound, Gundam, Union Arena, Yu-Gi-Oh!, Dragon Ball and Palworld card and sealed product by name, set, number or rarity, with today's market price.", '''
 <div class="wrap"><section class="block">
-  <div class="block-head"><div><h1 style="font-size:36px">Card search</h1><p>Every card and sealed product we track. Search by name, set, card number or rarity.</p></div></div>
+  <div class="block-head"><div><h1 style="font-size:36px">Price check</h1><p>Every card and sealed product we track. Search by name, set, card number or rarity.</p></div></div>
   <div class="search big-q">''' + SEARCH + '''<input id="sq" type="search" placeholder="e.g. Charizard ex 199, Umbreon VMAX, 25/102" aria-label="Search cards" autocomplete="off" enterkeyhint="search"></div>
   <div class="controls" style="margin-top:12px"><div id="sgame"></div><div id="stype"></div>
     <select class="select" id="srar" aria-label="Rarity"><option value="">Any rarity</option></select>
@@ -544,7 +541,7 @@ PAGES = {
 </section></div>'''),
 "collection": ("My Collection · Drive Your Style Market Insights", "Track your Pokémon, One Piece, Lorcana, Riftbound, Gundam, Union Arena, Yu-Gi-Oh!, Dragon Ball and Palworld card collection with live market values.", '''
 <div class="wrap"><section class="block">
-  <div class="block-head"><div><span class="eyebrow"><b>●</b> Members</span><h1 id="title" style="font-size:36px;margin-top:8px">My collection</h1>
+  <div class="block-head"><div><span class="eyebrow"><b>●</b> Members</span><h1 id="title" style="font-size:36px;margin-top:8px">My Collection</h1>
     <p id="shared-note" class="muted" hidden>A collection shared from Drive Your Style. <a href="collection.html" style="color:var(--accent)">Start your own →</a></p></div></div>
   <div id="acct" class="panel acct-bar" hidden></div>
   <div id="prof" class="panel prof-panel" hidden></div>
@@ -646,9 +643,9 @@ PAGES = {
     <p><b>General:</b> The Sponsor may verify eligibility and disqualify entries that break these rules or use fake accounts. This giveaway is not sponsored, endorsed or administered by The Pokémon Company, Nintendo, Instagram, TikTok, Facebook or YouTube. By entering you agree to these rules.</p>
   </div>
 </section></div>'''),
-"intel": ("Market Intel: daily brief, indices and signals · Drive Your Style", "Daily trading card market brief: market mood, Chase 100 and Modern Sealed 100 indices, cards with steady rising or cooling prices, today's biggest movers and the best cards to grade for Pokémon, One Piece and more.", '''
+"intel": ("Market brief: daily movers, indices and signals · Drive Your Style", "Daily trading card market brief: market mood, Chase 100 and Modern Sealed 100 indices, cards with steady rising or cooling prices, today's biggest movers and the best cards to grade for Pokémon, One Piece and more.", '''
 <div class="wrap in-wrap"><section class="block">
-  <span class="in-kicker" id="in-kick">TODAY</span><h1 class="in-h">Market Intel</h1>
+  <span class="in-kicker" id="in-kick">TODAY</span><h1 class="in-h">Market brief</h1>
   <div class="in-hero">
     <div class="in-card in-brief" id="in-brief"><div class="skeleton" style="height:120px"></div></div>
     <div class="in-card in-mood" id="in-mood"><div class="skeleton" style="height:120px"></div></div>
@@ -788,9 +785,9 @@ PAGES = {
 "supplies": ("Card grading & storage supplies · Drive Your Style",
              "What you need to send cards to PSA, CGC or BGS and to store, display and ship them: penny sleeves, Card Saver 1, team bags, top loaders, binders and more.", SUPPLIES_BODY),
 "investing": (PB_TITLE, PB_DESC, INVESTING_BODY),
-"about": ("About the data · Drive Your Style Market Insights", "Where Drive Your Style market prices come from.", '''
+"about": ("Where our data comes from · Drive Your Style Market Insights", "Where Drive Your Style market prices come from.", '''
 <div class="wrap"><article class="prose">
-  <h1>Where this data comes from</h1>
+  <h1>Where our data comes from</h1>
   <p>Every night we save the TCGplayer <b>market price</b> for each Pokémon, Pokémon Japan, One Piece, Lorcana, Riftbound, Gundam, Union Arena, Yu-Gi-Oh!, Dragon Ball and Palworld product, using the public daily data published by <a href="https://tcgcsv.com" style="color:var(--accent)">TCGCSV</a>. Market price reflects recent completed sales on TCGplayer.</p>
   <h2>How movers are calculated</h2>
   <p>A mover's change compares today's market price with the price saved closest to 7, 30, 90 or 365 days ago. Items under $5 today, or under $1 at the start of the window, are left out so tiny prices don't produce huge percentages.</p>
