@@ -213,7 +213,7 @@ def main(argv):
     short = re.sub(r"\s*-\s*\S+/\S+$", "", c["name"])
     hook = (f"{short} is up {c['pct']:.0f}% {period} 📈 now {money(c['now'])}" if c["pct"] is not None
             else f"{short} is the chase card of {c['set']} 🔥 worth {money(c['now'])}")
-    caption = (f"{hook}\n\n"
+    caption = (f"{hook}\nPrice: TCGplayer market\n\n"
                f"Do you have one? 👇 Check your {label} cards free at market.driveyourstyle.net (link in bio)\n\n{tags}")
     first_tag = tags.split()[0]
     post = {"date": today.isoformat(), "game": game, "card": c, "caption": caption,

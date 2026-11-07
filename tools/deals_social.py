@@ -126,7 +126,7 @@ def main(argv):
               "Market prices are today's TCGplayer market prices, tracked every night at market.driveyourstyle.net.", "", TAGS]
     caption = "\n".join(lines)
     top = items[0]
-    caption_tt = (f"In stock and under market price this week 🔥 {top['name']} is {top['off'] * 100:.0f}% under market\n\n"
+    caption_tt = (f"In stock and under market price this week 🔥 {top['name']} is {top['off'] * 100:.0f}% under market\nMarket price: TCGplayer market\n\n"
                   "Shop at driveyourstyle.net (link in bio)\n\n#pokemon #pokemoncards #pokemontcg #tcg #cardcollecting")
     base = f"{SITE}/social-deals/{today.isoformat()}"
     post = {"date": today.isoformat(), "post": True, "caption": caption, "caption_tiktok": caption_tt,

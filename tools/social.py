@@ -189,7 +189,7 @@ def main(argv):
     caption = "\n".join(lines)
     open(os.path.join(out, "caption.txt"), "w").write(caption)
     top = cards[0]
-    caption_tt = (f"These Pokémon cards jumped {period} 📈 #1 is up {top['pct']:.0f}%\n\n"
+    caption_tt = (f"These Pokémon cards jumped {period} 📈 #1 is up {top['pct']:.0f}%\nPrices: TCGplayer market\n\n"
                   "Which one do you have? 👇 Free prices at market.driveyourstyle.net (link in bio)\n\n"
                   "#pokemon #pokemoncards #pokemontcg #cardcollecting #tcg")
     post = {"date": today.isoformat(), "span": span, "caption": caption, "caption_tiktok": caption_tt, "cards": cards,
