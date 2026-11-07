@@ -27,8 +27,9 @@ GOOD = re.compile(r"illustration|art rare|character|trainer gallery|galarian gal
                   r"holo|alternate|manga|leader|super rare|treasure|enchanted|legendary|epic|iconic|showcase|overnumbered|"
                   r"starlight|ghost|collector|quarter century|prismatic|god rare|\bSCR\b|\bSPR\b|\bSR\b|\bUR\b|\bSEC\b|\bAP\b", re.I)
 # every TCG on the market site; Pokémon (the biggest audience) every third post. Posting Monday to Saturday = one full lap in about 2.5 weeks.
-ROTATION = ["pokemon", "one-piece", "yugioh", "pokemon", "riftbound", "lorcana", "pokemon", "pokemon-jp", "gundam",
-            "pokemon", "dragon-ball-fusion-world"]
+# Gundam taken out Nov 7, 2026: too few PSA 10 eBay sales for the sold-price check (0 of 15 cards passed). Add it back by hand later.
+ROTATION = ["pokemon", "one-piece", "yugioh", "pokemon", "riftbound", "lorcana", "pokemon", "pokemon-jp",
+            "dragon-ball-fusion-world"]
 # games with almost no PSA 10 sales yet: re-checked every 4 weeks and added to the rotation once they have candidates
 BENCH = ["union-arena", "palworld"]
 
