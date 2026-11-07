@@ -211,7 +211,7 @@ function shell() {
       <p id="updated-line"></p>${AFF_ON ? `<p>Some outbound links (eBay, Amazon, TCGplayer, StockX, GOAT) are affiliate links. If you buy through them we may earn a small commission at no extra cost to you. As an Amazon Associate we earn from qualifying purchases.</p>` : ""}
     </div>
     <div>
-      <p><a href="${STORE}">Shop Drive Your Style</a> · <a href="sell.html">Sell to us</a> ·${GIVEAWAY_ON ? ` <a href="giveaway.html">Monthly giveaway</a> ·` : ""} <a href="blog/">Market reports</a> · <a href="centering.html">Centering check</a> · <a href="about.html">Where this data comes from</a> · <a href="legal.html">Privacy &amp; Terms</a></p>
+      <p><a href="${STORE}">Shop Drive Your Style</a> · <a href="sell.html">Sell to us</a> ·${GIVEAWAY_ON ? ` <a href="giveaway.html">Monthly giveaway</a> ·` : ""} <a href="blog/">Market reports</a> · <a href="investing.html">Investing playbook</a> · <a href="centering.html">Centering check</a> · <a href="about.html">Where this data comes from</a> · <a href="legal.html">Privacy &amp; Terms</a></p>
       <div class="socials" aria-label="Follow Drive Your Style">${SOCIALS.map(([n, u, d]) => `<a href="${u}" target="_blank" rel="noopener" aria-label="${n}" title="${n}"><svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg></a>`).join("")}</div>
       <div class="theme-switch" role="group" aria-label="Theme"><button data-t="dark">Dark</button><button data-t="light">Light</button></div>
     </div></div></footer>`;
@@ -224,7 +224,7 @@ function shell() {
     ["shop", "Shop", I('<path d="M6 7h12l-1 13H7z"/><path d="M9 7a3 3 0 0 1 6 0"/>')]];
   const bar = document.createElement("nav"); bar.className = "tabbar"; bar.setAttribute("aria-label", "Main");
   if (V2) {   // 5 tabs: everything that isn't Home / Search / Sets / Me lives on the Tools page
-    const TOOLS = new Set(["tools", "grading", "centering", "sell", "sneakers", "calendar", "supplies", "intel", "trends", "cards", "compare", "collectors"]);
+    const TOOLS = new Set(["tools", "investing", "grading", "centering", "sell", "sneakers", "calendar", "supplies", "intel", "trends", "cards", "compare", "collectors"]);
     const cur = (p) => p === PAGE || (p === "sets" && PAGE === "set") || (p === "tools" && TOOLS.has(PAGE)) || (p === "collection" && PAGE === "watchlist");
     const v2tb = [tb[0], tb[1], tb[2], ["tools", "Tools", I('<rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/>')],
       ["collection", "Me", I('<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>')]];
@@ -2814,12 +2814,38 @@ async function pageScout() {
   draw();
 }
 
+async function pageInvesting() {   // the playbook: highlight the chapter in view, fill the live sealed board
+  const links = [...document.querySelectorAll(".pb-toc a")];
+  if (links.length && "IntersectionObserver" in window) {
+    const toc = $(".pb-toc");
+    const io = new IntersectionObserver((es) => es.forEach((e) => {
+      if (!e.isIntersecting) return;
+      links.forEach((a) => a.classList.toggle("on", a.hash === `#${e.target.id}`));
+      const on = $(".pb-toc a.on");   // phones: keep the active chapter chip in view
+      if (on && toc.scrollWidth > toc.clientWidth) toc.scrollTo({ left: on.offsetLeft - (toc.clientWidth - on.offsetWidth) / 2, behavior: "smooth" });
+    }), { rootMargin: "-25% 0px -65% 0px" });
+    document.querySelectorAll(".pb-ch[id]").forEach((s) => io.observe(s));
+  }
+  const box = $("#pb-board"); if (!box) return;
+  try {
+    const [meta, d] = await Promise.all([getJSON("meta.json"), getJSON("movers/sealed-pokemon.json")]);
+    const win = ["30", "7", "all"].find((k) => d.windows?.[k]?.["20"]?.up?.length);
+    if (!win) return;
+    const w = d.windows[win]["20"];
+    $("#pb-board-when").textContent = win === "all" ? `since ${fmtShort(d.anchors?.all)}` : `over the last ${win} days`;
+    const row = ([id, name, gid, now, , p]) => `<a class="pb-mv" href="${prodUrl(id, gid)}">${imgTag(id, "thumb", 200)}<span class="pb-mv-n"><b>${esc(name)}</b><span>${esc(meta.groups[gid]?.[0] || "")}</span></span><span class="pb-mv-p"><b>${money(now)}</b>${chg(p)}</span></a>`;
+    $("[data-up]", box).innerHTML = w.up.slice(0, 4).map(row).join("");
+    $("[data-down]", box).innerHTML = (w.down || []).slice(0, 4).map(row).join("") || `<div class="empty-note">Nothing cooled off this week.</div>`;
+    box.hidden = false;
+  } catch (e) { console.warn("playbook board", e); }
+}
+
 async function pageCentering() {
   if (!window.dysCentering) await new Promise((ok, bad) => { const s = document.createElement("script"); s.src = "assets/centering.js?v=" + (document.querySelector('script[src*="app.js"]')?.src.split("v=")[1] || "1"); s.onload = ok; s.onerror = bad; document.head.appendChild(s); });
   window.dysCentering($("#cz-root"));
 }
 
-const pages = { centering: pageCentering, search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, demand: pageDemand, importer: pageImporter, collection: pageCollection, collectors: pageCollectors, sell: pageSell, buyer: pageBuyer, scout: pageScout, giveaway: pageGiveaway, intel: pageIntel, grading: pageGrading };
+const pages = { investing: pageInvesting, centering: pageCentering, search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, demand: pageDemand, importer: pageImporter, collection: pageCollection, collectors: pageCollectors, sell: pageSell, buyer: pageBuyer, scout: pageScout, giveaway: pageGiveaway, intel: pageIntel, grading: pageGrading };
 getJSON("stock.json").then((a) => a.forEach((x) => STK.set(x.id, x))).catch(() => {})
   .then(() => (pages[PAGE] || (async () => {}))()).then(() => offerNudge()).catch((err) => {
   console.error(err);

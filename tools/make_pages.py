@@ -128,10 +128,234 @@ HUB = [
         ("sneakers.html", "Sneaker drops", "Release dates and resale", '<path d="M3 16c0-2 1-3 2.5-3.5L9 11l2-4 2.5 1.5c1 3 3 4 6 4.5A2.5 2.5 0 0 1 22 15.5V17H3z"/><path d="M3 17v2h19v-2"/>'),
         ("https://driveyourstyle.net", "Shop the store", "Sealed, singles, sneakers", '<path d="M6 7h12l-1 13H7z"/><path d="M9 7a3 3 0 0 1 6 0"/>'),
     ]),
+    ("Learn", [
+        ("investing.html", "Investing playbook", "Strategy, grading math, when to sell", '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5M9 8h6M9 12h4"/>'),
+        ("about.html", "Where our data comes from", "How prices and movers work", '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>'),
+    ]),
 ]
 TOOLS_BODY = '<div class="wrap"><section class="block" style="padding-bottom:4px"><h1 class="in-h">Tools</h1><p class="muted" style="margin:-6px 0 0">Free, no sign-up needed.</p></section>' + "".join(
     f'<section class="block hub-sec"><h2>{h}</h2><div class="hub">' + "".join(f'<a class="tool" href="{u}">{_I(d)}<b>{t}</b><span>{s}</span></a>' for u, t, s, d in items) + "</div></section>"
     for h, items in HUB) + "</div>"
+
+
+# investing.html: the card investing playbook (long-form guide, with a live sealed-movers board filled in by app.js)
+_HUB_ICON = {u: d for _, items in HUB for u, _t, _s, d in items}
+_PB_ICON = lambda d: f'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{d}</svg>'
+PB_CHAPTERS = [("lanes", "Pick your lane"), ("cycle", "How prices move"), ("grading", "Does grading pay?"),
+               ("risk", "Protect the downside"), ("sell", "Know when to sell"), ("routine", "Your weekly routine"), ("faq", "Questions")]
+PB_RULES = [
+    ("Pay for scarcity, not hype.", "Prices built on excitement fade. Prices built on short supply tend to stick."),
+    ("Set your sell price before you buy.", "If you can't name it, you're guessing."),
+    ("Count every fee.", "Grading, shipping and selling fees are part of what you paid."),
+    ("Grade the card you have.", "Not the one you hope it is."),
+    ("Spread it out.", "No single set or product should be able to sink your budget."),
+]
+# name, icon, what it is, hold time, budget/effort/risk (1-3), works when, watch for, [(link, label)]
+PB_LANES = [
+    ("Sealed stacker", '<path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/>',
+     "Buy booster boxes, ETBs and collection boxes near retail. Hold until they're out of print and gone from shelves.",
+     "2–5+ years", 2, 1, 2,
+     "you can buy close to retail and store boxes flat, dry and out of sunlight.",
+     "reprints, crushed or resealed shrink wrap, and money locked up for years.",
+     [("trends.html", "Sealed trends")]),
+    ("Grader", '<path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/>',
+     "Buy raw cards that look clean, send them to PSA, CGC or BGS, then sell or keep the slabs.",
+     "2–6 months", 1, 3, 2,
+     "the gap between a raw copy and a 10 is wide enough to cover every fee, and still works if it comes back a 9.",
+     "grading fees, slow turnaround, and cards that come back an 8.",
+     [("grading.html", "Grading Insights"), ("centering.html", "Centering check")]),
+    ("Flipper", '<path d="M7 7h11l-3-3M17 17H6l3 3"/>',
+     "Buy under market at card shows, local shops and in bulk lots, then resell within weeks.",
+     "Days to weeks", 1, 3, 1,
+     "you buy far enough under market price to profit after selling fees and shipping.",
+     "chasing whatever's trending, and margins that vanish once fees come out.",
+     [("cards.html", "Card movers"), ("watchlist.html", "Want list")]),
+    ("Long-term collector", '<path d="M4 6h16v12H4z"/><path d="M4 10h16"/>',
+     "Own the cards you'd want anyway: iconic Pokémon, vintage, top chase cards, in the best condition you can afford.",
+     "5+ years", 3, 1, 2,
+     "you'd be happy holding the card even if its price went flat.",
+     "buying at a peak, and fakes on big-ticket cards. Buy those graded, or from sellers with a track record.",
+     [("collection.html", "My Collection")]),
+]
+PB_PHASES = [
+    ("Release buzz", "Pre-orders and the first weeks. Excitement pushes prices above retail, often on just a few sales."),
+    ("Supply catches up", "Big print runs reach stores. Prices slide, and sealed often dips under retail. Patient buyers shop here."),
+    ("On the shelf", "Prices go flat while the product is still easy to find. Little upside, little pressure."),
+    ("Out of print", "Printing stops and stock dries up. Demand stays, supply doesn't, and prices can climb. A reprint can reset it all."),
+]
+PB_DRIVERS = [
+    ("Print run", "How much was made. Big runs and reprints hold prices down; short runs push them up.", '<path d="M6 9V3h12v6M6 18H4v-7h16v7h-2"/><path d="M6 14h12v7H6z"/>'),
+    ("Character pull", "Charizard, Pikachu, Umbreon and other fan favorites carry demand from set to set.", '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>'),
+    ("Artwork", "Full arts and illustration rares with standout art keep drawing collectors long after release.", '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>'),
+    ("Condition & pop", "The grade, and how many 10s exist. A low PSA 10 count can make a 10 worth many times the raw card.", '<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>'),
+    ("Liquidity", "How often it sells. A price built on three sales is a guess; one built on three hundred is a market.", '<path d="M3 12h4l3-8 4 16 3-8h4"/>'),
+]
+PB_CHECK = [
+    ("Centering is inside the grader's 10 range.", ("centering.html", "Check it from a photo")),
+    ("The surface is clean under a bright light: no scratches, print lines or dents.", None),
+    ("Corners and edges show no whitening under a loupe.", None),
+    ("The raw-to-10 gap covers every fee, and the math still works if it's a 9.", ("grading.html", "Grading Insights runs this for every card")),
+    ("You'd be fine keeping it if it doesn't hit.", None),
+]
+# title, what goes wrong, what to do, optional (link, label)
+PB_RISKS = [
+    ("Reprints", "A new print run can knock a product's price down overnight.", "Watch announcements and the release calendar before buying in bulk.", ("calendar.html", "Release calendar")),
+    ("Fakes & reseals", "Counterfeit cards and resealed packs show up most on expensive items.", "Buy big-ticket cards graded or from sellers with a long record. Check shrink wrap seams and logos.", None),
+    ("Hype spikes", "A price that doubles in a week on a handful of sales often gives most of it back.", "Wait for the number of sales to catch up before you chase.", ("cards.html", "Card movers")),
+    ("Fee drag", "Selling fees, shipping and grading take a big bite out of cheaper cards.", "Price every buy after fees, not before.", None),
+    ("Condition damage", "Heat, humidity and loose storage turn a 10 into an 8 while it sits in a drawer.", "Sleeves, top loaders or Card Savers, and a cool, dry spot.", ("supplies.html", "Card supplies")),
+    ("Cash tied up", "Money in a box you can't sell for three years can't buy the next deal.", "Keep part of your budget free for buys that come up.", None),
+]
+PB_SELL = ["It hit the price you set when you bought it.", "It jumped fast on only a few sales.", "A reprint or new print run was announced.",
+           "The number of PSA 10s is climbing quickly.", "You found a better use for the money."]
+PB_HOLD = ["It just went out of print and stock is drying up.", "The price dipped on a quiet week with no news.",
+           "Its demand comes from a character or artwork collectors chase year after year.", "Selling now would mean handing the profit to fees."]
+PB_WHERE = [
+    ("TCGplayer", "Raw singles at market price. Buyers search by card, so common cards sell fast."),
+    ("eBay", "Graded cards and high-value singles. Sold listings show exactly what buyers paid."),
+    ("Whatnot & live shows", "Volume, bundles and cards that sell better in front of a crowd."),
+    ("Local shops & card shows", "Quick cash and trades, with no shipping risk."),
+]
+PB_STEPS = [
+    ("blog/", "Read the market report", "Our Sunday write-up: what climbed, what dropped and why."),
+    ("cards.html", "Scan the movers", "Check card movers and sealed trends for anything you own or want."),
+    ("collection.html", "Update your collection", "Add new pickups so you always know what your binder is worth."),
+    ("watchlist.html", "Set your max prices", "Put the most you'd pay on your Want list, and only buy at your number."),
+]
+PB_FAQ = [
+    ("Sealed or singles: which is the better investment?",
+     "They do different jobs. Sealed is simple to hold and tends to rise once a product goes out of print, but it ties up more cash and is exposed to reprints. Singles let you buy exactly the card you want, and top cards can outrun sealed, but condition matters far more. Plenty of collectors hold some of both."),
+    ("How long should I hold sealed product?",
+     "Usually at least until it's out of print and gone from store shelves, which is often a year or more after release. Many sealed holders plan on three to five years. Sealed trends shows where a product sits on its price cycle."),
+    ("Are Japanese cards worth investing in?",
+     "They're their own market. Japanese sets often release first, use smaller packs, and some artwork never comes out in English. Their prices don't always move with the English versions, so track them separately. Pokémon Japan has its own set pages on this site."),
+    ("Which grading company should I use?",
+     "For most Pokémon cards, PSA 10s sell for the most, so most people grading to sell choose PSA. CGC and BGS can make sense when their fees or turnaround fit a card's value better. Check what each slab actually sells for before you pick."),
+    ("Will I get the market price when I sell?",
+     "Not quite. Market price here reflects recent completed sales on TCGplayer. What you keep is that price minus selling fees and shipping, and a card can sell above or below it on any given day."),
+    ("Is this financial advice?",
+     "No. This page explains how the card market tends to work. Cards can lose value, and past prices don't promise future ones. Only put in money you're comfortable holding for a long time."),
+]
+PB_TOOLS = [("search.html", "Price check", "Search or scan any card"), ("trends.html", "Sealed trends", "Booster boxes, ETBs, bundles"),
+            ("cards.html", "Card movers", "Biggest gains and drops"), ("grading.html", "Grading Insights", "Which cards pay to grade"),
+            ("centering.html", "Centering check", "Snap a photo, get the grade"), ("collection.html", "My Collection", "What your binder is worth"),
+            ("watchlist.html", "Want list", "Set the most you'd pay"), ("sell.html", "Sell to us", "Cash or store credit")]
+PB_TITLE = "Pokémon Card Investing Playbook · Drive Your Style Market Insights"
+PB_DESC = "A plain-English playbook for investing in Pokémon and TCG cards: pick a strategy, read the price cycle, run the grading math, avoid common losses and know when to sell."
+
+
+def investing_body():
+    import json
+    lvl = ("Low", "Medium", "High")
+
+    def lk(link):
+        return f' <a href="{link[0]}">{link[1]} →</a>' if link else ""
+
+    def pips(n):
+        return "".join(f'<i class="{"on" if k < n else ""}"></i>' for k in range(3)) + f"<em>{lvl[n - 1]}</em>"
+
+    def chapter(n, cid, title, intro, inner):
+        return (f'<section class="pb-ch" id="{cid}"><header class="pb-ch-h"><span class="pb-num">{n:02d}</span>'
+                f'<div><h2>{title}</h2><p>{intro}</p></div></header>{inner}</section>')
+
+    rules = "".join(f"<li><b>{t}</b> <span>{s}</span></li>" for t, s in PB_RULES)
+    toc = "".join(f'<a href="#{c}"><span>{i:02d}</span>{t}</a>' for i, (c, t) in enumerate(PB_CHAPTERS, 1))
+    lanes = "".join(
+        f'''<article class="pb-lane"><div class="pb-lane-top"><span class="pb-ico">{_PB_ICON(ic)}</span><h3>{name}</h3></div>
+  <p class="pb-lane-what">{what}</p>
+  <dl class="pb-meters"><div><dt>Hold</dt><dd class="pb-hold">{hold}</dd></div><div><dt>Budget</dt><dd>{pips(b)}</dd></div><div><dt>Effort</dt><dd>{pips(e)}</dd></div><div><dt>Risk</dt><dd>{pips(r)}</dd></div></dl>
+  <p class="pb-lane-why"><b>Works when</b> {works}</p><p class="pb-lane-why"><b>Watch for</b> {watch}</p>
+  <div class="pb-lane-go">{"".join(f'<a href="{u}">{l} →</a>' for u, l in links)}</div></article>'''
+        for name, ic, what, hold, b, e, r, works, watch, links in PB_LANES)
+    # typical sealed price arc: buzz above retail, slide under it, flat, climb once out of print (dotted: a reprint resets it)
+    cycle_svg = '''<div class="pb-cy-wrap"><svg class="pb-cycle-svg" viewBox="0 0 640 230" preserveAspectRatio="none" role="img" aria-label="Typical sealed price arc: above retail at release, dips below retail as supply lands, flat on the shelf, then climbs once out of print, unless it is reprinted.">
+  <defs><linearGradient id="pb-cy-g" x1="0" x2="1" y1="0" y2="0"><stop offset="0" style="stop-color:var(--accent-2)"/><stop offset=".55" style="stop-color:var(--accent)"/><stop offset="1" style="stop-color:#ff7ad9"/></linearGradient></defs>
+  <g class="pb-cy-grid"><line x1="160" y1="16" x2="160" y2="230"/><line x1="320" y1="16" x2="320" y2="230"/><line x1="480" y1="16" x2="480" y2="230"/></g>
+  <line class="pb-cy-retail" x1="0" y1="132" x2="640" y2="132"/>
+  <path class="pb-cy-area" d="M0 132 C 30 60, 70 52, 110 74 S 190 176, 240 168 S 300 160, 340 158 S 420 150, 480 132 S 580 52, 640 40 L640 230 L0 230 Z"/>
+  <path class="pb-cy-line" d="M0 132 C 30 60, 70 52, 110 74 S 190 176, 240 168 S 300 160, 340 158 S 420 150, 480 132 S 580 52, 640 40"/>
+  <path class="pb-cy-alt" d="M480 132 S 530 100, 560 104 S 610 170, 640 172"/>
+</svg><span class="pb-cy-ret" aria-hidden="true">RETAIL</span>''' + "".join(f'<span class="pb-cy-m" style="left:{x}%" aria-hidden="true">{i}</span>' for i, x in enumerate((12.5, 37.5, 62.5, 87.5), 1)) + "</div>"
+    phases = "".join(f'<li><span class="pb-ph-n">{i}</span><b>{t}</b><span>{s}</span></li>' for i, (t, s) in enumerate(PB_PHASES, 1))
+    drivers = "".join(f'<div class="pb-driver"><span class="pb-ico">{_PB_ICON(ic)}</span><b>{t}</b><span>{s}</span></div>' for t, s, ic in PB_DRIVERS)
+    board = '''<div class="pb-board" id="pb-board" hidden>
+    <div class="pb-board-h"><div><h3>On the board this week</h3><p>Every pattern above shows up in real prices. The biggest moves in Pokémon sealed ($20+) <span id="pb-board-when">this week</span>.</p></div><a class="more" href="trends.html">All sealed movers →</a></div>
+    <div class="pb-board-cols"><div class="panel"><h3><span class="chg up">▲</span> Climbing</h3><div data-up></div></div>
+    <div class="panel"><h3><span class="chg down">▼</span> Cooling off</h3><div data-down></div></div></div></div>'''
+    receipt = '''<div class="pb-receipt" aria-label="Worked example">
+    <span class="pb-rc-t">Worked example</span>
+    <div class="pb-rc-sec"><span class="pb-rc-k">The card</span>
+      <p><span>Raw market price</span><b>$40</b></p><p><span>PSA 10 sells for</span><b>$180</b></p><p><span>PSA 9 sells for</span><b>$65</b></p><p><span>Lower grades, about 0.7× raw</span><b>$28</b></p></div>
+    <div class="pb-rc-sec"><span class="pb-rc-k">Your odds</span>
+      <div class="pb-odds" role="img" aria-label="35% chance of a 10, 45% a 9, 20% lower"><span style="flex:35" class="o10">10 · 35%</span><span style="flex:45" class="o9">9 · 45%</span><span style="flex:20" class="olo">20%</span></div></div>
+    <div class="pb-rc-sec"><span class="pb-rc-k">The math</span>
+      <p><span>Expected sale<small>35% × $180 + 45% × $65 + 20% × $28</small></span><b>$97.85</b></p>
+      <p><span>After ~13% selling fees</span><b>$85.13</b></p>
+      <p><span>Cost in<small>$40 card + $30 grading and shipping</small></span><b>−$70.00</b></p></div>
+    <p class="pb-rc-total"><span>Expected profit</span><b>+$15.13</b></p>
+    <p class="pb-rc-be"><span>Break-even PSA 10 price</span><b>$130 <small>(3.3× raw)</small></b></p>
+    <p class="pb-rc-note">Drop the odds of a 10 to 20% and the same card loses about $5. Your odds matter more than any other number here.</p>
+  </div>'''
+    checklist = "".join(f'<li><span class="pb-tick" aria-hidden="true">✓</span><span>{t}{lk(l)}</span></li>' for t, l in PB_CHECK)
+    risks = "".join(f'<div class="pb-risk"><b>{t}</b><p>{w}</p><p class="pb-fix"><span>Do this</span>{d}{lk(l)}</p></div>' for t, w, d, l in PB_RISKS)
+    sell = "".join(f"<li>{s}</li>" for s in PB_SELL)
+    hold = "".join(f"<li>{s}</li>" for s in PB_HOLD)
+    where = "".join(f'<div class="pb-where-row"><b>{t}</b><span>{s}</span></div>' for t, s in PB_WHERE) + \
+        '<a class="pb-where-row pb-where-us" href="sell.html"><b>Drive Your Style</b><span>One offer for the whole stack, cash or store credit. <em>Get an offer →</em></span></a>'
+    steps = "".join(f'<a class="pb-step" href="{u}"><span class="pb-step-n">{i}</span><b>{t}</b><span>{s}</span></a>' for i, (u, t, s) in enumerate(PB_STEPS, 1))
+    faq = "".join(f'<details class="pb-faq"><summary>{q}</summary><p>{a}</p></details>' for q, a in PB_FAQ)
+    tools = "".join(f'<a class="tool" href="{u}">{_I(_HUB_ICON[u])}<b>{t}</b><span>{s}</span></a>' for u, t, s in PB_TOOLS)
+    ld = json.dumps([
+        {"@context": "https://schema.org", "@type": "Article", "headline": "The card investing playbook", "description": PB_DESC,
+         "author": {"@type": "Organization", "name": "Drive Your Style"}, "publisher": {"@type": "Organization", "name": "Drive Your Style", "url": "https://driveyourstyle.net"},
+         "mainEntityOfPage": "https://market.driveyourstyle.net/investing.html", "datePublished": "2026-11-07", "image": "https://market.driveyourstyle.net/assets/og.png"},
+        {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
+            {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in PB_FAQ]},
+    ], ensure_ascii=False).replace("</", "<\\/")
+
+    body = [
+        chapter(1, "lanes", "Pick your lane", "Four ways people make money with cards. Each takes a different budget, patience and amount of work. Most people do best focusing on one or two.",
+                f'<div class="pb-lanes">{lanes}</div>'),
+        chapter(2, "cycle", "How prices move", "Most sealed products follow the same arc after release. Knowing where a product sits on it tells you whether you're early, late or right on time.",
+                f'''<div class="pb-cycle panel">{cycle_svg}<div class="pb-cy-key"><span><i class="k-line"></i>Market price</span><span><i class="k-retail"></i>Retail</span><span><i class="k-alt"></i>If it's reprinted</span></div>
+  <ol class="pb-phases">{phases}</ol><p class="pb-cap">A common pattern, not a promise. Plenty of products never climb, and a hot set can skip the dip.</p></div>
+  <h3 class="pb-sub">What actually moves a price</h3><div class="pb-drivers">{drivers}</div>{board}'''),
+        chapter(3, "grading", "Does grading pay?", "Grading is a bet on the grade. The math takes a minute once you write it down; skip it and fees quietly eat the profit.",
+                f'''<div class="pb-math">{receipt}<div class="pb-check"><h3>Before you submit</h3><ul>{checklist}</ul>
+  <a class="report-banner" href="supplies.html"><div><b>📦 Ship it right</b><span>Penny sleeves, Card Saver 1s and team bags.</span></div><span>Supplies →</span></a></div></div>'''),
+        chapter(4, "risk", "Protect the downside", "Most losses in cards don't come from picking the wrong set. They come from the same handful of mistakes.",
+                f'<div class="pb-risks">{risks}</div>'),
+        chapter(5, "sell", "Know when to sell", "The best time to decide when you'll sell is before you buy. These signals help when the moment comes.",
+                f'''<div class="pb-signals"><div class="pb-sig pb-sig-sell"><h3>Sell signals</h3><ul>{sell}</ul></div><div class="pb-sig pb-sig-hold"><h3>Hold signals</h3><ul>{hold}</ul></div></div>
+  <h3 class="pb-sub">Where to sell</h3><div class="pb-where">{where}</div>'''),
+        chapter(6, "routine", "Your weekly routine", "Fifteen minutes a week keeps you on top of everything you own and everything you want.",
+                f'<div class="pb-steps">{steps}</div>'),
+        chapter(7, "faq", "Questions", "Short answers to what collectors ask us most.", f'<div class="pb-faqs">{faq}</div>'),
+    ]
+    return f'''
+<div class="wrap pb">
+<section class="pb-hero">
+  <div class="pb-hero-copy">
+    <span class="in-kicker">PLAYBOOK · POKÉMON &amp; TCG</span>
+    <h1>The card investing <span>playbook</span></h1>
+    <p class="pb-lede">How to buy, hold, grade and sell Pokémon and other TCG cards without guessing. Plain rules, worked math, and the same nightly prices that run this site.</p>
+    <div class="btns"><a class="btn primary" href="#lanes">Pick your lane ↓</a><a class="btn" href="trends.html">This week's movers</a></div>
+  </div>
+  <aside class="pb-rules" aria-labelledby="pb-rules-t"><span class="pb-rules-t" id="pb-rules-t">5 house rules</span><ol>{rules}</ol></aside>
+</section>
+<div class="pb-layout">
+  <nav class="pb-toc" aria-label="Chapters"><span class="pb-toc-t">Chapters</span>{toc}</nav>
+  <div class="pb-main">
+{"".join(body)}
+  <section class="pb-ch pb-end"><h2>Put the playbook to work</h2><p class="muted">Every tool here is free, no sign-up needed.</p><div class="hub">{tools}</div>
+  <p class="pb-fine">For research and education only, not financial advice. Examples use round numbers; real prices and fees change daily. Not affiliated with or endorsed by The Pokémon Company, Nintendo or TCGplayer.</p></section>
+  </div>
+</div>
+</div>
+<script type="application/ld+json">{ld}</script>'''
+
+
+INVESTING_BODY = investing_body()
 
 PAGES = {
 "index": ("Market Insights · Drive Your Style",
@@ -563,6 +787,7 @@ PAGES = {
           "Free card tools: price check and scan, movers, sealed trends, Grading Insights, centering check, collection tracker, want list, release calendar and sneaker drops.", TOOLS_BODY),
 "supplies": ("Card grading & storage supplies · Drive Your Style",
              "What you need to send cards to PSA, CGC or BGS and to store, display and ship them: penny sleeves, Card Saver 1, team bags, top loaders, binders and more.", SUPPLIES_BODY),
+"investing": (PB_TITLE, PB_DESC, INVESTING_BODY),
 "about": ("About the data · Drive Your Style Market Insights", "Where Drive Your Style market prices come from.", '''
 <div class="wrap"><article class="prose">
   <h1>Where this data comes from</h1>
