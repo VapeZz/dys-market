@@ -185,18 +185,52 @@ document.documentElement.dataset.theme = getTheme();
 
 /* ---------- shell ---------- */
 const SEARCH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>`;
-// header links that fold into the ☰ menu on narrower desktops: 1 = below 1800px, 2 = below 1440px
-const NAV_TIER = { search: 1, compare: 1, centering: 1, calendar: 1, sneakers: 1, watchlist: 1, about: 1, giveaway: 1, trends: 2, collectors: 2 };
+// One menu for the whole site: the desktop header dropdowns, the tablet ☰ Menu and the phone Menu tab all use NAV,
+// so every page has one name and one place. [page, label, one-liner, icon path]; the 3rd item lists pages that belong to the group.
+const NI = (d) => `<span class="tool-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg></span>`;
+const NAV = [
+  ["Prices", [
+    ["search", "Price check", "Search or scan any card", '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>'],
+    ["sets", "Sets", "Every set, all 10 games", '<rect x="7" y="3" width="13" height="17" rx="2"/><path d="M4 7v12a2 2 0 0 0 2 2h10"/>'],
+    ["cards", "Card movers", "Biggest card gains and drops", '<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>'],
+    ["trends", "Sealed trends", "Booster boxes, ETBs, bundles", '<path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/>'],
+    ["compare", "Compare", "Two products side by side", '<rect x="3" y="5" width="7" height="14" rx="1.5"/><rect x="14" y="5" width="7" height="14" rx="1.5"/>'],
+    ["calendar", "Release calendar", "Upcoming sets, every game", '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>'],
+  ], ["set", "product", "static"]],
+  ["Grading", [
+    ["grading", "Grading Insights", "Which cards pay to grade", '<path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/>'],
+    ["centering", "Centering check", "Snap a photo, get the grade", '<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M12 8v8M8 12h8"/>'],
+    ["supplies", "Grading supplies", "Sleeves, Card Savers, mailers", '<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4"/>'],
+  ], []],
+  ["Learn", [
+    ["investing", "Investing playbook", "Strategy, grading math, when to sell", '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5M9 8h6M9 12h4"/>'],
+    ["intel", "Market brief", "What's moving today", '<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>'],
+    ["blog/", "Weekly market report", "The Sunday write-up", '<path d="M5 4h11l3 3v13H5z"/><path d="M8 10h8M8 14h8M8 18h5"/>'],
+    ["about", "Where our data comes from", "How prices and movers work", '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>'],
+  ], ["blog"]],
+  ["My cards", [
+    ["collection", "My Collection", "What your binder is worth", '<path d="M4 6h16v12H4z"/><path d="M4 10h16"/>'],
+    ["watchlist", "Want list", "Set the most you'd pay", '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>'],
+    ["collectors", "Collectors", "Public binders to browse", '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c1-3.5 3.5-5.5 6.5-5.5s5.5 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.6.9 2.7 2.6 3 5.2"/>'],
+    ["sell", "Sell to us", "Cash or store credit", '<path d="M12 3v18M17 7.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2.2 2.6 5 3 5 1.1 5 3-2.2 3-5 3-5-1.1-5-3"/>'],
+    ...(GIVEAWAY_ON ? [["giveaway", "Monthly giveaway", "Win an Elite Trainer Box", '<path d="M4 11h16v9H4zM3 7h18v4H3zM12 7v13"/><path d="M12 7c-2-3-5-3-5-1s3 1 5 1c2 0 5 1 5-1s-3-2-5 1z"/>']] : []),
+  ], []],
+];
+const NAV_SNEAKERS = ["sneakers", "Sneakers", "Release dates and resale", '<path d="M3 16c0-2 1-3 2.5-3.5L9 11l2-4 2.5 1.5c1 3 3 4 6 4.5A2.5 2.5 0 0 1 22 15.5V17H3z"/><path d="M3 17v2h19v-2"/>'];
+const navHref = (p) => (p.endsWith("/") ? p : `${p}.html`);
+const navIn = ([, items, extra]) => items.some(([p]) => p.replace("/", "") === PAGE) || extra.includes(PAGE);
+const navItem = ([p, l, s, d]) => `<a class="mi" href="${navHref(p)}"${p.replace("/", "") === PAGE ? ' aria-current="page"' : ""}>${NI(d)}<b>${l}</b><span>${s}</span></a>`;
+const CHEV = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>`;
 function shell() {
-  const links = V2 ? [["intel", "Intel"], ["sets", "Sets"], ["cards", "Movers"], ["grading", "Grading"], ["sneakers", "Sneakers"], ["tools", "All tools"], ["collection", "My Collection"]] : [["intel", "Intel"], ["sets", "Sets"], ["trends", "Trends"], ["cards", "Movers"], ["search", "Search"], ["compare", "Compare"], ["centering", "Centering"], ["grading", "Grading"], ["calendar", "Calendar"], ["sneakers", "Sneakers"], ["watchlist", "Want list"], ["collection", "My Collection"], ["collectors", "Collectors"], ...(GIVEAWAY_ON ? [["giveaway", "🎁 Giveaway"]] : []), ["about", "About"]];
   $("#top").outerHTML = `<header class="top"><div class="wrap">
     <a class="brand" href="index.html" aria-label="Drive Your Style Market Insights home"><img class="logo-img logo-on-dark" src="assets/logo-light.png" alt="Drive Your Style" width="61" height="40"><img class="logo-img logo-on-light" src="assets/logo-dark.png" alt="" width="61" height="40"><span class="brand-sub">Market<br>Insights</span></a>
-    <nav class="nav" id="nav">${links.map(([p, l]) => `<a href="${p}.html"${NAV_TIER[p] ? ` class="nav-x${NAV_TIER[p]}"` : ""}${p === PAGE ? ' aria-current="page"' : ""}>${l}</a>`).join("")}
-      <a href="${STORE}" class="nav-shop">Shop the store →</a></nav>
+    <nav class="nav" id="nav" aria-label="Main">${NAV.map((g, i) => `<div class="nav-g"><button type="button" class="nav-b" aria-expanded="false" aria-controls="np${i}"${navIn(g) ? ' aria-current="true"' : ""}>${g[0]}${CHEV}</button>
+      <div class="nav-p${g[1].length > 4 ? " two" : ""}" id="np${i}" hidden>${g[1].map(navItem).join("")}</div></div>`).join("")}
+      <a class="nav-l" href="sneakers.html"${PAGE === "sneakers" ? ' aria-current="page"' : ""}>Sneakers</a></nav>
     <div class="top-actions">
       ${PAGE !== "index" ? `<div class="search" data-search>${SEARCH_ICON}<input type="search" placeholder="Search products & cards" aria-label="Search"><div class="results"></div></div>` : ""}
       <a class="shop-btn" href="${STORE}">Shop</a>
-      <button class="menu-btn" aria-label="Menu" aria-expanded="false">☰</button>
+      <button type="button" class="menu-btn" aria-expanded="false" aria-controls="msheet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Menu</span></button>
     </div></div></header>`;
   const SOCIALS = [
     ["TikTok", "https://www.tiktok.com/@drive.your.style", '<path fill="currentColor" d="M16.6 5.8A4.3 4.3 0 0 1 15.5 3h-3.1v12.4a2.6 2.6 0 1 1-1.8-2.5V9.7a5.8 5.8 0 1 0 4.9 5.7V9.1a7.4 7.4 0 0 0 4.3 1.4V7.4a4.3 4.3 0 0 1-3.2-1.6z"/>'],
@@ -223,21 +257,63 @@ function shell() {
     ["intel", "Intel", I('<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>')],
     ["shop", "Shop", I('<path d="M6 7h12l-1 13H7z"/><path d="M9 7a3 3 0 0 1 6 0"/>')]];
   const bar = document.createElement("nav"); bar.className = "tabbar"; bar.setAttribute("aria-label", "Main");
-  if (V2) {   // 5 tabs: everything that isn't Home / Search / Sets / Me lives on the Tools page
-    const TOOLS = new Set(["tools", "investing", "grading", "centering", "sell", "sneakers", "calendar", "supplies", "intel", "trends", "cards", "compare", "collectors"]);
-    const cur = (p) => p === PAGE || (p === "sets" && PAGE === "set") || (p === "tools" && TOOLS.has(PAGE)) || (p === "collection" && PAGE === "watchlist");
-    const v2tb = [tb[0], tb[1], tb[2], ["tools", "Tools", I('<rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/>')],
-      ["collection", "Me", I('<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>')]];
-    bar.innerHTML = v2tb.map(([p, l, i]) => `<a href="${p}.html"${cur(p) ? ' aria-current="page"' : ""}>${i}<span>${l}</span></a>`).join("");
+  if (V2) {   // 5 tabs: Home / Search / Sets / Menu (everything else, same groups as the desktop header) / Collection
+    const MENU_I = I('<path d="M4 7h16M4 12h16M4 17h16"/>');
+    const inMenu = !["index", "search", "sets", "set", "collection", "watchlist"].includes(PAGE);
+    const cur = (p) => p === PAGE || (p === "sets" && PAGE === "set") || (p === "collection" && PAGE === "watchlist");
+    bar.innerHTML = [tb[0], tb[1], tb[2]].map(([p, l, i]) => `<a href="${p}.html"${cur(p) ? ' aria-current="page"' : ""}>${i}<span>${l}</span></a>`).join("")
+      + `<button type="button" class="tab-menu" aria-expanded="false" aria-controls="msheet"${inMenu ? ' aria-current="page"' : ""}>${MENU_I}<span>Menu</span></button>`
+      + `<a href="collection.html"${cur("collection") ? ' aria-current="page"' : ""}>${tb[3][2]}<span>Collection</span></a>`;
   } else {
     bar.innerHTML = tb.map(([p, l, i]) => `<a href="${p === "shop" ? STORE : p + ".html"}"${p === PAGE || (p === "sets" && PAGE === "set") ? ' aria-current="page"' : ""}>${i}<span>${l}</span></a>`).join("");
   }
   document.body.appendChild(bar);
   document.querySelectorAll(".theme-switch button").forEach((b) => b.addEventListener("click", () => setTheme(b.dataset.t)));
   setTheme(getTheme());
-  const mb = $(".menu-btn");
-  mb.addEventListener("click", () => { const o = $("#nav").classList.toggle("open"); mb.setAttribute("aria-expanded", o); });
+  navMenus();
   getJSON("meta.json").then((m) => { $("#updated-line").textContent = `Prices last updated ${fmtDate(m.updated)}.`; }).catch(() => {});
+}
+
+function navMenus() {
+  // desktop: one dropdown open at a time; opens on click, and on hover for mouse users
+  const groups = [...document.querySelectorAll(".nav-g")];
+  const close = (g) => { if (!g) return; g.classList.remove("open"); $(".nav-b", g).setAttribute("aria-expanded", "false"); $(".nav-p", g).hidden = true; };
+  const open = (g) => { groups.forEach((x) => x !== g && close(x)); g.classList.add("open"); $(".nav-b", g).setAttribute("aria-expanded", "true"); $(".nav-p", g).hidden = false; };
+  const hover = matchMedia("(hover: hover) and (pointer: fine)").matches;
+  groups.forEach((g) => {
+    const b = $(".nav-b", g); let t;
+    // a click right after hover-open keeps it open (mouse users click what they're pointing at); a second click closes
+    b.addEventListener("click", () => { if (g.classList.contains("open") && g.dataset.by !== "hover") close(g); else { open(g); g.dataset.by = "click"; } });
+    if (hover) {
+      g.addEventListener("mouseenter", () => { clearTimeout(t); if (!g.classList.contains("open")) { open(g); g.dataset.by = "hover"; } });
+      g.addEventListener("mouseleave", () => { t = setTimeout(() => close(g), 180); });
+    }
+    g.addEventListener("keydown", (e) => { if (e.key === "Escape" && g.classList.contains("open")) { close(g); b.focus(); } });
+    g.addEventListener("focusout", (e) => { if (!g.contains(e.relatedTarget)) close(g); });
+  });
+  document.addEventListener("click", (e) => { if (!e.target.closest(".nav-g")) groups.forEach(close); });
+
+  // tablets and phones: the same groups as a full-screen menu, opened by ☰ Menu (header) or the Menu tab
+  const sheet = document.createElement("div");
+  sheet.id = "msheet"; sheet.className = "msheet"; sheet.hidden = true;
+  sheet.setAttribute("role", "dialog"); sheet.setAttribute("aria-modal", "true"); sheet.setAttribute("aria-label", "Menu");
+  sheet.innerHTML = `<div class="msheet-h"><b>Menu</b><button type="button" class="msheet-x" aria-label="Close menu">✕</button></div>
+    <div class="msheet-in">${NAV.map(([h, items]) => `<section class="msheet-g"><h2>${h}</h2><div class="mlist">${items.map(navItem).join("")}</div></section>`).join("")}
+      <section class="msheet-g"><h2>Sneakers</h2><div class="mlist">${navItem(NAV_SNEAKERS)}</div></section>
+      <a class="btn primary msheet-shop" href="${STORE}">Shop Drive Your Style →</a></div>`;
+  document.body.appendChild(sheet);
+  const toggles = [...document.querySelectorAll(".menu-btn, .tab-menu")];
+  let opener = null;
+  const setSheet = (on, from) => {
+    sheet.hidden = !on;
+    document.documentElement.classList.toggle("sheet-open", on);
+    toggles.forEach((b) => b.setAttribute("aria-expanded", on));
+    if (on) { opener = from; $(".msheet-x", sheet).focus(); } else if (opener) opener.focus();
+  };
+  toggles.forEach((b) => b.addEventListener("click", () => setSheet(sheet.hidden, b)));
+  $(".msheet-x", sheet).addEventListener("click", () => setSheet(false));
+  sheet.addEventListener("keydown", (e) => { if (e.key === "Escape") setSheet(false); });
+  addEventListener("resize", () => { if (!sheet.hidden && innerWidth > 1100) setSheet(false); });
 }
 
 /* ---------- search ---------- */
