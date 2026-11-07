@@ -1,0 +1,55 @@
+{
+  "_readme": "Grading and selling fees used by Grading Insights, the card-page calculator and the Intel grading picks. Edit this file when a grader or marketplace changes prices. Money is in cents. Grader tiers: [name, price per card, highest card value the tier covers (null = not published), turnaround in business days], cheapest first, open tiers only. upcharge: true when the grader bills the difference if the graded card is worth more than the tier covers. Selling fees: parts are [percent, applies from, applies up to (null = no limit), fee cap (null = none)], plus a flat fee per order.",
+  "checked": "2026-10-27",
+  "graders": {
+    "PSA": {
+      "upcharge": true,
+      "note": "PSA's Value tiers have been paused since June 2026, and submitting needs a Collectors Club membership.",
+      "tiers": [
+        ["Standard", 5999, 100000, "90–100"],
+        ["Priority", 7999, 150000, "70–80"],
+        ["Express", 19900, 250000, "20–30"],
+        ["Super Express", 34900, 500000, "10–15"],
+        ["Premier", 59900, 1000000, "7–10"]
+      ]
+    },
+    "CGC": {
+      "upcharge": true,
+      "note": "Bulk needs 25 or more cards in the order.",
+      "tiers": [
+        ["Bulk", 1700, 50000, "150"],
+        ["Economy", 2000, 100000, "90"],
+        ["Standard", 5500, 300000, "10"],
+        ["Express", 10000, 1000000, "5"],
+        ["WalkThrough", 30000, 10000000, "2"]
+      ]
+    },
+    "BGS": {
+      "upcharge": false,
+      "note": "Beckett isn't publishing value limits right now; check its submission form for upcharges.",
+      "tiers": [
+        ["Base", 1795, null, "75+"],
+        ["Standard", 3495, null, "45"],
+        ["Express", 7995, null, "15"]
+      ]
+    },
+    "TAG": {
+      "upcharge": false,
+      "note": "TAG's value limits are insurance limits; it isn't reported to upcharge.",
+      "tiers": [
+        ["Value", 2995, 25000, "90"],
+        ["Base", 3995, 50000, "60"],
+        ["Standard", 5995, 100000, "45"],
+        ["Priority", 7995, 150000, "30"],
+        ["Express", 14995, 250000, "10"],
+        ["Premier", 29995, 500000, "3–5"]
+      ]
+    }
+  },
+  "sell": {
+    "ebay": {"label": "eBay", "flat": 40, "parts": [[13.25, 0, 750000, null], [2.35, 750000, null, null]]},
+    "tcgplayer": {"label": "TCGplayer", "flat": 30, "parts": [[10.75, 0, null, 7500], [2.5, 0, null, null]]},
+    "whatnot": {"label": "Whatnot", "flat": 30, "parts": [[8, 0, null, null], [2.9, 0, null, null]]},
+    "none": {"label": "In person (no fees)", "flat": 0, "parts": []}
+  }
+}
