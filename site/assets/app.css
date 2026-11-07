@@ -28,26 +28,52 @@ img{max-width:100%;display:block}
 .brand{display:flex;flex-shrink:0;align-items:center;gap:10px;font-family:var(--display);font-weight:700;font-size:17px;white-space:nowrap}
 .brand-mark{width:30px;height:30px;border-radius:9px;background:var(--holo);display:grid;place-items:center;color:#0b0d14;font-size:13px;font-weight:800}
 .brand small{display:block;font-family:var(--font);font-weight:500;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
-.nav{display:flex;gap:4px;margin-left:8px}
-.nav a{padding:8px 10px;border-radius:10px;color:var(--ink-2);font-weight:600;font-size:14px;white-space:nowrap}
-.nav a:hover{color:var(--ink);background:var(--surface-2)}
-.nav a[aria-current="page"]{color:var(--ink);background:var(--surface-2)}
+.nav{display:flex;align-items:center;gap:2px;margin-left:8px}
+.nav-g{position:relative}
+.nav-b,.nav-l{display:inline-flex;align-items:center;gap:4px;padding:8px 11px;border:0;border-radius:10px;background:none;color:var(--ink-2);font:600 14px/1.2 var(--font);white-space:nowrap;cursor:pointer}
+.nav-b svg{width:14px;height:14px;opacity:.7;transition:transform .15s}
+.nav-b:hover,.nav-l:hover,.nav-g.open .nav-b{color:var(--ink);background:var(--surface-2)}
+.nav-g.open .nav-b svg{transform:rotate(180deg)}
+.nav-b[aria-current="true"],.nav-l[aria-current="page"]{color:var(--ink);box-shadow:inset 0 -2px 0 var(--accent)}
+.nav-p{position:absolute;top:calc(100% + 8px);left:-6px;z-index:60;width:320px;display:grid;gap:2px;padding:8px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow)}
+.nav-p:before{content:"";position:absolute;left:0;right:0;top:-10px;height:10px}
+.nav-p.two{width:600px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.nav-p[hidden]{display:none}
+.mi{display:grid;grid-template-columns:38px minmax(0,1fr);column-gap:12px;align-items:center;padding:9px 10px;border-radius:12px;color:var(--ink);text-decoration:none}
+.mi .tool-i{grid-row:1/3;width:38px;height:38px;border-radius:10px}
+.mi .tool-i svg{width:19px;height:19px}
+.mi b{font-size:14.5px;line-height:1.25;align-self:end}
+.mi > span:last-child{font-size:12.5px;line-height:1.3;color:var(--ink-3);align-self:start}
+.mi:hover,.mi:focus-visible{background:var(--surface-2)}
+.mi[aria-current="page"]{background:color-mix(in srgb,var(--accent) 13%,transparent)}
 .top-actions{margin-left:auto;display:flex;align-items:center;gap:10px}
 .shop-btn{padding:9px 16px;border-radius:999px;background:var(--ink);color:var(--bg);font-weight:700;font-size:14px;white-space:nowrap}
-.menu-btn{display:none;background:none;border:1px solid var(--line-strong);color:var(--ink);border-radius:10px;padding:8px 10px;font:inherit;cursor:pointer}
-/* desktop: the most-used links stay in the bar, the rest fold into the ☰ menu so the header never overflows */
-@media(max-width:1799px){
-  .nav a.nav-x1{display:none}
-  .menu-btn{display:block}
-  .nav.open{position:absolute;top:64px;left:0;right:0;flex-direction:column;background:var(--bg);border-bottom:1px solid var(--line);padding:8px 16px 16px;margin:0;z-index:60}
-  .nav.open a.nav-x1,.nav.open a.nav-x2{display:block}
+.menu-btn{display:none;align-items:center;gap:6px;background:none;border:1px solid var(--line-strong);color:var(--ink);border-radius:10px;padding:8px 12px;font:600 14px var(--font);cursor:pointer}
+.menu-btn svg{width:18px;height:18px}
+@media(max-width:1100px){.nav{display:none}.menu-btn{display:inline-flex}}
+@media(max-width:760px){.v2 .menu-btn{display:none}}
+/* full-screen menu (tablets and phones) */
+.msheet{position:fixed;inset:0;z-index:65;overflow-y:auto;overscroll-behavior:contain;background:var(--bg);padding-bottom:110px}
+.msheet[hidden]{display:none}
+.sheet-open,.sheet-open body{overflow:hidden}
+.msheet-h{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;height:64px;padding:0 16px;background:var(--bg);border-bottom:1px solid var(--line)}
+.msheet-h b{font:700 20px var(--display)}
+.msheet-x{width:42px;height:42px;border-radius:12px;border:1px solid var(--line-strong);background:none;color:var(--ink);font-size:16px;cursor:pointer}
+.msheet-in{max-width:760px;margin:0 auto;padding:4px 16px 16px}
+.msheet-g h2{font:600 11.5px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;color:#ff8a3d;margin:22px 4px 10px}
+.mlist{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.mlist .mi{border:1px solid var(--line);background:var(--surface)}
+.mlist .mi[aria-current="page"]{border-color:color-mix(in srgb,var(--accent) 55%,transparent);background:color-mix(in srgb,var(--accent) 13%,var(--surface))}
+.msheet-shop{width:100%;justify-content:center;margin-top:26px}
+@media(max-width:560px){
+  .mlist .mi{grid-template-columns:34px minmax(0,1fr);column-gap:10px;padding:10px}
+  .mlist .mi .tool-i{width:34px;height:34px}
+  .mlist .mi b{font-size:13.5px}
+  .mlist .mi > span:last-child{font-size:11.5px}
 }
-@media(max-width:1439px){.nav a.nav-x2{display:none}}
-@media(min-width:1101px) and (max-width:1799px){.nav.open{left:auto;right:max(16px,calc((100vw - 1280px)/2));width:260px;border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:8px}}
-@media(max-width:1100px){
-  .nav{display:none;position:absolute;top:64px;left:0;right:0;flex-direction:column;background:var(--bg);border-bottom:1px solid var(--line);padding:8px 16px 16px;margin:0;z-index:60}
-  .nav.open{display:flex}
-}
+.tabbar .tab-menu{display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--ink-3);font:600 10px var(--font);padding:6px 4px;border:0;border-radius:999px;background:none;flex:1 1 0;min-width:0;cursor:pointer}
+.tabbar .tab-menu svg{width:22px;height:22px}
+.tabbar .tab-menu[aria-current="page"],.tabbar .tab-menu[aria-expanded="true"]{color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
 @media(max-width:860px){.shop-btn{display:none}}
 
 /* hero + search */
@@ -190,8 +216,6 @@ footer .socials svg{width:18px;height:18px}
 .skeleton{background:linear-gradient(90deg,var(--surface) 0%,var(--surface-2) 50%,var(--surface) 100%);background-size:200% 100%;animation:sh 1.2s infinite;border-radius:10px;height:18px}
 @keyframes sh{to{background-position:-200% 0}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
-.nav .nav-shop{display:none}
-@media(max-width:860px){.nav .nav-shop{display:block;color:var(--accent)}}
 @media(max-width:600px){
   .row{grid-template-columns:40px 1fr auto;gap:10px;padding:10px 12px}
   .row .rank{display:none}
