@@ -4,7 +4,7 @@ name: Grade scout (eBay PSA 10 vs raw)
 # checks each shortlisted card's real eBay SOLD prices before anything is built or posted.
 on:
   schedule:
-    - cron: "20 10 * * 1-6"     # Mon-Sat, 3:20 am Pacific
+    - cron: "20 8 * * 1-6"      # Mon-Sat, 12:20 am Pacific (GitHub often runs it hours late; must finish before the 9:47 am Grade it? task)
   workflow_dispatch:
     inputs:
       game:
