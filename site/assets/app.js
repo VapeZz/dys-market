@@ -316,6 +316,26 @@ function navMenus() {
   addEventListener("resize", () => { if (!sheet.hidden && innerWidth > 1100) setSheet(false); });
 }
 
+/* breadcrumbs: a Back button (to the page you came from on this site, else the parent page) and the full path */
+const PAGE_NAME = Object.fromEntries([...NAV.flatMap(([, items]) => items.map(([p, l]) => [p.replace("/", ""), l])), ["index", "Home"], ["sneakers", "Sneakers"], ["tools", "All tools"]]);
+const BACK_I = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>`;
+function crumbs(path, parent) {   // path: [[href or null, label], ...]; parent: [href, label]
+  const el = $("#crumbs"); if (!el) return;
+  let back = parent, hist = false;
+  try {
+    const r = document.referrer ? new URL(document.referrer) : null;
+    if (r && r.origin === location.origin && history.length > 1) {
+      const up = new URL(parent[0], location.href);
+      const pg = r.pathname.includes("/blog/") ? "blog" : (r.pathname.split("/").pop() || "index.html").replace(/\.html$/, "");
+      if (r.pathname === up.pathname && r.searchParams.get("id") === up.searchParams.get("id")) hist = true;   // came from the parent: go back so its filters and scroll are kept
+      else if (PAGE_NAME[pg] && pg !== PAGE) { back = [r.href, PAGE_NAME[pg]]; hist = true; }
+    }
+  } catch {}
+  el.innerHTML = `<a class="crumb-back" href="${esc(back[0])}">${BACK_I}<span>Back to ${esc(back[1])}</span></a>
+    <nav class="crumb-path" aria-label="Breadcrumb"><ol>${path.map(([h, l], i) => `<li>${h && i < path.length - 1 ? `<a href="${h}">${esc(l)}</a>` : `<span aria-current="page">${esc(l)}</span>`}</li>`).join("")}</ol></nav>`;
+  if (hist) $(".crumb-back", el).addEventListener("click", (e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button) return; e.preventDefault(); history.back(); });
+}
+
 /* ---------- search ---------- */
 const ALIASES = [[/elite trainer box/, " etb"], [/booster box/, " bb"], [/ultra[- ]premium collection/, " upc"],
   [/super[- ]premium collection/, " spc"], [/premium collection/, " pc"], [/booster bundle/, " bundle"], [/pokemon center/, " pc etb"]];
@@ -636,7 +656,8 @@ async function pageSet() {
   const [meta, set, allSets] = await Promise.all([getJSON("meta.json"), getJSON(`set/${id}.json`), getJSON("sets.json")]);
   document.title = `${set.n} prices · Drive Your Style Market Insights`;
   const gl = Object.fromEntries(meta.games.map((g) => [g.slug, g.label]));
-  $("#crumbs").innerHTML = `<a href="sets.html">Sets</a> / <a href="sets.html?game=${set.k}">${esc(gl[set.k] || set.k)}</a> / ${esc(set.n)}`;
+  const game = gl[set.k] || set.k;
+  crumbs([["sets.html", "Sets"], [`sets.html?game=${set.k}`, game], [null, set.n]], [`sets.html?game=${set.k}`, `all ${game} sets`]);
   $("#title").textContent = set.n;
   const sinfo = allSets.find((s) => String(s.id) === String(set.id));
   if (sinfo?.lg) { $("#set-logo").innerHTML = `<img src="${esc(sinfo.lg)}" alt="${esc(set.n)} logo">`; $("#set-logo").hidden = false; }
@@ -892,7 +913,8 @@ async function pageProduct() {
   const base = v.n.replace(/ \((Holofoil|Reverse Holofoil|Normal|1st Edition.*?)\)$/, "");
   document.title = `${base} price · Drive Your Style Market Insights`;
   const gl = Object.fromEntries(meta.games.map((g) => [g.slug, g.label]));
-  $("#crumbs").innerHTML = `<a href="sets.html">Sets</a> / <a href="set.html?id=${set.id}">${esc(set.n)}</a> / ${esc(base)}`;
+  const setHref = `set.html?id=${set.id}${v.t === "s" ? "&tab=sealed" : ""}`;
+  crumbs([["sets.html", "Sets"], [`sets.html?game=${set.k}`, gl[set.k] || set.k], [setHref, set.n], [null, base]], [setHref, set.n]);
   const draw = () => {
     $("#prod").innerHTML = `<div class="prod-img">${imgTag(id, "", 1000, v.im)}</div>
       <div><span class="muted">${esc(gl[set.k] || "")} · ${esc(set.n)}${v.no ? " · #" + esc(v.no) : ""}${v.r ? " · " + esc(v.r) : ""}</span>

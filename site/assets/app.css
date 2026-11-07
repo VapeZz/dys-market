@@ -190,8 +190,20 @@ td.title img{width:36px;height:36px;border-radius:6px;object-fit:contain;backgro
 .chart{position:relative;width:100%;height:280px}
 .chart svg{width:100%;height:100%;overflow:visible}
 .chart .tip{position:absolute;pointer-events:none;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:10px;padding:8px 10px;font-size:13px;box-shadow:var(--shadow);transform:translate(-50%,-110%);white-space:nowrap;display:none}
-.crumbs{font-size:13px;color:var(--ink-3);margin-top:24px}
-.crumbs a:hover{color:var(--ink)}
+.crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-top:20px;min-height:36px;font-size:13px;color:var(--ink-3)}
+.crumb-back{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:7px 15px 7px 10px;border:1px solid var(--line-strong);border-radius:999px;background:var(--surface);color:var(--ink);font-weight:600;font-size:13.5px}
+.crumb-back svg{width:16px;height:16px;flex:0 0 16px}
+.crumb-back span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crumb-back:hover{border-color:var(--accent);color:var(--accent)}
+.crumb-path{flex:1 1 auto;min-width:0}
+.crumb-path ol{list-style:none;margin:0;padding:0;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow-x:auto;scrollbar-width:none}
+.crumb-path ol::-webkit-scrollbar{display:none}
+.crumb-path li{display:flex;align-items:center;gap:6px}
+.crumb-path li+li:before{content:"›";color:var(--ink-3)}
+.crumb-path a{color:var(--ink-2);text-decoration:underline;text-decoration-color:var(--line-strong);text-underline-offset:3px}
+.crumb-path a:hover{color:var(--ink);text-decoration-color:currentColor}
+.crumb-path [aria-current]{color:var(--ink-3)}
+@media(max-width:600px){.crumbs{margin-top:16px}.crumb-path{flex-basis:100%}}
 
 /* cta + footer */
 .cta{border-radius:20px;padding:32px;background:linear-gradient(120deg,#0b0d14 0%,#1a1440 55%,#3b1d5e 100%);color:#fff;display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.08)}

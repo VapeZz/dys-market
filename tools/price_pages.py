@@ -139,7 +139,9 @@ def main(argv):
         ser = i.get("s") or []
         buy = (f'<a class="btn primary" href="{esc(i["dys"]["u"])}">Buy at Drive Your Style · {money(i["dys"]["p"])}</a>' if i.get("dys") else
                f'<a class="btn primary" href="{STORE}">Shop Drive Your Style</a>')
-        body = f'''<div class="wrap pp"><p class="crumbs"><a href="sets.html">Sets</a> / <a href="set.html?id={d["id"]}">{esc(d["n"])}</a> / {esc(name)}</p>
+        set_href = f"set.html?id={d['id']}" + ("&amp;tab=sealed" if i["t"] == "s" else "")
+        body = f'''<div class="wrap pp"><div class="crumbs"><a class="crumb-back" href="{set_href}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>Back to {esc(d["n"])}</span></a>
+<nav class="crumb-path" aria-label="Breadcrumb"><ol><li><a href="sets.html">Sets</a></li><li><a href="sets.html?game={d["k"]}">{esc(game)}</a></li><li><a href="{set_href}">{esc(d["n"])}</a></li><li><span aria-current="page">{esc(name)}</span></li></ol></nav></div>
 <div class="prod">
 <div class="prod-img"><img src="{img(i["id"])}" alt="{esc(name)}" width="500" height="700"></div>
 <div><span class="muted">{esc(game)} · {esc(d["n"])}{f" · #{esc(i['no'])}" if i.get("no") else ""}{f" · {esc(i['r'])}" if i.get("r") else ""}</span>
@@ -156,8 +158,9 @@ def main(argv):
 </div>'''
         ld = {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
             {"@type": "ListItem", "position": 1, "name": "Sets", "item": f"{SITE}/sets.html"},
-            {"@type": "ListItem", "position": 2, "name": d["n"], "item": f"{SITE}/set.html?id={d['id']}"},
-            {"@type": "ListItem", "position": 3, "name": name, "item": f"{SITE}/p/{s}.html"}]}
+            {"@type": "ListItem", "position": 2, "name": game, "item": f"{SITE}/sets.html?game={d['k']}"},
+            {"@type": "ListItem", "position": 3, "name": d["n"], "item": f"{SITE}/set.html?id={d['id']}"},
+            {"@type": "ListItem", "position": 4, "name": name, "item": f"{SITE}/p/{s}.html"}]}
         title = f"{nice}{f' ({variant})' if variant else ''} Price – {short} | Drive Your Style"
         desc = f"{name} ({d['n']}, {game}) market price today: {money(i['p'])}. Price history, recent changes and similar {kind}s."
         page = (head.replace("</head>", f'<script type="application/ld+json">{json.dumps(ld, ensure_ascii=False)}</script>\n</head>')
