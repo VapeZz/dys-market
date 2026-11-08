@@ -101,6 +101,30 @@ def photo_stand_ins(rows, game_of, alt, skip_sets=()):
     return out
 
 
+def upcoming_rows(sets_out, announced, today, low, limit=16):
+    """Next releases for the Shopify homepage's "Upcoming releases" row (data/upcoming.json, kept small).
+    Dated TCGplayer sets after today plus announced sets TCGplayer doesn't list yet, soonest first."""
+    label = {g["slug"]: g["label"] for g in config.GAMES}
+    rows = [s for s in sets_out if s.get("pub") and s["pub"] > today]
+    rows += [a for a in announced if a["pub"] > today
+             and not any(x["k"] == a["k"] and low(a["n"]) in low(x["n"]) for x in sets_out)]
+    rows.sort(key=lambda s: (s["pub"], s["n"]))
+    out = []
+    for s in rows[:limit]:
+        r = {"k": s["k"], "g": label.get(s["k"], s["k"]), "n": s["n"], "pub": s["pub"]}
+        if s.get("a"):
+            r["a"] = s["a"]
+        if s.get("id"):
+            r["id"] = s["id"]
+        pics = s.get("pics") or ([s["bbId"]] if s.get("bbId") else [])
+        if pics:
+            r["pics"] = pics[:3]
+        if s.get("lg"):
+            r["lg"] = s["lg"]
+        out.append(r)
+    return out
+
+
 def build(groups, products, stock, log=print):
     try:
         _ld = json.load(open(os.path.join(config.DATA_DIR, "lows", "latest.json")))
@@ -300,6 +324,7 @@ def build(groups, products, stock, log=print):
     stale = (date.fromisoformat(latest_day) - timedelta(days=30)).isoformat()
     write("announced.json", [{"k": a["k"], "n": a["n"], "a": a.get("a", ""), "pub": a["pub"]} for a in config.ANNOUNCED
                              if a["pub"] >= stale and not any(x["k"] == a["k"] and low(a["n"]) in low(x["n"]) for x in sets_out)])
+    write("upcoming.json", upcoming_rows(sets_out, config.ANNOUNCED, latest_day, low))
 
     # ---- per-set detail with price history ------------------------------
     series_days = pick_series_days(days, latest_day)
