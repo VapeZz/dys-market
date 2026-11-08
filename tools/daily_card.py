@@ -219,7 +219,7 @@ def headline(theme, n, period, cards):
     if theme == "dip":
         return f"{n} cards<br><span style='color:{RED}'>dropped</span><br>{esc(period)}"
     st = cards[0]["set"]
-    size = "" if len(st) <= 16 else " style='font-size:.62em'"
+    size = "" if len(st) <= 16 else " style='font-size:.62em;display:inline-block;line-height:1.05'" if len(st) <= 26 else " style='font-size:.46em;display:inline-block;line-height:1.1'"
     return f"The {n} chase<br>cards of<br><span class='holo'{size}>{esc(st)}</span>"
 
 
@@ -256,7 +256,7 @@ def slides(cards, theme, period, game, sparks):
 <img src="file://{LOGO}" style="height:100px">
 <div class="tag" style="margin-top:46px">{esc(label)} · Cards of the day</div>
 <div style="margin-top:40px;font-family:'Barlow Condensed';font-weight:800;font-size:118px;line-height:.95;text-transform:uppercase">{headline(theme, n, period, cards)}</div>
-<div style="position:relative;width:900px;height:640px;margin-top:50px">{fan}</div>
+<div style="position:relative;width:900px;height:600px;margin-top:44px;flex-shrink:0">{fan}</div>
 <div style="margin-top:auto;font-size:40px;color:#bdb9b2">Counting down #{n} → #1 →</div></div>"""
     out = [hook]
     for rank in range(n, 0, -1):   # countdown: best card last
