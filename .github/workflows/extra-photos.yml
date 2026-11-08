@@ -5,6 +5,15 @@ on:
   schedule:
     - cron: "47 11 * * 6"   # Saturdays ~3:47 AM PT, after the photo audit
   workflow_dispatch:
+    inputs:
+      games:
+        description: "yugioh or pokemon-jp"
+        required: false
+        default: "yugioh"
+      dry:
+        description: "1 = trial: match only, write a report to the photo-trial branch"
+        required: false
+        default: "0"
 permissions:
   contents: write
 jobs:
@@ -17,8 +26,13 @@ jobs:
           git fetch -q --depth 1 origin img-audit && git show FETCH_HEAD:img-audit.json > /tmp/img-audit.json
           mkdir -p /tmp/photos
           if git fetch -q --depth 1 origin card-photos; then git archive FETCH_HEAD | tar -x -C /tmp/photos; fi
-          python3 tools/extra_photos.py audit=/tmp/img-audit.json out=/tmp/photos | tee /tmp/photos/log.txt
-          cd /tmp/photos
-          git init -q -b card-photos && git config user.name dys-market-bot && git config user.email dys-market-bot@users.noreply.github.com
+          if [ "${{ inputs.dry }}" = "1" ]; then
+            mkdir -p /tmp/trial && python3 tools/extra_photos.py audit=/tmp/img-audit.json out=/tmp/trial games=${{ inputs.games }} dry=1 | tee /tmp/trial/log.txt
+            cd /tmp/trial && BR=photo-trial
+          else
+            python3 tools/extra_photos.py audit=/tmp/img-audit.json out=/tmp/photos games=${{ inputs.games || 'yugioh' }} | tee /tmp/photos/log.txt
+            cd /tmp/photos && BR=card-photos
+          fi
+          git init -q -b $BR && git config user.name dys-market-bot && git config user.email dys-market-bot@users.noreply.github.com
           git add -A && git commit -qm "Extra card photos $(date -u +%F)"
-          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" card-photos
+          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" $BR
