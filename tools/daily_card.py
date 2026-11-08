@@ -307,9 +307,11 @@ def render(site_data, cards, theme, period, game, out, offline=False):
 def caption_for(theme, cards, period, game):
     label, tags, _ = GAMES[game]
     lines = [first_line(theme, len(cards), label, period, cards), "Prices: TCGplayer market", ""]
+    shorts = [short_name(c) for c in cards]
     for k, c in enumerate(cards, 1):
         mv = "" if c.get("pct") is None else f", {'up' if c['pct'] >= 0 else 'down'} {abs(c['pct']):.0f}%"
-        lines.append(f"{k}. {short_name(c)} ({c['set']}): {money(c['now'])}{mv}")
+        nm = shorts[k - 1] if shorts.count(shorts[k - 1]) == 1 else c["name"]   # keep the card number when two share a name
+        lines.append(f"{k}. {nm} ({c['set']}): {money(c['now'])}{mv}")
     lines += ["", f"Which one would you buy? 👇 Check your {label} cards free at market.driveyourstyle.net (link in bio)", "", tags]
     return "\n".join(lines)
 
