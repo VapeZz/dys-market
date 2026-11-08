@@ -176,7 +176,7 @@ def cover(winners, losers, span, ago):
         f'<div class="card" style="position:absolute;width:280px;height:392px;left:{x}px;top:{y}px;transform:rotate({r}deg);z-index:{z}">'
         f'<img src="{img(c["id"], 400)}">{chip(c)}</div>'
         for c, (x, y, r, z) in zip(order, [(328, 30, 0, 5), (128, 80, -12, 4), (528, 80, 12, 4), (-30, 160, -20, 3), (686, 160, 20, 3)]))
-    lose = (f'<div style="margin-top:14px;font-size:34px;color:#d8d5cf;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">…but $100 in {esc(losers[0]["name"])} is now <b style="color:{RED}">${worth(losers[0]):.0f}</b></div>'
+    lose = (f'<div style="margin-top:14px;font-size:34px;color:#d8d5cf;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">…but $100 → <b style="color:{RED}">${worth(losers[0]):.0f}</b> in {esc(losers[0]["name"])}</div>'
             if losers else "")
     return f"""<div class="slide">
 <div class="top"><img class="logo" src="file://{LOGO}"><div class="tag">{"Winners &amp; losers" if losers else "Trending cards"}</div></div>
