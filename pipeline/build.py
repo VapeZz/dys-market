@@ -53,11 +53,13 @@ def label(products, key):
     return pid, name
 
 
-def photo_stand_ins(rows, game_of, alt):
+def photo_stand_ins(rows, game_of, alt, skip_sets=()):
     """Cards the weekly photo audit found with no TCGplayer photo -> the same card's photo from another printing:
     same set + same number + same name (other variant), else the same card code in another set (One Piece, Gundam,
     Union Arena... where codes like OP01-016 name one card), else for Yu-Gi-Oh the same card name in any set.
-    Pokémon only uses the same-set rule: names repeat across sets with different art."""
+    Pokémon: the same-set rule, plus exact reprints (same name AND same number, e.g. World Championship Decks, deck
+    exclusives, jumbo cards, stamped league/prerelease promos), never trainer kits (skip_sets) or basic energy, where the
+    same name and number can be different art."""
     path = os.environ.get("IMG_AUDIT", "")
     try:
         audit = json.load(open(path, encoding="utf-8")) if path else {}
@@ -69,7 +71,8 @@ def photo_stand_ins(rows, game_of, alt):
     base = lambda n: n.split(" (")[0].strip()
     card_name = lambda n: re.sub(r"\s+-\s+\S+$", "", base(n)).strip()
     code = re.compile(r"[A-Za-z].*\d|\d.*[A-Za-z]")
-    by_set, by_code, by_name = {}, {}, {}
+    by_set, by_code, by_name, by_reprint = {}, {}, {}, {}
+    reprint_ok = lambda r: game_of.get(str(r[2])) == "pokemon" and r[5] and str(r[2]) not in skip_sets and not card_name(r[1]).lower().endswith("energy")
     for r in rows:
         if r[3] != "c":
             continue
@@ -78,6 +81,8 @@ def photo_stand_ins(rows, game_of, alt):
             by_set.setdefault((r[2], r[5], base(r[1])), []).append(r[0])
             if code.search(r[5]) and k not in ("pokemon", "pokemon-jp"):
                 by_code.setdefault((k, r[5], card_name(r[1])), []).append(r[0])
+            if reprint_ok(r):
+                by_reprint.setdefault((card_name(r[1]).lower(), r[5]), []).append(r[0])
         if k == "yugioh":
             by_name.setdefault(base(r[1]), []).append(r[0])
     out = {}
@@ -87,7 +92,8 @@ def photo_stand_ins(rows, game_of, alt):
         k = game_of.get(str(r[2]))
         for pool in (by_set.get((r[2], r[5], base(r[1]))) if r[5] else None,
                      by_code.get((k, r[5], card_name(r[1]))) if r[5] else None,
-                     by_name.get(base(r[1])) if k == "yugioh" else None):
+                     by_name.get(base(r[1])) if k == "yugioh" else None,
+                     by_reprint.get((card_name(r[1]).lower(), r[5])) if reprint_ok(r) else None):
             c = [x for x in (pool or []) if x != r[0] and x not in missing]
             if c:
                 out[r[0]] = min(c)   # oldest printing: the one most likely to have a photo
@@ -413,7 +419,7 @@ def build(groups, products, stock, log=print):
             if c:
                 c.sort(key=lambda x: ("Overnumbered" not in x[1], x[0]))
                 alt[r[0]] = c[0][0]
-        alt.update(photo_stand_ins(rows_all, game_of, alt))
+        alt.update(photo_stand_ins(rows_all, game_of, alt, {gid for gid, g in groups.items() if "trainer kit" in g["name"].lower()}))
         write("img-alt.json", alt)
 
     # ---- in-stock list + meta --------------------------------------------
