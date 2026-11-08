@@ -1,0 +1,53 @@
+name: Social upgrades phase 3 preview (test branch only)
+# Renders preview posts of the new Trending (winners & losers, "$100 →" hook) and Cop or drop (vote → reveal countdown)
+# builders with real photos and saves them to the social-phase3-preview branch. Changes nothing live:
+# the builders write into /tmp only; gh-pages is read, never pushed.
+on:
+  push:
+    branches: [social-phase3]
+    paths: [tools/social.py, tools/kicks_social.py, .github/workflows/social-phase3-preview.yml]
+permissions:
+  contents: write
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -q playwright==1.56.0 imageio-ffmpeg numpy pillow && python -m playwright install --with-deps chromium > /dev/null
+      - name: Live site data (read only)
+        run: |
+          git clone -q --depth 1 --filter=blob:none --sparse --branch gh-pages "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" /tmp/pages
+          git -C /tmp/pages sparse-checkout set --no-cone /data/sets.json /data/meta.json /data/set/ /data/sneaker-images.json
+          cp site/sneakers.json /tmp/pages/sneakers.json   # the Nov 8 calendar (not published to the live site until tonight's nightly)
+      - name: Trending preview (real data, today's numbers)
+        run: python tools/social.py /tmp/pages/data /tmp/prev/trending --date "$(TZ=America/Los_Angeles date +%F)"
+      - name: Cop or drop preview (next release day with 3+ photo pairs; eBay prices are samples for the layout)
+        run: |
+          python - <<'EOF'
+          import json, datetime
+          cal = json.load(open("/tmp/pages/sneakers.json"))
+          imgs = json.load(open("/tmp/pages/data/sneaker-images.json"))
+          tomorrow = (datetime.datetime.utcnow() - datetime.timedelta(hours=8) + datetime.timedelta(days=1)).date().isoformat()
+          by = {}
+          for r in cal["releases"]:
+              if r["d"] >= tomorrow and r.get("c") and r.get("r") and (r.get("im") or imgs.get(r["c"])):
+                  by.setdefault(r["d"], []).append(r)
+          day = next(d for d in sorted(by) if len(by[d]) >= 3)
+          rs = sorted(by[day], key=lambda r: -r.get("h", 1))[:4]
+          ks = [1.45, 1.12, 0.95, 1.25]   # sample eBay ask / retail, layout only
+          pairs = [{"c": r["c"], "ask_n": 6, "ask_p25": round(r["r"] * k), "ask_low": round(r["r"] * k * 0.9)} for r, k in zip(rs, ks)]
+          json.dump({"date": day, "mode": "drop", "pairs": pairs}, open("/tmp/drop-spec.json", "w"))
+          print(day, json.dumps(pairs))
+          EOF
+          mkdir -p /tmp/prev/kicks
+          python tools/kicks_social.py /tmp/drop-spec.json /tmp/pages /tmp/prev/kicks
+      - name: Save to social-phase3-preview branch
+        run: |
+          cd /tmp/prev
+          git init -q -b social-phase3-preview && git config user.name "dys-market-bot" && git config user.email "dys-market-bot@users.noreply.github.com"
+          git add -A && git commit -q -m "Social upgrades phase 3 preview" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" social-phase3-preview
+          echo "::notice title=Preview::$(python -c "import json; t=json.load(open('trending/latest.json')); k=json.load(open('kicks/latest.json')); print(len(t['slides']), 'trending slides |', t['caption'].splitlines()[0], '|', len(k['slides']), 'kicks slides |', k['first'])")"
