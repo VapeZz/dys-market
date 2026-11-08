@@ -314,6 +314,12 @@ jobs:
           git commit -q -m "Price data $(date -u +%F)"
           git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" data
 
+      - name: Extra card photos (card-photos branch, built weekly by extra-photos.yml)
+        continue-on-error: true
+        run: |
+          mkdir -p site/img/extra
+          if git fetch -q --depth 1 origin card-photos; then git archive FETCH_HEAD ygo index.json | tar -x -C site/img/extra; fi
+
       - name: Publish site (gh-pages branch)
         run: |
           rm -rf /tmp/site-out && cp -r site /tmp/site-out && touch /tmp/site-out/.nojekyll
