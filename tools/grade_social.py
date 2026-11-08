@@ -1,4 +1,6 @@
-"""'Grade it?' carousel: 5 cheap raw cards whose PSA 10 sells for 10x+ raw, one game per post.
+"""'Grade it?' carousel: 3 to 5 cheap raw cards whose PSA 10 sells for 10x+ raw, one game per post.
+"Guess the PSA 10" format (Nov 2026): cover hides the price, then each card gets a guess slide (raw price,
+PSA 10 = ???) followed by its reveal, counting down to the biggest multiple; ends with "How close were you?".
 
     python tools/grade_social.py SPEC.json SITE_DIR OUT_DIR
 
@@ -11,9 +13,10 @@ SPEC.json: {"date": "YYYY-MM-DD", "game": "pokemon", "cards": [{"id", "name", "n
 3 to 5 cards: smaller games often don't have 5 that qualify.
 No PokemonPriceTracker data is used anywhere in these posts.
 
-Writes OUT_DIR/<date>/slide-1..7.jpg (1080x1350, Instagram/Facebook), tt-1..7.jpg (1080x1920, TikTok/Story),
-short.mp4 (YouTube Short with its own music), post.json, OUT_DIR/latest.json and OUT_DIR/history.json
-(card ids already featured, so a card doesn't come back within 4 weeks).
+Writes OUT_DIR/<date>/slide-1..N.jpg (1080x1350, Instagram/Facebook), tt-1..N.jpg (1080x1920, TikTok/Story),
+short.mp4 (Reel / YouTube Short with its own music), post.json, OUT_DIR/latest.json and OUT_DIR/history.json
+(card ids already featured, so a card doesn't come back within 4 weeks). N = 2 x cards + 2 (guess + reveal per card);
+post.json "slides_reveal" lists just the cover, the reveals and the ending (for places that take 10 images max).
 """
 import io
 import json
@@ -101,7 +104,9 @@ body{width:1080px;height:%(h)dpx;overflow:hidden;background:#050404;color:#f2f0e
 .ten{background:rgba(62,224,143,.12);border:3px solid #3ee08f}
 .lab{font-family:'Barlow Condensed';font-weight:700;font-size:%(lab)dpx;letter-spacing:.12em;text-transform:uppercase;color:#bdb9b2}
 .big{font-family:'Barlow Condensed';font-weight:800;font-size:%(big)dpx;line-height:1}
-.chip{font-family:'Barlow Condensed';font-weight:700;font-size:32px;letter-spacing:.14em;text-transform:uppercase;border:3px solid #f2f0eb;padding:8px 18px 6px}"""
+.chip{font-family:'Barlow Condensed';font-weight:700;font-size:32px;letter-spacing:.14em;text-transform:uppercase;border:3px solid #f2f0eb;padding:8px 18px 6px}
+.q{background:rgba(124,92,255,.14);border:3px dashed #a78bfa}
+.ans{font-family:'Barlow Condensed';font-weight:800;font-size:%(lab)dpx;letter-spacing:.12em;text-transform:uppercase;color:#050404;background:#3ee08f;border-radius:999px;padding:6px 20px 3px}"""
 SIZES = {   # tall = 1080x1920 (TikTok, Story, Short), feed = 1080x1350 (Instagram / Facebook carousel)
     "tall": dict(h=1920, pad=70, logo=84, rad=26, pp=22, lab=38, big=112, card=900, fan=500, hook=150, hook2=190, gap=40),
     "feed": dict(h=1350, pad=52, logo=70, rad=18, pp=14, lab=30, big=84, card=640, fan=330, hook=104, hook2=132, gap=22),
@@ -109,53 +114,96 @@ SIZES = {   # tall = 1080x1920 (TikTok, Story, Short), feed = 1080x1350 (Instagr
 PAGE = "<!doctype html><html><head><meta charset='utf-8'><style>%s%s</style></head><body>%s</body></html>"
 
 
+def mult(c):
+    return c["p10"] / c["raw"]
+
+
 def cover(cards, game, z):
-    top = max(cards, key=lambda c: c["p10"] / c["raw"])
-    mult = max(c["p10"] / c["raw"] for c in cards)
+    top = cards[-1]                     # cards are in reveal order: the biggest multiple comes last
     n, step = len(cards), 140 if z["h"] > 1500 else 150
     mid, left0 = (n - 1) / 2, 20 + (5 - n) * step / 2
+    fanned = cards[:-1]
+    fanned.insert(n // 2, top)          # the card the hook is about sits in the middle, in front
     fan = "".join(f"<img class='card' src='file://{c['img']}' style='position:absolute;height:{z['fan']}px;left:{left0 + i * step:.0f}px;"
-                  f"top:{abs(i - mid) * (40 if z['h'] > 1500 else 26):.0f}px;transform:rotate({(i - mid) * 7:.1f}deg)'>" for i, c in enumerate(cards))
+                  f"top:{abs(i - mid) * (40 if z['h'] > 1500 else 26):.0f}px;transform:rotate({(i - mid) * 7:.1f}deg);z-index:{10 - int(abs(i - mid) * 2)}'>"
+                  for i, c in enumerate(fanned))
     big = z["h"] > 1500
-    return f"""<div class='s'><div class='top'><img class='logo' src='file://{LOGO}'><span class='chip'>Grade it?</span></div>
-<div class='bc' style='margin-top:{90 if big else 34}px;font-size:{z['hook']}px;text-align:center'>A ${top['raw']:.0f} card</div>
+    return f"""<div class='s'><div class='top'><img class='logo' src='file://{LOGO}'><span class='chip'>Guess the PSA 10</span></div>
+<div class='bc' style='margin-top:{90 if big else 34}px;font-size:{z['hook']}px;text-align:center'>This ${top['raw']:.0f} card</div>
 <div class='bc' style='margin-top:8px;font-size:{76 if big else 54}px;text-align:center'>sells for</div>
-<div class='bc holo' style='margin-top:8px;font-size:{z['hook2']}px;text-align:center'>{m(top['p10'], False)}</div>
+<div class='bc holo' style='margin-top:8px;font-size:{z['hook2']}px;text-align:center'>$???</div>
 <div class='bc' style='margin-top:6px;font-size:{76 if big else 54}px;text-align:center'>in a PSA 10</div>
-<div style='margin-top:{40 if big else 20}px;font-size:{44 if big else 34}px;text-align:center;max-width:900px' class='muted'>{len(cards)} cheap {GAMES[game][0]} cards that sell for up to <b style='color:#f2f0eb'>{mult:.0f}×</b> raw once they grade a 10</div>
+<div style='margin-top:{40 if big else 20}px;font-size:{44 if big else 34}px;text-align:center;max-width:900px' class='muted'>Guess before you swipe. {n} cheap {GAMES[game][0]} cards, answers inside.</div>
 <div style='position:relative;width:952px;height:{z['fan'] + 180}px;margin-top:{60 if big else 30}px'>{fan}</div>
-<div class='bc' style='margin-top:auto;font-size:{64 if big else 48}px'>Swipe for all {len(cards)} →</div></div>"""
+<div class='bc' style='margin-top:auto;font-size:{64 if big else 48}px'>Swipe to guess →</div></div>"""
 
 
-def slide(i, c, z, n=5):
-    big = z["h"] > 1500
-    head = (f"<img src='file://{c['logo']}' style='max-height:{170 if big else 110}px;max-width:{560 if big else 460}px'>" if c.get("logo")
+def _head(c, big):
+    return (f"<img src='file://{c['logo']}' style='max-height:{170 if big else 110}px;max-width:{560 if big else 460}px'>" if c.get("logo")
             else f"<span class='bc' style='font-size:{52 if big else 40}px'>{c['set']}</span>")
-    return f"""<div class='s'><div class='top'>{head}<img class='logo' src='file://{LOGO}'></div>
+
+
+def guess(k, c, z):
+    """Same layout as the reveal, with the PSA 10 price hidden, so swiping feels like flipping it over."""
+    big = z["h"] > 1500
+    return f"""<div class='s'><div class='top'>{_head(c, big)}<img class='logo' src='file://{LOGO}'></div>
 <img class='card' src='file://{c['img']}' style='margin-top:{z['gap']}px;height:{z['card']}px'>
 <div class='bc' style='margin-top:{z['gap']}px;font-size:{76 if big else 58}px;text-align:center'>{c['name']} <span class='muted' style='font-size:{52 if big else 40}px'>{c['no']}</span></div>
 <div style='margin-top:{30 if big else 18}px;width:100%;display:flex;gap:26px;align-items:center;justify-content:center'>
  <div class='pill raw' style='flex:1'><div class='lab'>Raw</div><div class='big'>{m(c['raw'])}</div></div>
  <div class='bc' style='font-size:{90 if big else 66}px'>→</div>
- <div class='pill ten' style='flex:1.25'><div class='lab' style='color:#3ee08f'>PSA 10</div><div class='big holo'>{m(c['p10'])}</div></div></div>
-<div style='margin-top:{34 if big else 18}px;font-size:{42 if big else 32}px;text-align:center'><b class='holo' style='font-size:{52 if big else 40}px'>{c['p10'] / c['raw']:.0f}× raw</b> · {c['sold']} PSA 10s sold on eBay in {c.get('days', 30)} days</div>
+ <div class='pill q' style='flex:1.25'><div class='lab' style='color:#a78bfa'>PSA 10</div><div class='big holo'>$???</div></div></div>
+<div class='bc' style='margin-top:{34 if big else 18}px;font-size:{60 if big else 46}px;text-align:center'>Guess the <span class='holo'>PSA 10</span> price</div>
+<div style='margin-top:{18 if big else 8}px;font-size:{36 if big else 28}px;text-align:center' class='muted'>Comment your guess, then swipe for the answer →</div>
+<div style='position:absolute;bottom:{58 if big else 34}px;left:64px;right:64px;display:flex;justify-content:space-between;align-items:center'><span class='muted' style='font-size:{26 if big else 22}px'>Raw: TCGplayer market</span><span class='bc' style='font-size:{40 if big else 32}px'>#{k}</span></div></div>"""
+
+
+def slide(k, c, z):
+    big = z["h"] > 1500
+    return f"""<div class='s'><div class='top'>{_head(c, big)}<img class='logo' src='file://{LOGO}'></div>
+<img class='card' src='file://{c['img']}' style='margin-top:{z['gap']}px;height:{z['card']}px'>
+<div class='bc' style='margin-top:{z['gap']}px;font-size:{76 if big else 58}px;text-align:center'>{c['name']} <span class='muted' style='font-size:{52 if big else 40}px'>{c['no']}</span></div>
+<div style='margin-top:{30 if big else 18}px;width:100%;display:flex;gap:26px;align-items:center;justify-content:center'>
+ <div class='pill raw' style='flex:1'><div class='lab'>Raw</div><div class='big'>{m(c['raw'])}</div></div>
+ <div class='bc' style='font-size:{90 if big else 66}px'>→</div>
+ <div class='pill ten' style='flex:1.25'><div class='lab' style='color:#3ee08f'>PSA 10 sold</div><div class='big holo'>{m(c['p10'])}</div></div></div>
+<div style='margin-top:{34 if big else 18}px;font-size:{42 if big else 32}px;text-align:center'><b class='holo' style='font-size:{52 if big else 40}px'>{mult(c):.0f}× raw</b> · {c['sold']} PSA 10s sold on eBay in {c.get('days', 30)} days</div>
 <div style='margin-top:{18 if big else 8}px;font-size:{36 if big else 28}px;text-align:center' class='muted'>Gets a 10? About <b style='color:#3ee08f'>+{m(profit(c['raw'], c['p10']))}</b> profit after the PSA fee, shipping and eBay fees</div>
-<div style='position:absolute;bottom:{58 if big else 34}px;left:64px;right:64px;display:flex;justify-content:space-between;align-items:center'><span class='muted' style='font-size:{26 if big else 22}px'>PSA 10: median eBay sold price · Raw: TCGplayer market</span><span class='bc' style='font-size:{40 if big else 32}px'>{i} / {n}</span></div></div>"""
+<div style='position:absolute;bottom:{58 if big else 34}px;left:64px;right:64px;display:flex;justify-content:space-between;align-items:center'><span class='muted' style='font-size:{26 if big else 22}px'>PSA 10: median eBay sold price · Raw: TCGplayer market</span><span class='ans'>#{k} answer</span></div></div>"""
 
 
 def cta(game, day, z, cards=()):
     big = z["h"] > 1500
     return f"""<div class='s' style='justify-content:center'><img src='file://{LOGO}' style='height:{150 if big else 110}px'>
-<div class='bc' style='margin-top:{80 if big else 50}px;font-size:{130 if big else 100}px;text-align:center'>Check <span class='holo'>your</span><br>cards free</div>
-<div style='margin-top:{44 if big else 30}px;font-size:{44 if big else 34}px;text-align:center;max-width:880px' class='muted'>Live raw prices on 150,000+ cards across Pokémon, One Piece, Lorcana, Riftbound and more, plus a free centering check before you grade.</div>
+<div class='bc' style='margin-top:{80 if big else 50}px;font-size:{130 if big else 100}px;text-align:center'>How close<br>were <span class='holo'>you?</span></div>
+<div style='margin-top:{44 if big else 30}px;font-size:{44 if big else 34}px;text-align:center;max-width:880px' class='muted'>Drop your guesses in the comments. Check your own cards free: live raw prices on 150,000+ cards, plus a centering check before you grade.</div>
 <div class='bc' style='margin-top:{70 if big else 44}px;font-weight:700;font-size:{62 if big else 50}px;border:4px solid #f2f0eb;padding:18px 40px 14px'>market.driveyourstyle.net</div>
 <div class='bc holo' style='margin-top:{90 if big else 54}px;font-size:{56 if big else 44}px;letter-spacing:.04em'>Follow for more grading picks</div>
 <div style='position:absolute;bottom:{60 if big else 36}px;left:64px;right:64px;font-size:{28 if big else 22}px;text-align:center' class='muted'>PSA 10 = median eBay sold price, last {max(c.get('days', 30) for c in cards)} days. Raw = TCGplayer market price, {date.fromisoformat(day).strftime('%b %-d')}. Not every card grades a 10: check centering and surface first. Not financial advice.</div></div>"""
 
 
-def render(cards, game, day, out):
+PER = {"cover": 3.0, "guess": 2.4, "reveal": 3.0, "cta": 3.2}   # seconds per slide in the video
+
+
+def plan(cards):
+    """Slide order: cover, then guess + reveal for each card counting down (#n ... #1), then the ending."""
     total = len(cards)
-    bodies = [lambda z: cover(cards, game, z)] + [lambda z, i=i, c=c: slide(i, c, z, total) for i, c in enumerate(cards, 1)] + [lambda z: cta(game, day, z, cards)]
+    seq = [("cover", None, None)]
+    for idx, c in enumerate(cards):
+        seq += [("guess", total - idx, c), ("reveal", total - idx, c)]
+    return seq + [("cta", None, None)]
+
+
+def render(cards, game, day, out):
+    def body(kind, k, c):
+        if kind == "cover":
+            return lambda z: cover(cards, game, z)
+        if kind == "guess":
+            return lambda z: guess(k, c, z)
+        if kind == "reveal":
+            return lambda z: slide(k, c, z)
+        return lambda z: cta(game, day, z, cards)
+    bodies = [body(*s) for s in plan(cards)]
     with sync_playwright() as p:
         b = p.chromium.launch()
         for size, prefix in (("feed", "slide"), ("tall", "tt")):
@@ -174,16 +222,18 @@ def render(cards, game, day, out):
 
 def captions(cards, game, day):
     label, tags = GAMES[game]
-    top = max(cards, key=lambda c: c["p10"] / c["raw"])
-    lo, hi = min(c["p10"] / c["raw"] for c in cards), max(c["p10"] / c["raw"] for c in cards)
-    first = f"A ${top['raw']:.0f} {label} card sells for {m(top['p10'], False)} in a PSA 10 👀"
-    lines = [f"{i}. {c['name']} {c['no']} ({c['set']}): {m(c['raw'])} raw → {m(c['p10'], False)} PSA 10" for i, c in enumerate(cards, 1)]
+    top = cards[-1]                     # the biggest multiple, revealed last
+    ranked = cards[::-1]                # #1 first in the caption
     n, days = len(cards), max(c.get("days", 30) for c in cards)
+    first = f"This ${top['raw']:.0f} {label} card sells for ??? in a PSA 10 👀 Guess before you swipe"
+    lines = [f"#{i} {c['name']} {c['no']} ({c['set']}): {m(c['raw'])} raw → {m(c['p10'], False)} PSA 10 ({mult(c):.0f}×)" for i, c in enumerate(ranked, 1)]
     note = f"PSA 10 = median eBay sold price over the last {days} days. Raw = TCGplayer market price. Not every card grades a 10, so check centering first (free centering tool at market.driveyourstyle.net)."
-    cap = (f"{first}\n\n{n} cheap {label} cards selling for {lo:.0f}–{hi:.0f}× raw once they grade a 10:\n\n" + "\n".join(lines) + f"\n\n{note}\n\nWhich one would you grade? 👇\n\n"
+    cap = (f"{first}\n\nGuess the PSA 10 price of all {n} cheap {label} cards, then swipe for the answers. How close were you? 👇\n\n"
+           "Answers (no peeking 🙈):\n" + "\n".join(lines) + f"\n\n{note}\n\n"
            f"🛒 eBay links for all {n} (affiliate links): market.driveyourstyle.net/social-grade (link in bio)\n\n{tags}")
-    cap_tt = f"{first} {n} cheap {label} cards worth grading. Which one would you send in? 👇 eBay links for all {n} in bio {tags}"
-    short = f"These ${min(c['raw'] for c in cards):.0f}–${max(c['raw'] for c in cards):.0f} {label} cards sell for {lo:.0f}–{hi:.0f}× in a PSA 10 👀 Would you grade #1?"
+    cap_tt = (f"Guess the PSA 10 👀 This ${top['raw']:.0f} {label} card sells for how much graded? "
+              f"Comment your guess before the reveal 👇 eBay links for all {n} in bio {tags}")
+    short = f"Guess the PSA 10 price 👀 This ${top['raw']:.0f} {label} card sells for how much?"
     return first, cap, cap_tt, (short + (" #" + game.replace("-", "") if len(short) < 85 else ""))[:100]
 
 
@@ -246,13 +296,17 @@ def main(argv):
                           img=card_png(c["id"], out, game, c.get("no", "")), logo=logo_png(s.get("lg"), c["gid"], out)))
     if len(cards) < 3:
         raise SystemExit("need at least 3 cards")
-    nslides = len(cards) + 2
+    cards.sort(key=mult)                # reveal order: smallest multiple first, biggest last (#1)
+    seq = plan(cards)
+    nslides = len(seq)
     render(cards, game, day, out)
     from tiktok import make_short
     for f in os.listdir(out):   # a re-run with fewer cards must not leave old extra slides behind
         if f.startswith(("slide-", "tt-")) and int(f.split("-")[1].split(".")[0]) > nslides:
             os.remove(os.path.join(out, f))
-    short = make_short([os.path.join(out, f"tt-{n}.jpg") for n in range(1, nslides + 1)], os.path.join(out, "short.mp4"))
+    short = make_short([os.path.join(out, f"tt-{n}.jpg") for n in range(1, nslides + 1)], os.path.join(out, "short.mp4"),
+                       per=[PER[kind] for kind, _, _ in seq])
+    reveal = [n for n, (kind, _, _) in enumerate(seq, 1) if kind != "guess"]
     for f in os.listdir(out):
         if f.startswith(("card-", "logo-")):
             os.remove(os.path.join(out, f))
@@ -260,10 +314,11 @@ def main(argv):
     url = f"{SITE}/social-grade/{day}"
     post = {"date": day, "game": game, "post": True, "first": first, "caption": cap, "caption_tiktok": cap_tt, "short_title": short_title,
             "slides": [f"{url}/slide-{n}.jpg" for n in range(1, nslides + 1)], "slides_tiktok": [f"{url}/tt-{n}.jpg" for n in range(1, nslides + 1)],
+            "slides_reveal": [f"{url}/slide-{n}.jpg" for n in reveal],
             "story": f"{url}/tt-1.jpg", "short": f"{url}/short.mp4" if short else None,
-            "cards": [{k: c[k] for k in ("id", "name", "no", "raw", "p10", "sold", "days")} for c in cards]}
+            "cards": [{k: c[k] for k in ("id", "name", "no", "raw", "p10", "sold", "days")} for c in cards[::-1]]}
     post["page"] = f"{url}/"
-    open(os.path.join(out, "index.html"), "w", encoding="utf-8").write(page(post, cards, game, day))
+    open(os.path.join(out, "index.html"), "w", encoding="utf-8").write(page(post, cards[::-1], game, day))   # links page lists #1 first
     open(os.path.join(out_root, "index.html"), "w", encoding="utf-8").write(   # /social-grade/ always opens the newest picks
         f'<!doctype html><meta charset="utf-8"><title>Cheap cards worth grading</title><meta http-equiv="refresh" content="0; url={day}/"><link rel="canonical" href="{url}/"><a href="{day}/">This week\'s picks</a>')
     for path in (os.path.join(out, "post.json"), os.path.join(out_root, "latest.json")):
