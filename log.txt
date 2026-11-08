@@ -1,0 +1,28 @@
+Pokémon Japan: 1408 cards in 98 sets; TCGdex lists 204 Japanese sets
+TCGdex sample: [{"id": "PMCG1", "name": "拡張パック", "cardCount": {"total": 102, "official": 102}}, {"id": "PMCG2", "name": "ポケモンジャングル", "cardCount": {"total": 48, "official": 48}}]
+Pokémon Japan: 11 of 98 sets paired with TCGdex; 2 cards matched (trial, nothing downloaded for the site)
+  SVM: Generations Start Decks | svm | 175 cards | no TCGdex set with this code and card total |  | no TCGdex image:  | skipped: 
+  L1: SoulSilver Collection | l1ss | 139 cards | L1b | 0 | no TCGdex image: 0 | skipped: 139
+  L1: HeartGold Collection | l1hg | 137 cards | L1a | 0 | no TCGdex image: 0 | skipped: 137
+  World Champions Pack |  | 102 cards | no TCGdex set with this code and card total |  | no TCGdex image:  | skipped: 
+  Unnumbered Promotional cards |  | 67 cards | no TCGdex set with this code and card total |  | no TCGdex image:  | skipped: 
+  Random Constructed Starter Decks (Venusaur/Charizard/Blastoise) |  | 52 cards | no TCGdex set with this code and card total |  | no TCGdex image:  | skipped: 
+  Entry Pack '08 | dp | 44 cards | no TCGdex set with this code and card total |  | no TCGdex image:  | skipped: 
+  Pokemon VS |  | 43 cards | VS1 | 0 | no TCGdex image: 41 | skipped: 2
+  M-P Promotional Cards | mp | 42 cards | M-P | 0 | no TCGdex image: 40 | skipped: 2
+  smG: Ultra Sun & Ultra Moon Deck Build Boxes | smg | 41 cards | no TCGdex set with this code and card total |  | no TCGdex image:  | skipped: 
+  Offense and Defense of the Furthest Ends |  | 26 cards | no TCGdex set with this code and card total |  | no TCGdex image:  | skipped: 
+  Entry Pack | dp1 | 25 cards | no TCGdex set with this code and card total |  | no TCGdex image:  | skipped: 
+  Imprison! Gardevoir ex Constructed Standard Deck |  | 25 cards | no TCGdex set with this code and card total |  | no TCGdex image:  | skipped: 
+  Shockwave! Tyranitar ex Constructed Standard Deck |  | 23 cards | no TCGdex set with this code and card total |  | no TCGdex image:  | skipped: 
+  L2: Steelix Constructed Standard Deck | l2 | 19 cards | no TCGdex set with this code and card total |  | no TCGdex image:  | skipped: 
+  SV-P Promotional Cards | svp | 18 cards | SV-P | 0 | no TCGdex image: 16 | skipped: 2
+  smB: Premium Trainer Box | smb | 18 cards | no TCGdex set with this code and card total |  | no TCGdex image:  | skipped: 
+  L2: Tyranitar Constructed Standard Deck | l2 | 18 cards | no TCGdex set with this code and card total |  | no TCGdex image:  | skipped: 
+  Ocean's Kyogre ex Constructed Starter Deck |  | 17 cards | no TCGdex set with this code and card total |  | no TCGdex image:  | skipped: 
+  Holon Research Tower Fire Quarter Deck |  | 15 cards | no TCGdex set with this code and card total |  | no TCGdex image:  | skipped: 
+  Holon Research Tower Lightning Quarter Deck |  | 14 cards | no TCGdex set with this code and card total |  | no TCGdex image:  | skipped: 
+  Holon Research Tower Water Quarter Deck |  | 14 cards | no TCGdex set with this code and card total |  | no TCGdex image:  | skipped: 
+  SVN: Battle Partners Deck Build Box | svn | 13 cards | no TCGdex set with this code and card total |  | no TCGdex image:  | skipped: 
+  Bastiodon the Defender Half Deck | dp2 | 13 cards | no TCGdex set with this code and card total |  | no TCGdex image:  | skipped: 
+  Rampardos the Attacker Constructed Half Deck | dp2 | 13 cards | no TCGdex set with this code and card total |  | no TCGdex image:  | skipped: 
