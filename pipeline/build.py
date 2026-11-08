@@ -84,6 +84,10 @@ def build(groups, products, stock, log=print):
     for g in groups.values():
         if (g["k"], g["pub"]) in bulk:
             g["pub"] = ""
+    for gid, d in config.PUB_FIX.items():   # official dates for sets TCGplayer left undated
+        g = groups.get(str(gid)) or groups.get(gid)
+        if g and not g["pub"]:
+            g["pub"] = d
 
     # ---- window anchors -------------------------------------------------
     anchors = {}
@@ -221,6 +225,11 @@ def build(groups, products, stock, log=print):
         })
     sets_out.sort(key=lambda s: s["pub"] or "", reverse=True)
     write("sets.json", sets_out)
+    # announced sets TCGplayer doesn't list yet (drop once a TCGplayer set name contains it, or a month after release)
+    low = lambda t: re.sub(r"[^a-z0-9]+", " ", t.lower()).strip()
+    stale = (date.fromisoformat(latest_day) - timedelta(days=30)).isoformat()
+    write("announced.json", [{"k": a["k"], "n": a["n"], "a": a.get("a", ""), "pub": a["pub"]} for a in config.ANNOUNCED
+                             if a["pub"] >= stale and not any(x["k"] == a["k"] and low(a["n"]) in low(x["n"]) for x in sets_out)])
 
     # ---- per-set detail with price history ------------------------------
     series_days = pick_series_days(days, latest_day)

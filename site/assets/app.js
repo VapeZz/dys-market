@@ -606,16 +606,27 @@ function setTile(s, today) {
       <span class="simg${s.lg ? " logo" : s.tc?.length && (!s.bbId || NEWG.has(s.k)) ? " fan" : ""}">${s.lg ? `<img src="${esc(s.lg)}" alt="${esc(s.n)} logo" loading="lazy">` : s.bbId && !(s.tc?.length && NEWG.has(s.k)) ? imgTag(s.bbId, "", 1000)
         : s.tc?.length ? s.tc.map(([id, im]) => `<span class="fc">${imgTag(id, "", 400, im || "")}</span>`).join("") : `<span class="sph">${esc((s.a || s.n).slice(0, 8))}</span>`}${s.pub && s.pub > today ? `<span class="badge up-next">Upcoming</span>` : ""}</span>
       <span class="sname">${esc(s.n.replace(/^(ME|SV|SWSH|SM|M)\d*[a-z]?:\s*/i, ""))}</span>
-      <span class="smeta">${s.pub ? new Date(s.pub + "T12:00:00").toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "—"}</span></a>`;
+      <span class="smeta">${s.pub ? new Date(s.pub + "T12:00:00").toLocaleDateString("en-US", s.pub > today ? { month: "short", day: "numeric", year: "numeric" } : { month: "short", year: "numeric" }) : "—"}</span></a>`;
+}
+// an officially announced set TCGplayer doesn't list yet: no prices, so no link
+function annTile(a) {
+  const d = new Date(a.pub + "T12:00:00");
+  return `<div class="stile ann" title="Announced. Prices start once it's listed on TCGplayer.">
+      <span class="simg"><span class="sph ann-ph"><b>${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</b><small>${d.getFullYear()}</small>${a.a ? `<em>${esc(a.a)}</em>` : ""}</span><span class="badge up-next">Announced</span></span>
+      <span class="sname">${esc(a.n)}</span>
+      <span class="smeta">${d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span></div>`;
 }
 
 async function pageSets() {
-  const [meta, sets] = await Promise.all([getJSON("meta.json"), getJSON("sets.json")]);
+  const [meta, sets, announced] = await Promise.all([getJSON("meta.json"), getJSON("sets.json"), getJSON("announced.json").catch(() => [])]);
   let game = params.get("game") || "pokemon", q = "", era = "all";
   const today = meta.updated;
   const tile = (s) => setTile(s, today);
   const draw = () => {
-    const list = sets.filter((s) => s.k === game && (!q || (s.n + " " + s.a).toLowerCase().includes(q)))
+    const hit = (s) => s.k === game && (!q || (s.n + " " + (s.a || "")).toLowerCase().includes(q));
+    // upcoming (dated after today, plus announced sets TCGplayer doesn't list yet) go in their own section up top, soonest first
+    const upcoming = [...sets.filter((s) => hit(s) && s.pub > today), ...announced.filter(hit)].sort((a, b) => a.pub.localeCompare(b.pub));
+    const list = sets.filter((s) => hit(s) && !(s.pub > today))
       .sort((a, b) => (b.pub || "").localeCompare(a.pub || ""));
     const groups = new Map();
     for (const s of list) { const e = eraOf(s); if (!groups.has(e)) groups.set(e, []); groups.get(e).push(s); }
@@ -624,8 +635,10 @@ async function pageSets() {
     const eras = [...groups.keys()];
     if (era !== "all" && !groups.has(era)) era = "all";
     $("#eras").innerHTML = [["all", "All"], ...eras.map((e) => [e, e])].map(([v, l]) => `<button type="button" class="chip${v === era ? " on" : ""}" data-e="${esc(v)}">${esc(l)}</button>`).join("");
-    $("#count").textContent = `${list.length} sets`;
-    $("#table").innerHTML = list.length ? [...groups].filter(([e]) => era === "all" || e === era).map(([e, ss]) =>
+    $("#count").textContent = `${list.length} sets${upcoming.length ? ` · ${upcoming.length} upcoming` : ""}`;
+    const upHtml = era === "all" && upcoming.length ? `<section class="era era-up"><h2>Upcoming <small>${upcoming.length} ${upcoming.length === 1 ? "set" : "sets"}</small></h2>
+      <div class="sgrid">${upcoming.map((s) => (s.id ? tile(s) : annTile(s))).join("")}</div></section>` : "";
+    $("#table").innerHTML = list.length || upHtml ? upHtml + [...groups].filter(([e]) => era === "all" || e === era).map(([e, ss]) =>
       `<section class="era"><h2>${esc(e)} <small>${ss.length} sets</small></h2><div class="sgrid">${ss.map(tile).join("")}</div></section>`).join("")
       : `<div class="panel empty-note">No sets match.</div>`;
   };
@@ -1196,14 +1209,14 @@ function compareChart(el, series, rangeDays) {
 }
 
 async function pageCalendar() {
-  const [meta, sets] = await Promise.all([getJSON("meta.json"), getJSON("sets.json")]);
+  const [meta, sets, announced] = await Promise.all([getJSON("meta.json"), getJSON("sets.json"), getJSON("announced.json").catch(() => [])]);
   const gl = Object.fromEntries(meta.games.map((g) => [g.slug, g.label]));
   const today = meta.updated;
   const back = new Date(today + "T12:00:00"); back.setDate(back.getDate() - 90);
   const from = back.toISOString().slice(0, 10);
   let game = params.get("game") || "all";
   const draw = () => {
-    const rows = sets.filter((s) => s.pub && s.pub >= from && (game === "all" || s.k === game))
+    const rows = [...sets, ...announced.filter((a) => a.pub > today)].filter((s) => s.pub && s.pub >= from && (game === "all" || s.k === game))
       .sort((a, b) => a.pub.localeCompare(b.pub) || a.n.localeCompare(b.n));
     const up = rows.filter((s) => s.pub > today), past = rows.filter((s) => s.pub <= today).reverse();
     const month = (d) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "long", year: "numeric" });
@@ -1212,10 +1225,11 @@ async function pageCalendar() {
       for (const s of list) { const m = month(s.pub); if (m !== cur) { cur = m; out.push([m, []]); } out[out.length - 1][1].push(s); }
       return out.map(([m, items]) => `<h3 class="cal-month">${esc(m)}</h3><div class="cal-list">${items.map((s) => {
         const d = new Date(s.pub + "T12:00:00");
-        return `<a class="cal-item" href="set.html?id=${s.id}"><div class="cal-date"><b>${d.getDate()}</b><span>${d.toLocaleDateString("en-US", { month: "short" })}</span></div>
+        const tag = s.id ? "a" : "div";   // announced sets have no page yet
+        return `<${tag} class="cal-item${s.id ? "" : " ann"}"${s.id ? ` href="set.html?id=${s.id}"` : ""}><div class="cal-date"><b>${d.getDate()}</b><span>${d.toLocaleDateString("en-US", { month: "short" })}</span></div>
           ${s.bbId ? imgTag(s.bbId, "cal-img") : `<span class="cal-img"></span>`}
-          <div class="cal-body"><div class="cal-name">${esc(s.n)}${s.pub > today ? ` <span class="badge up-next">Upcoming</span>` : ""}</div>
-          <div class="muted cal-meta">${esc(gl[s.k] || s.k)}${s.np ? ` · ${s.np} products` : ""}${s.bb ? ` · ${esc(/booster box/i.test(s.bbN || "") ? "Booster box" : "Main sealed")} ${money(s.bb)}` : ""}</div></div></a>`;
+          <div class="cal-body"><div class="cal-name">${esc(s.n)}${s.pub > today ? ` <span class="badge up-next">${s.id ? "Upcoming" : "Announced"}</span>` : ""}</div>
+          <div class="muted cal-meta">${esc(gl[s.k] || s.k)}${s.a && !s.id ? ` · ${esc(s.a)}` : ""}${s.np ? ` · ${s.np} products` : ""}${s.bb ? ` · ${esc(/booster box/i.test(s.bbN || "") ? "Booster box" : "Main sealed")} ${money(s.bb)}` : ""}${s.id ? "" : " · Prices once it's on TCGplayer"}</div></div></${tag}>`;
       }).join("")}</div>`).join("");
     };
     $("#upcoming").innerHTML = up.length ? group(up) : `<div class="panel empty-note">No upcoming release dates announced yet for this game.</div>`;

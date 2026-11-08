@@ -54,6 +54,24 @@ PPT_BUSINESS_PLAN = False
 # and never shown on this site. Using them for the business's buying decisions needs the Business plan.
 PPT_PERSONAL = True
 
+# Release dates TCGplayer's feed leaves blank, from the official announcement (TCGplayer group id -> YYYY-MM-DD).
+# Without a date a set sorts to the bottom of the Sets page under "Other" and is missing from the calendar.
+PUB_FIX = {
+    24831: "2026-11-06",   # Pokémon ME06: Delta Reign
+}
+
+# Officially announced sets that TCGplayer doesn't list yet. Shown as "Announced" on the Sets page and the release
+# calendar; each one drops off by itself once TCGplayer adds a set whose name contains it, or 30 days after release.
+# Only add sets with an official name AND date. k = game slug, a = set code if announced.
+ANNOUNCED = [
+    {"k": "pokemon", "n": "Flowing Fists", "a": "", "pub": "2027-02-05"},
+    {"k": "pokemon-jp", "n": "Special Deck Set MEGA", "a": "", "pub": "2026-11-13"},
+    {"k": "pokemon-jp", "n": "Aura Seeker", "a": "", "pub": "2026-11-27"},
+    {"k": "gundam", "n": "Blazing Fist", "a": "GD07", "pub": "2027-01-29"},
+    {"k": "gundam", "n": "Cosmic Crisis", "a": "EB02", "pub": "2027-02-26"},
+    {"k": "gundam", "n": "Unicorn Awakening", "a": "ST15", "pub": "2027-04-16"},
+]
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(ROOT, "data"))
 SITE_DIR = os.environ.get("SITE_DIR", os.path.join(ROOT, "site"))
