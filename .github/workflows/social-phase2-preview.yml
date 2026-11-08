@@ -1,0 +1,66 @@
+name: Social upgrades phase 2 preview (test branch only)
+# Renders preview posts of the new "Grade it?" (guess the PSA 10) and "Did it flip?" (our calls scorecard)
+# builders with real photos and saves them to the social-phase2-preview branch. Changes nothing live:
+# the builders write into /tmp only; gh-pages and data are read, never pushed.
+on:
+  push:
+    branches: [social-phase2]
+    paths: [tools/grade_social.py, tools/kicks_social.py, tools/kicks_plan.py, tools/tiktok.py, .github/workflows/social-phase2-preview.yml]
+permissions:
+  contents: write
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -q playwright==1.56.0 imageio-ffmpeg numpy pillow && python -m playwright install --with-deps chromium > /dev/null
+      - name: Live site data (read only)
+        run: |
+          git clone -q --depth 1 --filter=blob:none --sparse --branch gh-pages "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" /tmp/pages
+          git -C /tmp/pages sparse-checkout set --no-cone /data/sets.json /data/meta.json /data/set/ /sneakers.json /data/sneaker-images.json
+      - name: Grade it? preview (Oct 31 cards and the eBay sold prices checked that day)
+        run: |
+          python - <<'EOF'
+          import json, glob
+          cards = [{"id": 509952, "name": "Scizor", "no": "205/197", "raw": 12.81, "p10": 379.99, "sold": "7"},
+                   {"id": 253370, "name": "Gengar V", "no": "156/264", "raw": 11.7, "p10": 355.0, "sold": "16"},
+                   {"id": 478025, "name": "Electivire", "no": "GG08/GG70", "raw": 8.77, "p10": 310.0, "sold": "8"},
+                   {"id": 450289, "name": "Lugia V", "no": "138/195", "raw": 14.56, "p10": 236.0, "sold": "22+"},
+                   {"id": 623588, "name": "Articuno", "no": "161/159", "raw": 14.05, "p10": 191.1, "sold": "25+"}]
+          want = {c["id"] for c in cards}
+          gid = {}
+          for f in glob.glob("/tmp/pages/data/set/*.json"):
+              s = json.load(open(f))
+              if s.get("k") != "pokemon":
+                  continue
+              for i in s.get("items", []):
+                  if i.get("id") in want:
+                      gid[i["id"]] = s["id"]
+          for c in cards:
+              c["gid"] = gid[c["id"]]
+          json.dump({"date": "2026-10-31", "game": "pokemon", "cards": cards}, open("/tmp/grade-spec.json", "w"))
+          EOF
+          python tools/grade_social.py /tmp/grade-spec.json /tmp/pages /tmp/prev/grade
+      - name: Did it flip? preview (tomorrow's pairs; sold numbers are samples for the layout)
+        run: |
+          python tools/kicks_plan.py recap /tmp/pages --date "$(TZ=America/Los_Angeles date -d tomorrow +%F)" > /tmp/cand.json
+          python - <<'EOF'
+          import json
+          cand = json.load(open("/tmp/cand.json"))[:5]
+          sample = [(22, 1.39), (18, 1.25), (9, 0.99), (11, 0.82), (7, 0.97)]   # (sold count, sold median / retail): layout samples only
+          pairs = [{"c": p["c"], "sold_n": n, "sold_med": round(p["r"] * k), "sold_days": 30} for p, (n, k) in zip(cand, sample)]
+          json.dump({"date": "2026-11-09", "mode": "recap", "pairs": pairs}, open("/tmp/kicks-spec.json", "w"))
+          print(json.dumps(pairs))
+          EOF
+          mkdir -p /tmp/prev/kicks
+          python tools/kicks_social.py /tmp/kicks-spec.json /tmp/pages /tmp/prev/kicks
+      - name: Save to social-phase2-preview branch
+        run: |
+          cd /tmp/prev
+          git init -q -b social-phase2-preview && git config user.name "dys-market-bot" && git config user.email "dys-market-bot@users.noreply.github.com"
+          git add -A && git commit -q -m "Social upgrades phase 2 preview" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" social-phase2-preview
+          echo "::notice title=Preview::$(python -c "import json; g=json.load(open('grade/latest.json')); k=json.load(open('kicks/latest.json')); print(len(g['slides']), 'grade slides |', g['first'], '|', len(k['slides']), 'kicks slides | score', k.get('score'))")"

@@ -33,6 +33,7 @@ def full_screen(page, slide_paths, out_dir, foot="Free card prices · market.dri
 
 def make_short(slide_paths, out_path, per=3.2, fade=0.4, fps=30, music=True):
     """Stitch 1080x1920 slides into a vertical MP4 (slow zoom + crossfades) for YouTube Shorts.
+    per = seconds per slide, or a list with one value per slide (e.g. short "guess" slides, longer reveals).
     Original background music (tools/music.py), different for every post; silent if that fails.
     Returns out_path, or None if ffmpeg fails."""
     import shutil
@@ -48,7 +49,8 @@ def make_short(slide_paths, out_path, per=3.2, fade=0.4, fps=30, music=True):
     if not slide_paths:
         return None
     n = len(slide_paths)
-    frames = int((per + fade) * fps)
+    pers = list(per) if isinstance(per, (list, tuple)) else [per] * n
+    pers = (pers + [pers[-1]] * n)[:n]
     args = [exe, "-y", "-loglevel", "error"]
     for p in slide_paths:
         args += ["-i", p]
@@ -57,18 +59,18 @@ def make_short(slide_paths, out_path, per=3.2, fade=0.4, fps=30, music=True):
         try:
             import music as _m
             wav = os.path.splitext(out_path)[0] + "-music.wav"
-            style, bpm = _m.write(wav, n * per + fade + 1, music if isinstance(music, str) else _m.seed_for(out_path))
+            style, bpm = _m.write(wav, sum(pers) + fade + 1, music if isinstance(music, str) else _m.seed_for(out_path))
             audio = ["-i", wav]
             print(f"make_short: music {style} {bpm} bpm")
         except Exception as e:
             print("make_short: music failed, silent track:", e)
     args += audio
     f = [f"[{i}:v]scale=2160:3840,zoompan=z='min(zoom+0.0007,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
-         f":d={frames}:s=1080x1920:fps={fps},setsar=1,format=yuv420p[v{i}]" for i in range(n)]
-    last, t = "v0", per
+         f":d={int((pers[i] + fade) * fps)}:s=1080x1920:fps={fps},setsar=1,format=yuv420p[v{i}]" for i in range(n)]
+    last, t = "v0", pers[0]
     for i in range(1, n):
         f.append(f"[{last}][v{i}]xfade=transition=fade:duration={fade}:offset={t:.2f}[x{i}]")
-        last, t = f"x{i}", t + per
+        last, t = f"x{i}", t + pers[i]
     args += ["-filter_complex", ";".join(f), "-map", f"[{last}]", "-map", f"{n}:a", "-shortest",
              "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-r", str(fps),
              "-c:a", "aac", "-b:a", "128k", "-ac", "2", "-movflags", "+faststart", out_path]

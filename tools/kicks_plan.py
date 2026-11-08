@@ -72,7 +72,9 @@ def main(argv):
         cand = [r for r in rel if lo <= r["d"] <= hi and r["c"] not in done]
         later = [r["c"] for r in cand if not r["photo"]]
         cand = [r for r in cand if r["photo"]]
-        cand.sort(key=lambda r: (-r.get("h", 1), r["d"]), reverse=False)
+        # pairs we made a call on come first, so the post can score our calls; then heat, then date
+        picked = {p.get("c") for p in load(os.path.join(pages, "sneakers.json"), {}).get("picks", [])}
+        cand.sort(key=lambda r: (r["c"] not in picked, -r.get("h", 1), r["d"]))
         if later:
             print(f"postponed (no photo yet): {' '.join(later)}", file=sys.stderr)
         print(json.dumps([{k: r.get(k) for k in ("c", "n", "d", "r", "h")} for r in cand[:12]], ensure_ascii=False))
