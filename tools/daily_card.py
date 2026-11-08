@@ -49,6 +49,7 @@ THEMES = ["jumps", "under10", "highs", "dip", "newset"]
 THEME_DAYS = {0: "newset", 1: "under10", 2: "highs", 3: "dip", 4: "jumps", 5: "under10", 6: "jumps"}   # Mon=0; Monday's Trending covers jumps
 MIN_CARDS, MAX_CARDS, PER_SET = 3, 5, 2
 SIDEWAYS = re.compile(r"\bBREAK\b|\bLEGEND\b|jumbo|oversize", re.I)   # landscape cards don't fit the portrait slides
+NOT_CARDS = re.compile(r"action point card|\btoken\b", re.I)   # game pieces, not collectible cards
 UA = {"User-Agent": "DriveYourStyleMarket/1.0 (+https://driveyourstyle.net)"}
 B = BASE.replace("height:1350px", "height:1920px")
 GREEN, RED = "#3ee08f", "#ff6b6b"
@@ -88,13 +89,27 @@ def game_rows(site_data, today, game):
         except (OSError, ValueError):
             continue
         for i in items:
-            if i["t"] == "c" and i.get("p") and not SKIP.search(i["n"]) and not SIDEWAYS.search(i["n"]):
+            if i["t"] == "c" and i.get("p") and not SKIP.search(i["n"]) and not SIDEWAYS.search(i["n"]) and not NOT_CARDS.search(i["n"]):
                 rows.append((st, i))
     return sets, rows
 
 
+DECKS = re.compile(r"\bdeck\b|starter|start deck|trial|promo|collection|\btin\b|\bkit\b|bundle|box set", re.I)
+
+
+def set_name(n):
+    """Short set name without the leading code (\"UE10DC: Bleach ...\" -> \"Bleach ...\")."""
+    return re.sub(r"^[A-Z]{1,5}\d{1,3}[A-Z]{0,3}\s*[:\-–]\s*", "", short_set(n))
+
+
+def base_name(n):
+    return re.sub(r"\s*\(.*$", "", n).strip().lower()
+
+
 def card(st, i, pct):
-    return {"id": i["id"], "name": clean_name(i["n"]), "set": short_set(st["n"]), "gid": st["id"], "game": st["k"],
+    if pct is not None and abs(pct) < 1:   # a move under 1% isn't news: show the rarity instead
+        pct = None
+    return {"id": i["id"], "name": clean_name(i["n"]), "set": set_name(st["n"]), "gid": st["id"], "game": st["k"],
             "now": i["p"], "old": round(i["p"] / (1 + pct / 100)) if pct is not None else None, "pct": pct,
             "rarity": i.get("r")}
 
@@ -127,20 +142,25 @@ def pick_theme(site_data, today, game, theme, exclude):
             cands.append((pct, st, i, pct))
     if theme == "newset":   # chase cards of the newest set that has enough priced cards
         for st in sorted(sets, key=lambda s: s.get("pub") or "", reverse=True):
+            if (st.get("np") or 0) < 40 or DECKS.search(st["n"]):
+                continue
             top = sorted(((s2, i) for s2, i in rows if s2["id"] == st["id"] and i["p"] >= 300 and i["id"] not in exclude),
                          key=lambda r: -r[1]["p"])
             if len(top) >= MIN_CARDS:
                 cands = [(-i["p"], s2, i, (i.get("ch") or {}).get(win)) for s2, i in top]
                 break
     cands.sort(key=lambda r: r[0])
-    out, per_set = [], {}
+    out, per_set, names = [], {}, set()
     for _, st, i, pct in cands:
         if len(out) == MAX_CARDS:
             break
         if theme != "newset" and per_set.get(st["id"], 0) >= PER_SET:
             continue
+        if base_name(i["n"]) in names:   # same card, other printing
+            continue
         if not has_photo(i["id"]):
             continue
+        names.add(base_name(i["n"]))
         per_set[st["id"]] = per_set.get(st["id"], 0) + 1
         out.append(card(st, i, pct))
     return out, ("this week" if win == "7" else "lately")
