@@ -101,6 +101,17 @@ def main():
 
 
 TCGDEX = "https://api.tcgdex.net/v2/ja/"
+# Hand-checked pairs where TCGplayer's set code / card total don't line up with TCGdex's on their own.
+# Cards still have to match by number, and a numbered total (e.g. 016/070) must equal the TCGdex set's official count.
+JP_MAP = {
+    "L1: HeartGold Collection": "L1a",
+    "L1: SoulSilver Collection": "L1b",
+    "Pokemon VS": "VS1",
+    "M-P Promotional Cards": "M-P",
+    "SV-P Promotional Cards": "SV-P",
+    "Start Deck 100 Battle Collection": "MC",
+}
+NO_RE = re.compile(r"^(\d+)/([A-Za-z0-9-]+)$")
 
 
 def code_of(s):
@@ -127,6 +138,7 @@ def pokemon_jp(audit, out, dry):
     time.sleep(0.3)
     print(f"Pokémon Japan: {sum(len(v) for v in want.values())} cards in {len(want)} sets; TCGdex lists {len(dex)} Japanese sets")
     print("TCGdex sample:", json.dumps(dex[:2], ensure_ascii=False)[:400])
+    dex_by_id = {d["id"]: d for d in dex}
     dex_by_code = {}
     for d in dex:
         dex_by_code.setdefault(re.sub(r"[^a-z0-9]", "", d["id"].lower()), []).append(d)
@@ -138,8 +150,11 @@ def pokemon_jp(audit, out, dry):
         code = code_of(s)
         nums = [c["no"] for c in cards if re.match(r"^\d+/\d+$", c.get("no") or "")]
         tot = {int(n.split("/")[1]) for n in nums}
-        cands = dex_by_code.get(code, []) + [d for k, v in dex_by_code.items() if code and k != code and re.fullmatch(code + "[ab]", k) for d in v]
-        ok = [d for d in cands if (d.get("cardCount") or {}).get("official") in tot] if tot else []
+        if s["n"] in JP_MAP:
+            ok = [dex_by_id[JP_MAP[s["n"]]]] if JP_MAP[s["n"]] in dex_by_id else []
+        else:
+            cands = dex_by_code.get(code, []) + [d for k, v in dex_by_code.items() if code and k != code and re.fullmatch(code + "[ab]", k) for d in v]
+            ok = [d for d in cands if (d.get("cardCount") or {}).get("official") in tot] if tot else []
         if len(ok) != 1:
             report.append({"set": s["n"], "code": code, "cards": len(cards), "paired": None,
                            "why": "no TCGdex set with this code and card total" if not ok else f"{len(ok)} TCGdex sets fit"})
@@ -153,17 +168,35 @@ def pokemon_jp(audit, out, dry):
                 by_no[int(re.sub(r"\D", "", c["localId"]))] = c
             except ValueError:
                 pass
-        hits = []
+        hits, noimg, skipped = [], 0, 0
+        official = (d.get("cardCount") or {}).get("official")
         for c in cards:
-            m = re.match(r"^(\d+)/(\d+)$", c.get("no") or "")
-            if m and int(m.group(1)) in by_no and by_no[int(m.group(1))].get("image"):
-                hits.append((c, by_no[int(m.group(1))]))
+            m = NO_RE.match(c.get("no") or "")
+            if not m:
+                skipped += 1
+                continue
+            den = m.group(2)
+            if den.isdigit() and int(den) != official:   # e.g. a 015/023 deck card listed under a 742-card set
+                skipped += 1
+                continue
+            named = re.search(r" - (\d+)/", c["n"])
+            if named and int(named.group(1)) != int(m.group(1)):   # name and number disagree on TCGplayer: skip
+                skipped += 1
+                continue
+            x = by_no.get(int(m.group(1)))
+            if not x:
+                skipped += 1
+            elif not x.get("image"):
+                noimg += 1
+            else:
+                hits.append((c, x))
         total += len(hits)
         report.append({"set": s["n"], "code": code, "cards": len(cards), "paired": d["id"], "matched": len(hits),
+                       "tcgdex_no_image": noimg, "skipped": skipped,
                        "examples": [[c["n"], c["no"], x["localId"], x.get("name"), x["image"]] for c, x in hits[:3]]})
         for c, x in hits:
             if dry:
-                if len(samples) < 12 and (not samples or samples[-1][0] != s["n"]):
+                if len(samples) < 16 and sum(1 for q in samples if q[0] == s["n"]) < 2:
                     samples.append((s["n"], c, x))
                 continue
             path = os.path.join(out, "pokemon-jp", f"{c['id']}.webp")
@@ -179,13 +212,16 @@ def pokemon_jp(audit, out, dry):
     if dry:
         os.makedirs(os.path.join(out, "samples"), exist_ok=True)
         for i, (sn, c, x) in enumerate(samples):
-            try:
-                body = fetch(x["image"] + "/low.webp")
-                with open(os.path.join(out, "samples", f"{i:02d}-{c['id']}.webp"), "wb") as f:
-                    f.write(body)
-            except Exception as e:
-                print("sample failed", x["image"], e)
-            time.sleep(0.3)
+            for tries in range(3):
+                try:
+                    body = fetch(x["image"] + "/low.webp")
+                    with open(os.path.join(out, "samples", f"{i:02d}-{c['id']}.webp"), "wb") as f:
+                        f.write(body)
+                    break
+                except Exception as e:
+                    print("sample failed", x["image"], e)
+                    time.sleep(3)
+            time.sleep(0.5)
         with open(os.path.join(out, "report.json"), "w", encoding="utf-8") as f:
             json.dump({"matched": total, "dex_sets": dex, "sets": report, "samples": [[sn, c["n"], c["no"], x["localId"], x.get("name")] for sn, c, x in samples]},
                       f, ensure_ascii=False, indent=1)
@@ -196,7 +232,8 @@ def pokemon_jp(audit, out, dry):
     print(f"Pokémon Japan: {len(paired)} of {len(report)} sets paired with TCGdex; {total} cards matched"
           + (" (trial, nothing downloaded for the site)" if dry else ""))
     for r in report[:25]:
-        print(" ", r["set"], "|", r["code"], "|", r["cards"], "cards |", r.get("paired") or r.get("why"), "|", r.get("matched", ""))
+        print(" ", r["set"], "|", r["code"], "|", r["cards"], "cards |", r.get("paired") or r.get("why"), "|", r.get("matched", ""),
+              "| no TCGdex image:", r.get("tcgdex_no_image", ""), "| skipped:", r.get("skipped", ""))
 
 
 if __name__ == "__main__":
