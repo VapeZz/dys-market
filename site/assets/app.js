@@ -49,12 +49,14 @@ const img = (id, size = 200) => `https://tcgplayer-cdn.tcgplayer.com/product/${e
 const NOIMG = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 350"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2a2f45"/><stop offset="1" stop-color="#151827"/></linearGradient></defs><rect x="4" y="4" width="242" height="342" rx="16" fill="url(#g)" stroke="#3a4060" stroke-width="3"/><circle cx="125" cy="150" r="38" fill="none" stroke="#6b7395" stroke-width="6"/><path d="M87 150h76" stroke="#6b7395" stroke-width="6"/><circle cx="125" cy="150" r="11" fill="#151827" stroke="#6b7395" stroke-width="6"/><text x="125" y="240" fill="#8b93b5" font-family="Arial,sans-serif" font-size="20" text-anchor="middle">No image yet</text></svg>');
 window.dysImg = (el) => {
   if (el.dataset.alt && !el.dataset.tried) { el.dataset.tried = "1"; el.src = el.dataset.alt; return; }
-  const none = () => { el.onerror = null; el.src = NOIMG; };
+  const none = () => { el.onerror = null; el.classList.remove("borrowed"); el.src = NOIMG; };
   const m = el.src.match(/\/product\/(\d+)_(in_1000x1000|\d+w)\.jpg/), hops = +(el.dataset.hops || 0);
   if (!m || hops >= 3) return none();
   el.dataset.hops = hops + 1;   // no photo yet (new variant): show the same card's other version
-  getJSON("img-alt.json").then((a) => { const n = a[m[1]]; if (n) el.src = img(n, m[2] === "in_1000x1000" ? 1000 : parseInt(m[2])); else none(); }).catch(none);
+  getJSON("img-alt.json").then((a) => { const n = a[m[1]]; if (n) { el.classList.add("borrowed"); el.src = img(n, m[2] === "in_1000x1000" ? 1000 : parseInt(m[2])); } else none(); }).catch(none);
 };
+// shown on a card's page when its photo is borrowed from another printing (img-alt.json) until TCGplayer adds one
+const BORROW_NOTE = `<span class="borrow-note">Photo from another printing of this card</span>`;
 const imgTag = (id, cls = "thumb", size = 200, alt = "") =>
   `<img class="${cls}" src="${img(id, size)}"${alt ? ` data-alt="${esc(alt)}"` : ""} alt="" loading="lazy" onerror="dysImg(this)">`;
 const prodUrl = (id, gid) => `product.html?id=${encodeURIComponent(id ?? "")}&set=${encodeURIComponent(gid ?? "")}`;
@@ -929,7 +931,7 @@ async function pageProduct() {
   const setHref = `set.html?id=${set.id}${v.t === "s" ? "&tab=sealed" : ""}`;
   crumbs([["sets.html", "Sets"], [`sets.html?game=${set.k}`, gl[set.k] || set.k], [setHref, set.n], [null, base]], [setHref, set.n]);
   const draw = () => {
-    $("#prod").innerHTML = `<div class="prod-img">${imgTag(id, "", 1000, v.im)}</div>
+    $("#prod").innerHTML = `<div class="prod-img">${imgTag(id, "", 1000, v.im)}${BORROW_NOTE}</div>
       <div><span class="muted">${esc(gl[set.k] || "")} · ${esc(set.n)}${v.no ? " · #" + esc(v.no) : ""}${v.r ? " · " + esc(v.r) : ""}</span>
         <h1 style="font-size:clamp(26px,3.4vw,38px);margin-top:6px">${esc(base)}</h1>
         ${variants.length > 1 ? `<div id="var" style="margin-top:12px"></div>` : ""}

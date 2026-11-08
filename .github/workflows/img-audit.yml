@@ -2,6 +2,8 @@ name: Photo audit
 # Which cards/sealed items on the live site show "No image yet". Read-only for the site:
 # results go to the img-audit branch (img-audit.json + log.txt).
 on:
+  schedule:
+    - cron: "17 10 * * 6"   # Saturdays ~2:17 AM PT: recent sets (new sets are where photos go missing)
   workflow_dispatch:
     inputs:
       days:
@@ -17,12 +19,13 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
       - run: |
           mkdir -p /tmp/out
-          python3 tools/img_audit.py days=${{ inputs.days }} games=${{ inputs.games }} out=/tmp/out/img-audit.json | tee /tmp/out/log.txt
+          git fetch -q --depth 1 origin img-audit && git show FETCH_HEAD:img-audit.json > /tmp/prev.json || echo '{}' > /tmp/prev.json
+          python3 tools/img_audit.py days=${{ inputs.days || '540' }} games=${{ inputs.games || 'all' }} out=/tmp/out/img-audit.json prev=/tmp/prev.json | tee /tmp/out/log.txt
           cd /tmp/out
           git init -q -b img-audit && git config user.name dys-market-bot && git config user.email dys-market-bot@users.noreply.github.com
           git add -A && git commit -qm "Photo audit $(date -u +%F)"

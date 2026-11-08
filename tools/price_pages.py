@@ -134,7 +134,7 @@ def main(argv):
             return f"p/{slugs[k]}.html" if k in slugs else f"product.html?id={x['id']}&amp;set={d['id']}"
         more_html = "".join(
             f'<a class="pp-more" href="{href(x)}">'
-            f'<img src="https://tcgplayer-cdn.tcgplayer.com/product/{x["id"]}_200w.jpg" alt="" loading="lazy" width="60" height="84"><span>{esc(base_name(x["n"]))}<b>{money(x["p"])}</b></span></a>' for x in more)
+            f'<img src="https://tcgplayer-cdn.tcgplayer.com/product/{x["id"]}_200w.jpg" alt="" loading="lazy" width="60" height="84" onerror="window.dysImg&amp;&amp;dysImg(this)"><span>{esc(base_name(x["n"]))}<b>{money(x["p"])}</b></span></a>' for x in more)
         dates = d.get("dates") or []
         ser = i.get("s") or []
         buy = (f'<a class="btn primary" href="{esc(i["dys"]["u"])}">Buy at Drive Your Style · {money(i["dys"]["p"])}</a>' if i.get("dys") else
@@ -143,7 +143,7 @@ def main(argv):
         body = f'''<div class="wrap pp"><div class="crumbs"><a class="crumb-back" href="{set_href}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>Back to {esc(d["n"])}</span></a>
 <nav class="crumb-path" aria-label="Breadcrumb"><ol><li><a href="sets.html">Sets</a></li><li><a href="sets.html?game={d["k"]}">{esc(game)}</a></li><li><a href="{set_href}">{esc(d["n"])}</a></li><li><span aria-current="page">{esc(name)}</span></li></ol></nav></div>
 <div class="prod">
-<div class="prod-img"><img src="{img(i["id"])}" alt="{esc(name)}" width="500" height="700"></div>
+<div class="prod-img"><img src="{img(i["id"])}" alt="{esc(name)}" width="500" height="700" onerror="window.dysImg&amp;&amp;dysImg(this)"><span class="borrow-note">Photo from another printing of this card</span></div>
 <div><span class="muted">{esc(game)} · {esc(d["n"])}{f" · #{esc(i['no'])}" if i.get("no") else ""}{f" · {esc(i['r'])}" if i.get("r") else ""}</span>
 <h1 style="font-size:clamp(26px,3.4vw,38px);margin-top:6px">{esc(nice)} price{f" <span class='muted' style='font-size:.6em'>{esc(variant)}</span>" if variant else ""}</h1>
 <div class="muted" style="margin-top:14px">Market price</div><div class="price-big">{money(i["p"])}</div>

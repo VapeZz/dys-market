@@ -104,8 +104,13 @@ jobs:
           PPT_API_KEY_OLD: ${{ secrets.PPT_API_KEY_OLD }}
         run: python pipeline/merge_archive.py "$MERGE_ARCHIVE"
 
+      - name: Cards with no TCGplayer photo (from the weekly photo audit)
+        continue-on-error: true
+        run: git fetch -q --depth 1 origin img-audit && git show FETCH_HEAD:img-audit.json > /tmp/img-audit.json || true
+
       - name: Download today's prices and build site data
         env:
+          IMG_AUDIT: /tmp/img-audit.json
           PPT_API_KEY: ${{ secrets.PPT_API_KEY }}         # opens the encrypted older price history
           PPT_API_KEY_NEW: ${{ secrets.PPT_API_KEY_NEW }}
           PPT_API_KEY_OLD: ${{ secrets.PPT_API_KEY_OLD }}
