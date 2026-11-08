@@ -1,0 +1,386 @@
+[
+ {
+  "sample": "riftbound-newset",
+  "slides": 7,
+  "video": true,
+  "first": "The 5 chase cards of Radiance 💎 #1 is worth $514.38",
+  "yt": "The 5 chase cards of Radiance 💎 #1 is worth $514.38 — which would you buy? #riftbound",
+  "cards": [
+   {
+    "id": 722900,
+    "name": "Packed Amphitheater (Ultimate)",
+    "set": "Radiance",
+    "gid": 24819,
+    "game": "riftbound",
+    "now": 51438,
+    "old": 55191,
+    "pct": -6.8,
+    "rarity": "Showcase"
+   },
+   {
+    "id": 723435,
+    "name": "Riven, The Exile (Overnumbered)",
+    "set": "Radiance",
+    "gid": 24819,
+    "game": "riftbound",
+    "now": 19978,
+    "old": 21528,
+    "pct": -7.2,
+    "rarity": "Showcase"
+   },
+   {
+    "id": 722843,
+    "name": "Evelynn, Agony's Embrace (Overnumbered)",
+    "set": "Radiance",
+    "gid": 24819,
+    "game": "riftbound",
+    "now": 18928,
+    "old": 20051,
+    "pct": -5.6,
+    "rarity": "Showcase"
+   },
+   {
+    "id": 722338,
+    "name": "Seraphine, Starry-Eyed Songstress (Overnumbered)",
+    "set": "Radiance",
+    "gid": 24819,
+    "game": "riftbound",
+    "now": 12564,
+    "old": 14101,
+    "pct": -10.9,
+    "rarity": "Showcase"
+   },
+   {
+    "id": 722887,
+    "name": "Mordekaiser, Iron Revenant (Overnumbered)",
+    "set": "Radiance",
+    "gid": 24819,
+    "game": "riftbound",
+    "now": 11322,
+    "old": null,
+    "pct": null,
+    "rarity": "Showcase"
+   }
+  ]
+ },
+ {
+  "sample": "lorcana-newset",
+  "slides": 7,
+  "video": true,
+  "first": "The 5 chase cards of Hyperia City 💎 #1 is worth $1,860.82",
+  "yt": "The 5 chase cards of Hyperia City 💎 #1 is worth $1,860.82 — which would you buy? #lorcana",
+  "cards": [
+   {
+    "id": 722591,
+    "name": "Mickey Mouse - Best in Town (Iconic)",
+    "set": "Hyperia City",
+    "gid": 24740,
+    "game": "lorcana",
+    "now": 186082,
+    "old": null,
+    "pct": null,
+    "rarity": "Iconic"
+   },
+   {
+    "id": 722586,
+    "name": "Ariel - Collector of Oddities (Enchanted)",
+    "set": "Hyperia City",
+    "gid": 24740,
+    "game": "lorcana",
+    "now": 37474,
+    "old": 38200,
+    "pct": -1.9,
+    "rarity": "Enchanted"
+   },
+   {
+    "id": 722580,
+    "name": "Belle - Exceptional Writer (Enchanted)",
+    "set": "Hyperia City",
+    "gid": 24740,
+    "game": "lorcana",
+    "now": 23144,
+    "old": 24967,
+    "pct": -7.3,
+    "rarity": "Enchanted"
+   },
+   {
+    "id": 722579,
+    "name": "Max Goof - Karaoke Star (Enchanted)",
+    "set": "Hyperia City",
+    "gid": 24740,
+    "game": "lorcana",
+    "now": 22945,
+    "old": 23485,
+    "pct": -2.3,
+    "rarity": "Enchanted"
+   },
+   {
+    "id": 722573,
+    "name": "Aurora - Delightful Musician (Enchanted)",
+    "set": "Hyperia City",
+    "gid": 24740,
+    "game": "lorcana",
+    "now": 20013,
+    "old": null,
+    "pct": null,
+    "rarity": "Enchanted"
+   }
+  ]
+ },
+ {
+  "sample": "yugioh-jumps",
+  "slides": 7,
+  "video": true,
+  "first": "5 Yu-Gi-Oh! cards that jumped this week 📈 #1 is up 94%",
+  "yt": "5 Yu-Gi-Oh! cards that jumped this week 📈 #1 is up 94% — which would you buy? #yugioh",
+  "cards": [
+   {
+    "id": 690376,
+    "name": "Quick Launch (Starlight Rare) (1st Edition)",
+    "set": "Rarity Collection 5",
+    "gid": 24555,
+    "game": "yugioh",
+    "now": 1090,
+    "old": 561,
+    "pct": 94.3,
+    "rarity": "Starlight Rare"
+   },
+   {
+    "id": 610872,
+    "name": "A Bao A Qu, the Lightless Shadow (1st Edition)",
+    "set": "Supreme Darkness",
+    "gid": 23758,
+    "game": "yugioh",
+    "now": 912,
+    "old": 568,
+    "pct": 60.6,
+    "rarity": "Secret Rare"
+   },
+   {
+    "id": 600104,
+    "name": "Amazoness Princess (PSR) (1st Edition)",
+    "set": "Speed Duel: Battle City Finals",
+    "gid": 23652,
+    "game": "yugioh",
+    "now": 640,
+    "old": 419,
+    "pct": 52.7,
+    "rarity": "Prismatic Secret Rare"
+   },
+   {
+    "id": 579573,
+    "name": "Evolzar Lars (1st Edition)",
+    "set": "25th Anniversary Tin: Dueling Mirrors",
+    "gid": 23481,
+    "game": "yugioh",
+    "now": 862,
+    "old": 572,
+    "pct": 50.7,
+    "rarity": "Prismatic Secret Rare"
+   },
+   {
+    "id": 551294,
+    "name": "Abomination's Prison (Quarter Century Secret Rare) (1st Edition)",
+    "set": "25th Anniversary Rarity Collection II",
+    "gid": 23416,
+    "game": "yugioh",
+    "now": 1282,
+    "old": 864,
+    "pct": 48.4,
+    "rarity": "Quarter Century Secret Rare"
+   }
+  ]
+ },
+ {
+  "sample": "gundam-newset",
+  "slides": 7,
+  "video": true,
+  "first": "The 5 chase cards of Stardust Trails 💎 #1 is worth $1,000.00",
+  "yt": "The 5 chase cards of Stardust Trails 💎 #1 is worth $1,000.00 — which would you buy? #gundamcardgame",
+  "cards": [
+   {
+    "id": 727905,
+    "name": "Infinite Justice Gundam (LR++)",
+    "set": "Stardust Trails",
+    "gid": 24804,
+    "game": "gundam",
+    "now": 100000,
+    "old": null,
+    "pct": null,
+    "rarity": "LR++"
+   },
+   {
+    "id": 727919,
+    "name": "Gundam Bael (LR++)",
+    "set": "Stardust Trails",
+    "gid": 24804,
+    "game": "gundam",
+    "now": 87299,
+    "old": null,
+    "pct": null,
+    "rarity": "LR++"
+   },
+   {
+    "id": 727898,
+    "name": "Argama (SP) (R+)",
+    "set": "Stardust Trails",
+    "gid": 24804,
+    "game": "gundam",
+    "now": 9429,
+    "old": 14943,
+    "pct": -36.9,
+    "rarity": "R+"
+   },
+   {
+    "id": 727899,
+    "name": "Archangel (SP) (U+)",
+    "set": "Stardust Trails",
+    "gid": 24804,
+    "game": "gundam",
+    "now": 8575,
+    "old": null,
+    "pct": null,
+    "rarity": "U+"
+   },
+   {
+    "id": 727932,
+    "name": "Altron Gundam (EW) (LR+)",
+    "set": "Stardust Trails",
+    "gid": 24804,
+    "game": "gundam",
+    "now": 8361,
+    "old": 6277,
+    "pct": 33.2,
+    "rarity": "LR+"
+   }
+  ]
+ },
+ {
+  "sample": "union-arena-newset",
+  "slides": 7,
+  "video": true,
+  "first": "The 5 chase cards of GODDESS OF VICTORY: NIKKE Precious Booster 💎 #1 is worth $1,499.99",
+  "yt": "The 5 chase cards of GODDESS OF VICTORY: NIKKE Precious Booster 💎 #1 is worth $1,499.99 #unionarena",
+  "cards": [
+   {
+    "id": 723096,
+    "name": "Red Hood (036) (PcSR***)",
+    "set": "GODDESS OF VICTORY: NIKKE Precious Booster",
+    "gid": 24743,
+    "game": "union-arena",
+    "now": 149999,
+    "old": null,
+    "pct": null,
+    "rarity": "Precious Super Rare 3-Star"
+   },
+   {
+    "id": 723063,
+    "name": "Cinderella (015) (PcSR**)",
+    "set": "GODDESS OF VICTORY: NIKKE Precious Booster",
+    "gid": 24743,
+    "game": "union-arena",
+    "now": 59100,
+    "old": null,
+    "pct": null,
+    "rarity": "Precious Super Rare 2-Star"
+   },
+   {
+    "id": 723048,
+    "name": "Rapi: Red Hood (PcSR**)",
+    "set": "GODDESS OF VICTORY: NIKKE Precious Booster",
+    "gid": 24743,
+    "game": "union-arena",
+    "now": 20000,
+    "old": null,
+    "pct": null,
+    "rarity": "Precious Super Rare 2-Star"
+   },
+   {
+    "id": 723057,
+    "name": "Grave (011) (PcR*)",
+    "set": "GODDESS OF VICTORY: NIKKE Precious Booster",
+    "gid": 24743,
+    "game": "union-arena",
+    "now": 3499,
+    "old": 3858,
+    "pct": -9.3,
+    "rarity": "Precious Rare 1-Star"
+   },
+   {
+    "id": 723053,
+    "name": "Anis: Sparkling Summer (008) (PcR*)",
+    "set": "GODDESS OF VICTORY: NIKKE Precious Booster",
+    "gid": 24743,
+    "game": "union-arena",
+    "now": 2772,
+    "old": 2984,
+    "pct": -7.1,
+    "rarity": "Precious Rare 1-Star"
+   }
+  ]
+ },
+ {
+  "sample": "dragon-ball-fusion-world-newset",
+  "slides": 7,
+  "video": true,
+  "first": "The 5 chase cards of Brightness of Hope 💎 #1 is worth $188.43",
+  "yt": "The 5 chase cards of Brightness of Hope 💎 #1 is worth $188.43 — which would you buy? #dragonball",
+  "cards": [
+   {
+    "id": 711459,
+    "name": "Son Goku - FB11-001 (Alternate Art)",
+    "set": "Brightness of Hope",
+    "gid": 24716,
+    "game": "dragon-ball-fusion-world",
+    "now": 18843,
+    "old": 19053,
+    "pct": -1.1,
+    "rarity": "Leader"
+   },
+   {
+    "id": 713344,
+    "name": "Son Goku - FB11-121 (Alternate Art)",
+    "set": "Brightness of Hope",
+    "gid": 24716,
+    "game": "dragon-ball-fusion-world",
+    "now": 17801,
+    "old": 18428,
+    "pct": -3.4,
+    "rarity": "Secret Rare"
+   },
+   {
+    "id": 711457,
+    "name": "Goku Black - FB11-049 (Alternate Art)",
+    "set": "Brightness of Hope",
+    "gid": 24716,
+    "game": "dragon-ball-fusion-world",
+    "now": 12198,
+    "old": 14436,
+    "pct": -15.5,
+    "rarity": "Leader"
+   },
+   {
+    "id": 713342,
+    "name": "Bulma - FB11-094 (Alternate Art)",
+    "set": "Brightness of Hope",
+    "gid": 24716,
+    "game": "dragon-ball-fusion-world",
+    "now": 12128,
+    "old": 12568,
+    "pct": -3.5,
+    "rarity": "Rare"
+   },
+   {
+    "id": 702623,
+    "name": "Shallot/Giblet // Shallet (Alternate Art)",
+    "set": "Brightness of Hope",
+    "gid": 24716,
+    "game": "dragon-ball-fusion-world",
+    "now": 10670,
+    "old": 11161,
+    "pct": -4.4,
+    "rarity": "Leader"
+   }
+  ]
+ }
+]

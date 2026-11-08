@@ -1,0 +1,322 @@
+[
+ {
+  "sample": "pokemon-jumps",
+  "slides": 7,
+  "video": true,
+  "first": "5 Pokémon cards that jumped this week 📈 #1 is up 19%",
+  "yt": "5 Pokémon cards that jumped this week 📈 #1 is up 19% — which would you buy? #pokemon",
+  "cards": [
+   {
+    "id": 534634,
+    "name": "Kadabra",
+    "set": "Paldean Fates",
+    "gid": 23353,
+    "game": "pokemon",
+    "now": 1038,
+    "old": 874,
+    "pct": 18.8,
+    "rarity": "Shiny Rare"
+   },
+   {
+    "id": 560396,
+    "name": "Pecharunt ex - 085/064",
+    "set": "Shrouded Fable",
+    "gid": 23529,
+    "game": "pokemon",
+    "now": 1031,
+    "old": 905,
+    "pct": 13.9,
+    "rarity": "Ultra Rare"
+   },
+   {
+    "id": 593857,
+    "name": "Gravity Mountain - 250/191",
+    "set": "Surging Sparks",
+    "gid": 23651,
+    "game": "pokemon",
+    "now": 1221,
+    "old": 1090,
+    "pct": 12.0,
+    "rarity": "Hyper Rare"
+   },
+   {
+    "id": 535527,
+    "name": "Mew ex - 216/091",
+    "set": "Paldean Fates",
+    "gid": 23353,
+    "game": "pokemon",
+    "now": 3764,
+    "old": 3382,
+    "pct": 11.3,
+    "rarity": "Shiny Ultra Rare"
+   },
+   {
+    "id": 527902,
+    "name": "Chansey",
+    "set": "Trading Card Game Classic",
+    "gid": 23323,
+    "game": "pokemon",
+    "now": 1045,
+    "old": 947,
+    "pct": 10.3,
+    "rarity": "Classic Collection"
+   }
+  ]
+ },
+ {
+  "sample": "pokemon-under10",
+  "slides": 7,
+  "video": true,
+  "first": "5 Pokémon cards under $10 that are climbing 📈 #1 is up 57%",
+  "yt": "5 Pokémon cards under $10 that are climbing 📈 #1 is up 57% — which would you buy? #pokemon",
+  "cards": [
+   {
+    "id": 550238,
+    "name": "Wellspring Mask Ogerpon ex - 194/167",
+    "set": "Twilight Masquerade",
+    "gid": 23473,
+    "game": "pokemon",
+    "now": 460,
+    "old": 293,
+    "pct": 57.0,
+    "rarity": "Ultra Rare"
+   },
+   {
+    "id": 542921,
+    "name": "Explorer's Guidance - 200/162",
+    "set": "Temporal Forces",
+    "gid": 23381,
+    "game": "pokemon",
+    "now": 375,
+    "old": 266,
+    "pct": 41.0,
+    "rarity": "Ultra Rare"
+   },
+   {
+    "id": 534574,
+    "name": "Toxel",
+    "set": "Paldean Fates",
+    "gid": 23353,
+    "game": "pokemon",
+    "now": 559,
+    "old": 445,
+    "pct": 25.6,
+    "rarity": "Shiny Rare"
+   },
+   {
+    "id": 693464,
+    "name": "Cinccino ex - 105/086",
+    "set": "Chaos Rising",
+    "gid": 24655,
+    "game": "pokemon",
+    "now": 399,
+    "old": 319,
+    "pct": 25.1,
+    "rarity": "Ultra Rare"
+   },
+   {
+    "id": 693446,
+    "name": "Ampharos - 090/086",
+    "set": "Chaos Rising",
+    "gid": 24655,
+    "game": "pokemon",
+    "now": 456,
+    "old": 369,
+    "pct": 23.6,
+    "rarity": "Illustration Rare"
+   }
+  ]
+ },
+ {
+  "sample": "pokemon-highs",
+  "slides": 7,
+  "video": true,
+  "first": "5 Pokémon cards just hit a new high 🚀 #1 is up 20% this week",
+  "yt": "5 Pokémon cards just hit a new high 🚀 #1 is up 20% this week — which would you buy? #pokemon",
+  "cards": [
+   {
+    "id": 610369,
+    "name": "Flareon ex - 014/131",
+    "set": "Prismatic Evolutions",
+    "gid": 23821,
+    "game": "pokemon",
+    "now": 509,
+    "old": 425,
+    "pct": 19.8,
+    "rarity": "Double Rare"
+   },
+   {
+    "id": 550224,
+    "name": "Enamorus - 180/167",
+    "set": "Twilight Masquerade",
+    "gid": 23473,
+    "game": "pokemon",
+    "now": 863,
+    "old": 721,
+    "pct": 19.7,
+    "rarity": "Illustration Rare"
+   },
+   {
+    "id": 534634,
+    "name": "Kadabra",
+    "set": "Paldean Fates",
+    "gid": 23353,
+    "game": "pokemon",
+    "now": 1038,
+    "old": 874,
+    "pct": 18.8,
+    "rarity": "Shiny Rare"
+   },
+   {
+    "id": 676079,
+    "name": "Mega Diancie ex - 267/217",
+    "set": "Ascended Heroes",
+    "gid": 24541,
+    "game": "pokemon",
+    "now": 529,
+    "old": 461,
+    "pct": 14.8,
+    "rarity": "Mega Attack Rare"
+   },
+   {
+    "id": 560396,
+    "name": "Pecharunt ex - 085/064",
+    "set": "Shrouded Fable",
+    "gid": 23529,
+    "game": "pokemon",
+    "now": 1031,
+    "old": 905,
+    "pct": 13.9,
+    "rarity": "Ultra Rare"
+   }
+  ]
+ },
+ {
+  "sample": "pokemon-dip",
+  "slides": 7,
+  "video": true,
+  "first": "5 Pokémon cards that dropped this week 📉 #1 is down 60%. Buy the dip?",
+  "yt": "5 Pokémon cards that dropped this week 📉 #1 is down 60% — which would you buy? #pokemon",
+  "cards": [
+   {
+    "id": 713259,
+    "name": "Umbreon ex - 110 (30th Celebration)",
+    "set": "Mega Evolution Promo",
+    "gid": 24451,
+    "game": "pokemon",
+    "now": 7999,
+    "old": 19898,
+    "pct": -59.8,
+    "rarity": "Promo"
+   },
+   {
+    "id": 726565,
+    "name": "Eevee - 114/103",
+    "set": "Delta Reign",
+    "gid": 24831,
+    "game": "pokemon",
+    "now": 2587,
+    "old": 4653,
+    "pct": -44.4,
+    "rarity": "Illustration Rare"
+   },
+   {
+    "id": 713287,
+    "name": "Ditto - 106 (30th Celebration)",
+    "set": "Mega Evolution Promo",
+    "gid": 24451,
+    "game": "pokemon",
+    "now": 2757,
+    "old": 3922,
+    "pct": -29.7,
+    "rarity": "Promo"
+   },
+   {
+    "id": 726567,
+    "name": "Kecleon - 117/103",
+    "set": "Delta Reign",
+    "gid": 24831,
+    "game": "pokemon",
+    "now": 2342,
+    "old": 3204,
+    "pct": -26.9,
+    "rarity": "Illustration Rare"
+   },
+   {
+    "id": 712954,
+    "name": "Pikachu ex - 150/128",
+    "set": "30th Celebration",
+    "gid": 24722,
+    "game": "pokemon",
+    "now": 4074,
+    "old": 5535,
+    "pct": -26.4,
+    "rarity": "Special Illustration Rare"
+   }
+  ]
+ },
+ {
+  "sample": "pokemon-newset",
+  "slides": 7,
+  "video": true,
+  "first": "The 5 chase cards of Delta Reign 💎 #1 is worth $319.52",
+  "yt": "The 5 chase cards of Delta Reign 💎 #1 is worth $319.52 — which would you buy? #pokemon",
+  "cards": [
+   {
+    "id": 728061,
+    "name": "Mega Rayquaza ex - 138/103",
+    "set": "Delta Reign",
+    "gid": 24831,
+    "game": "pokemon",
+    "now": 31952,
+    "old": null,
+    "pct": null,
+    "rarity": "Special Illustration Rare"
+   },
+   {
+    "id": 728062,
+    "name": "Mega Rayquaza ex - 141/103",
+    "set": "Delta Reign",
+    "gid": 24831,
+    "game": "pokemon",
+    "now": 28488,
+    "old": null,
+    "pct": null,
+    "rarity": "Mega Hyper Rare"
+   },
+   {
+    "id": 726574,
+    "name": "Raikou ex",
+    "set": "Delta Reign",
+    "gid": 24831,
+    "game": "pokemon",
+    "now": 7974,
+    "old": null,
+    "pct": null,
+    "rarity": "Special Illustration Rare"
+   },
+   {
+    "id": 726576,
+    "name": "Zinnia's Trust - 140/103",
+    "set": "Delta Reign",
+    "gid": 24831,
+    "game": "pokemon",
+    "now": 3230,
+    "old": null,
+    "pct": null,
+    "rarity": "Special Illustration Rare"
+   },
+   {
+    "id": 728060,
+    "name": "Mega Golurk ex - 137/103",
+    "set": "Delta Reign",
+    "gid": 24831,
+    "game": "pokemon",
+    "now": 2879,
+    "old": null,
+    "pct": null,
+    "rarity": "Special Illustration Rare"
+   }
+  ]
+ }
+]
