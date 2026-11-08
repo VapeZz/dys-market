@@ -1,0 +1,73 @@
+name: Discord feeds
+
+# Every 30 minutes: watches our store (new products, back in stock, price drops of 10%+)
+# and the release feed (new releases, moved dates) and posts changes to Discord.
+# Sundays 9 AM Pacific: posts the next 14 days of releases.
+# Posts ONLY if the webhook secrets are set. Without them this is a harmless dry run.
+# Needs repo secrets: DISCORD_WEBHOOK_NEW_ARRIVALS and DISCORD_WEBHOOK_RELEASES.
+# Memory of what was already posted lives on the feeds-state branch (the nightly build never touches it).
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+    - cron: "3 17 * * 0"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "What to run"
+        type: choice
+        options: [all, store, releases, digest]
+        default: all
+      dry_run:
+        description: "Dry run: print what would be posted, post and save nothing"
+        type: boolean
+        default: true
+      sample:
+        description: "Dry run only: show N existing items as sample posts"
+        default: "0"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: discord-feeds
+  cancel-in-progress: false
+
+jobs:
+  feeds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Load what was already posted (feeds-state branch)
+        run: |
+          git clone -q --depth 1 --branch feeds-state "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" feeds-state 2>/dev/null || mkdir -p feeds-state
+
+      - name: Run the feeds
+        env:
+          DISCORD_WEBHOOK_NEW_ARRIVALS: ${{ secrets.DISCORD_WEBHOOK_NEW_ARRIVALS }}
+          DISCORD_WEBHOOK_RELEASES: ${{ secrets.DISCORD_WEBHOOK_RELEASES }}
+          MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || (github.event.schedule == '3 17 * * 0' && 'digest' || 'all') }}
+          DRY: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'yes' || 'no' }}
+          SAMPLE: ${{ github.event_name == 'workflow_dispatch' && inputs.sample || '0' }}
+        run: |
+          args=""
+          [ "$DRY" = "yes" ] && args="--dry-run --sample $SAMPLE"
+          python pipeline/feeds.py "$MODE" --state feeds-state/state.json $args
+
+      - name: Save what was posted
+        run: |
+          [ -f feeds-state/state.json ] || exit 0
+          cd feeds-state
+          if [ ! -d .git ]; then
+            git init -q -b feeds-state
+            git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          fi
+          git config user.name "dys-market-bot"
+          git config user.email "dys-market-bot@users.noreply.github.com"
+          git add state.json
+          git diff --cached --quiet || { git commit -q -m "Feed state $(date -u +%FT%TZ)"; git push -q origin HEAD:feeds-state; }
