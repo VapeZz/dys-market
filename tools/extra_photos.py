@@ -187,7 +187,7 @@ def pokemon_jp(audit, out, dry):
                 print("sample failed", x["image"], e)
             time.sleep(0.3)
         with open(os.path.join(out, "report.json"), "w", encoding="utf-8") as f:
-            json.dump({"matched": total, "sets": report, "samples": [[sn, c["n"], c["no"], x["localId"], x.get("name")] for sn, c, x in samples]},
+            json.dump({"matched": total, "dex_sets": dex, "sets": report, "samples": [[sn, c["n"], c["no"], x["localId"], x.get("name")] for sn, c, x in samples]},
                       f, ensure_ascii=False, indent=1)
     else:
         with open(os.path.join(out, "index.json"), "w", encoding="utf-8") as f:
