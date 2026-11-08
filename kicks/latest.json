@@ -1,0 +1,97 @@
+{
+ "date": "2026-11-09",
+ "mode": "recap",
+ "title": "Did it flip? Oct 30–Nov 7",
+ "first": "Did it flip? 📈 0 of last week's 5 drops made money on eBay after fees",
+ "caption": "Did it flip? 📈 0 of last week's 5 drops made money on eBay after fees\n\nOur calls before release: 2 of 4 right ✅\n\n1. Nike Kobe 3 Low Protro \"Mamba Eterno\": $190 retail → $264 eBay (+$23) · Wash (we said Cop)\n2. Nike Kobe 3 Low Protro \"Black\": $190 retail → $238 eBay (−$1) · Wash (we said Cop)\n3. Air Jordan 6 \"White Infrared\": $215 retail → $213 eBay (−$51) · Bricked (we said Cop to wear)\n4. New Balance Niobium C1 Tokyo Design Studio \"Black Magnet\": $300 retail → $291 eBay (−$71) · Bricked\n5. Air Jordan 3 \"Fireside\": $205 retail → $168 eBay (−$82) · Bricked (we said Wait)\n\neBay = median sold price (5+ sales) or the low end of new pairs listed. Profit after ~8% tax, eBay fees and shipping. Prices vary by size and change fast.\n\nDid you cop any of these? 👇 Think we got one wrong? Tell us.\n\n🛒 Links for every pair (eBay links are affiliate links): market.driveyourstyle.net/social-kicks (link in bio)\n\n#sneakers #sneakerreleases #copordrop #resell #sneakerhead #jordan #nike #kicks #sneakernews #lasvegas #driveyourstyle",
+ "caption_tiktok": "Did it flip? 📈 0 of last week's 5 drops made money on eBay after fees. Our calls went 2 for 4 Did you cop any of these? 👇 Think we got one wrong? Tell us. Links in bio #sneakers #copordrop #resell #jordan #nike",
+ "short_title": "Did these sneakers flip? Our calls went 2 for 4 👟",
+ "slides": [
+  "https://market.driveyourstyle.net/social-kicks/2026-11-09/slide-1.jpg",
+  "https://market.driveyourstyle.net/social-kicks/2026-11-09/slide-2.jpg",
+  "https://market.driveyourstyle.net/social-kicks/2026-11-09/slide-3.jpg",
+  "https://market.driveyourstyle.net/social-kicks/2026-11-09/slide-4.jpg",
+  "https://market.driveyourstyle.net/social-kicks/2026-11-09/slide-5.jpg",
+  "https://market.driveyourstyle.net/social-kicks/2026-11-09/slide-6.jpg",
+  "https://market.driveyourstyle.net/social-kicks/2026-11-09/slide-7.jpg",
+  "https://market.driveyourstyle.net/social-kicks/2026-11-09/slide-8.jpg"
+ ],
+ "slides_tiktok": [
+  "https://market.driveyourstyle.net/social-kicks/2026-11-09/tt-1.jpg",
+  "https://market.driveyourstyle.net/social-kicks/2026-11-09/tt-2.jpg",
+  "https://market.driveyourstyle.net/social-kicks/2026-11-09/tt-3.jpg",
+  "https://market.driveyourstyle.net/social-kicks/2026-11-09/tt-4.jpg",
+  "https://market.driveyourstyle.net/social-kicks/2026-11-09/tt-5.jpg",
+  "https://market.driveyourstyle.net/social-kicks/2026-11-09/tt-6.jpg",
+  "https://market.driveyourstyle.net/social-kicks/2026-11-09/tt-7.jpg",
+  "https://market.driveyourstyle.net/social-kicks/2026-11-09/tt-8.jpg"
+ ],
+ "short": "https://market.driveyourstyle.net/social-kicks/2026-11-09/short.mp4",
+ "page": "https://market.driveyourstyle.net/social-kicks/2026-11-09/",
+ "pairs": [
+  {
+   "c": "IO6260-800",
+   "n": "Nike Kobe 3 Low Protro \"Mamba Eterno\"",
+   "d": "2026-10-30",
+   "r": 190,
+   "v": 264.0,
+   "src": "sold",
+   "call": "wear",
+   "profit": 22.67999999999998,
+   "said": "cop",
+   "right": false
+  },
+  {
+   "c": "IV7127-002",
+   "n": "Nike Kobe 3 Low Protro \"Black\"",
+   "d": "2026-11-01",
+   "r": 190,
+   "v": 238.0,
+   "src": "sold",
+   "call": "wear",
+   "profit": -1.240000000000009,
+   "said": "cop",
+   "right": false
+  },
+  {
+   "c": "CT8529-105",
+   "n": "Air Jordan 6 \"White Infrared\"",
+   "d": "2026-11-07",
+   "r": 215,
+   "v": 213.0,
+   "src": "sold",
+   "call": "drop",
+   "profit": -51.24000000000001,
+   "said": "wear",
+   "right": true
+  },
+  {
+   "c": "MSNB16WS",
+   "n": "New Balance Niobium C1 Tokyo Design Studio \"Black Magnet\"",
+   "d": "2026-10-30",
+   "r": 300,
+   "v": 291.0,
+   "src": "sold",
+   "call": "drop",
+   "profit": -71.27999999999997,
+   "said": null,
+   "right": null
+  },
+  {
+   "c": "CK9246-200",
+   "n": "Air Jordan 3 \"Fireside\"",
+   "d": "2026-10-30",
+   "r": 205,
+   "v": 168.0,
+   "src": "sold",
+   "call": "drop",
+   "profit": -81.84,
+   "said": "wait",
+   "right": true
+  }
+ ],
+ "score": {
+  "right": 2,
+  "of": 4
+ }
+}

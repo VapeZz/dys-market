@@ -1,0 +1,96 @@
+{
+ "date": "2026-10-31",
+ "game": "pokemon",
+ "post": true,
+ "first": "This $9 Pokémon card sells for ??? in a PSA 10 👀 Guess before you swipe",
+ "caption": "This $9 Pokémon card sells for ??? in a PSA 10 👀 Guess before you swipe\n\nGuess the PSA 10 price of all 5 cheap Pokémon cards, then swipe for the answers. How close were you? 👇\n\nAnswers (no peeking 🙈):\n#1 Electivire GG08/GG70 (Crown Zenith: Galarian Gallery): $8.77 raw → $310 PSA 10 (35×)\n#2 Gengar V 156/264 (Fusion Strike): $11.70 raw → $355 PSA 10 (30×)\n#3 Scizor 205/197 (Obsidian Flames): $12.81 raw → $380 PSA 10 (30×)\n#4 Lugia V 138/195 (Silver Tempest): $14.56 raw → $236 PSA 10 (16×)\n#5 Articuno 161/159 (Journey Together): $14.05 raw → $191 PSA 10 (14×)\n\nPSA 10 = median eBay sold price over the last 30 days. Raw = TCGplayer market price. Not every card grades a 10, so check centering first (free centering tool at market.driveyourstyle.net).\n\n🛒 eBay links for all 5 (affiliate links): market.driveyourstyle.net/social-grade (link in bio)\n\n#pokemon #pokemoncards #pokemontcg #psa #psagrading #cardgrading #tcg",
+ "caption_tiktok": "Guess the PSA 10 👀 This $9 Pokémon card sells for how much graded? Comment your guess before the reveal 👇 eBay links for all 5 in bio #pokemon #pokemoncards #pokemontcg #psa #psagrading #cardgrading #tcg",
+ "short_title": "Guess the PSA 10 price 👀 This $9 Pokémon card sells for how much? #pokemon",
+ "slides": [
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/slide-1.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/slide-2.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/slide-3.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/slide-4.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/slide-5.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/slide-6.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/slide-7.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/slide-8.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/slide-9.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/slide-10.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/slide-11.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/slide-12.jpg"
+ ],
+ "slides_tiktok": [
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/tt-1.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/tt-2.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/tt-3.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/tt-4.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/tt-5.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/tt-6.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/tt-7.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/tt-8.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/tt-9.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/tt-10.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/tt-11.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/tt-12.jpg"
+ ],
+ "slides_reveal": [
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/slide-1.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/slide-3.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/slide-5.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/slide-7.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/slide-9.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/slide-11.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-10-31/slide-12.jpg"
+ ],
+ "story": "https://market.driveyourstyle.net/social-grade/2026-10-31/tt-1.jpg",
+ "short": "https://market.driveyourstyle.net/social-grade/2026-10-31/short.mp4",
+ "cards": [
+  {
+   "id": 478025,
+   "name": "Electivire",
+   "no": "GG08/GG70",
+   "raw": 8.77,
+   "p10": 310.0,
+   "sold": "8",
+   "days": 30
+  },
+  {
+   "id": 253370,
+   "name": "Gengar V",
+   "no": "156/264",
+   "raw": 11.7,
+   "p10": 355.0,
+   "sold": "16",
+   "days": 30
+  },
+  {
+   "id": 509952,
+   "name": "Scizor",
+   "no": "205/197",
+   "raw": 12.81,
+   "p10": 379.99,
+   "sold": "7",
+   "days": 30
+  },
+  {
+   "id": 450289,
+   "name": "Lugia V",
+   "no": "138/195",
+   "raw": 14.56,
+   "p10": 236.0,
+   "sold": "22+",
+   "days": 30
+  },
+  {
+   "id": 623588,
+   "name": "Articuno",
+   "no": "161/159",
+   "raw": 14.05,
+   "p10": 191.1,
+   "sold": "25+",
+   "days": 30
+  }
+ ],
+ "page": "https://market.driveyourstyle.net/social-grade/2026-10-31/"
+}
