@@ -15,7 +15,7 @@ from datetime import date, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from make_pages import HEAD  # noqa: E402
-from social import SKIP, clean_name, img, money, pick, short_set  # noqa: E402
+from social import SKIP, clean_name, img, money, pick, short_set, url_ok  # noqa: E402
 
 SITE = "https://market.driveyourstyle.net"
 STORE = "https://driveyourstyle.net"
@@ -229,7 +229,7 @@ def build_post(site, today):
 <p class="rp-fine">Market prices come from public TCGplayer data recorded nightly and can lag by a day. Percent changes compare to the price {"7 days ago" if win == "7" else "when tracking began"}. For research only, not financial advice.</p>
 </article>'''
     return {"slug": slug, "date": today.isoformat(), "title": title, "summary": summary,
-            "image": img(lead["id"], 400) if lead else None, "body": body}
+            "image": img(lead["id"], 400) if lead and url_ok(img(lead["id"], 400)) else None, "body": body}
 
 
 def page(title, desc, canon, body, ld=None):

@@ -12,6 +12,8 @@ import json
 import os
 import re
 import sys
+import urllib.error
+import urllib.request
 from datetime import date, timedelta
 
 from playwright.sync_api import sync_playwright
@@ -72,6 +74,8 @@ def pick(site_data, today, limit=5):
             bucket = "pokemon" if s["k"].startswith("pokemon") else "other"
             if i["id"] in used or per_set.get(s["id"], 0) >= 2 or quota[bucket] <= 0:
                 continue
+            if not url_ok(img(i["id"], 400)):   # every card shown needs its own photo
+                continue
             per_set[s["id"]] = per_set.get(s["id"], 0) + 1
             quota[bucket] -= 1
             used.add(i["id"])
@@ -108,6 +112,32 @@ body{width:1080px;height:1350px;overflow:hidden;background:#050404;color:#f2f0eb
 
 def img(pid, size=1000):
     return f"https://tcgplayer-cdn.tcgplayer.com/product/{pid}_in_{size}x{size}.jpg"
+
+
+OFFLINE = False   # --offline (local tests): photos are assumed to exist
+_ok = {}
+
+
+def url_ok(u):
+    """True if the URL serves a real image (TCGplayer answers 403/404 when a product has no photo)."""
+    if not u:
+        return False
+    if OFFLINE:
+        return True
+    if u not in _ok:
+        _ok[u] = False
+        for method in ("HEAD", "GET"):
+            try:
+                req = urllib.request.Request(u, method=method, headers={"User-Agent": "DriveYourStyleMarket/1.0 (+https://driveyourstyle.net)"})
+                with urllib.request.urlopen(req, timeout=20) as r:
+                    _ok[u] = r.status == 200 and r.headers.get("Content-Type", "").startswith("image")
+                break
+            except urllib.error.HTTPError as e:
+                if e.code in (403, 404, 410):
+                    break
+            except Exception:
+                pass
+    return _ok[u]
 
 
 def cover(cards, period):
@@ -147,6 +177,8 @@ def cta():
 
 
 def main(argv):
+    global OFFLINE
+    OFFLINE = "--offline" in argv
     site_data, out_root = argv[0], argv[1]
     today = date.fromisoformat(argv[argv.index("--date") + 1]) if "--date" in argv else date.today()
     cards, win, since = pick(site_data, today)

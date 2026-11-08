@@ -38,7 +38,7 @@ def decide(d, history):
 
 
 def body(d, lead):
-    from social import LOGO, esc, img
+    from social import LOGO, esc, img, url_ok
     money = lambda c: f"${c / 100:,.0f}" if c >= 10000 else f"${c / 100:,.2f}"
     day = date.fromisoformat(d["date"]).strftime("%b %-d").upper()
     tiles = "".join(
@@ -51,7 +51,7 @@ def body(d, lead):
     if lead:
         up = lead["d1"] >= 0
         lead_html = f'''<div style="margin-top:44px;width:920px;display:flex;gap:30px;align-items:center;border:3px solid rgba(242,240,235,.18);border-radius:26px;padding:26px;text-align:left">
-{"" if lead["k"] == "one-piece" else f'<div class="card" style="flex:0 0 230px;height:322px"><img src="{img(lead["id"])}"></div>'}
+{"" if lead["k"] == "one-piece" or not url_ok(img(lead["id"])) else f'<div class="card" style="flex:0 0 230px;height:322px"><img src="{img(lead["id"])}"></div>'}
 <div><div style="font-family:ui-monospace,Menlo,monospace;font-size:24px;letter-spacing:.12em;color:#e7b84a">TOP MOVER · 24H</div>
 <div style="font-family:'Barlow Condensed';font-weight:800;font-size:{56 if len(clean(lead["n"])) < 24 else 44}px;line-height:1;margin-top:10px;text-transform:uppercase">{esc(clean(lead["n"]))}</div>
 <div style="font-size:28px;color:#bdb9b2;margin-top:8px">{esc(lead["sn"])}</div>

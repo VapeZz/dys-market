@@ -98,21 +98,6 @@ def drop_slide(r):
 </div></div>"""
 
 
-def list_slide(week, span):
-    rows = sorted(week, key=lambda r: (r["d"], -r["h"]))[:11]
-    more = len(week) - len(rows)
-    li = "".join(
-        f'<div style="display:flex;gap:26px;align-items:baseline;padding:16px 0;border-bottom:2px solid rgba(255,255,255,.08)">'
-        f'<div style="flex:0 0 120px;font-family:\'Barlow Condensed\';font-weight:800;font-size:38px;color:#bdb9b2;text-transform:uppercase">{day(r["d"], "%a %d")}</div>'
-        f'<div style="flex:1;font-size:32px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{"🔥 " if r["h"] == 3 else ""}{esc(r["n"])}</div>'
-        f'<div style="font-family:\'Barlow Condensed\';font-weight:800;font-size:40px">{usd(r.get("r"))}</div></div>' for r in rows)
-    return f"""<div class="slide">
-<div class="top"><img class="logo" src="file://{LOGO}" style="height:72px"><div class="tag">Full list</div></div>
-<div style="margin-top:40px;font-family:'Barlow Condensed';font-weight:800;font-size:96px;line-height:.95;text-transform:uppercase">All drops <span class="holo">{esc(span)}</span></div>
-<div style="margin-top:24px">{li}</div>
-<div style="margin-top:auto;font-size:30px;color:#bdb9b2">{f"+{more} more · " if more > 0 else ""}Full calendar with resale checks at market.driveyourstyle.net</div></div>"""
-
-
 def cta():
     return f"""<div class="slide" style="justify-content:center;align-items:center;text-align:center">
 <img src="file://{LOGO}" style="height:200px">
@@ -132,7 +117,7 @@ def main(argv):
         print(f"sneaker social: only {len(feat)} drops next week; skipping")
         return
     span = f"{start:%b %-d}–{end:%-d}" if start.month == end.month else f"{start:%b %-d}–{end:%b %-d}"
-    slides = [cover(feat, span)] + [drop_slide(r) for r in feat] + [list_slide(week, span), cta()]
+    slides = [cover(feat, span)] + [drop_slide(r) for r in feat] + [cta()]   # no text-only "full list": every pair shown has its photo
     out = os.path.join(out_root, today.isoformat())
     os.makedirs(out, exist_ok=True)
     with sync_playwright() as p:
@@ -154,12 +139,13 @@ def main(argv):
     from tiktok import make_short
     video = make_short(tt, os.path.join(out, "short.mp4"), per=3.6)
     lines = [f"👟 Sneaker drops {span}", ""]
-    for r in sorted(week, key=lambda r: (r["d"], -r["h"])):
-        if r["h"] >= 2 or r in feat:
-            call = f" · our call: {VERDICT[r['pick']['v']][0]}" if r.get("pick") and r["pick"]["v"] in VERDICT else ""
-            lines.append(f"{'🔥' if r['h'] == 3 else '•'} {day(r['d'], '%a %-m/%-d')}: {r['n']} ({usd(r.get('r'))}){call}")
+    for r in sorted(feat, key=lambda r: (r["d"], -r["h"])):   # only pairs with a photo are named
+        call = f" · our call: {VERDICT[r['pick']['v']][0]}" if r.get("pick") and r["pick"]["v"] in VERDICT else ""
+        lines.append(f"{'🔥' if r['h'] == 3 else '•'} {day(r['d'], '%a %-m/%-d')}: {r['n']} ({usd(r.get('r'))}){call}")
+    more = len(week) - len(feat)
     lines += ["", "Which pair are you copping? 👇", "",
-              "Full release calendar with reminders and StockX/GOAT/eBay resale checks at market.driveyourstyle.net (link in bio). Dates can change.",
+              (f"+{more} more drops this week on the full calendar. " if more > 0 else "") +
+              "Release calendar with reminders and StockX/GOAT/eBay resale checks at market.driveyourstyle.net (link in bio). Dates can change.",
               "", HASHTAGS]
     caption = "\n".join(lines)
     open(os.path.join(out, "caption.txt"), "w").write(caption)

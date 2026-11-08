@@ -34,6 +34,24 @@ ROTATION = ["pokemon", "one-piece", "yugioh", "pokemon", "riftbound", "lorcana",
 BENCH = ["union-arena", "palworld"]
 
 
+def has_photo(pid):
+    """True if TCGplayer serves a photo for this product (403/404 when there is none)."""
+    import urllib.error
+    import urllib.request
+    u = f"https://tcgplayer-cdn.tcgplayer.com/product/{pid}_in_1000x1000.jpg"
+    for method in ("HEAD", "GET"):
+        try:
+            req = urllib.request.Request(u, method=method, headers={"User-Agent": "DriveYourStyleMarket/1.0 (+https://driveyourstyle.net)"})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                return r.status == 200 and r.headers.get("Content-Type", "").startswith("image")
+        except urllib.error.HTTPError as e:
+            if e.code in (403, 404, 410):
+                return False
+        except Exception:
+            pass
+    return True   # couldn't tell (network hiccup): the Grade it? build fails safely if the photo is really missing
+
+
 def scan(rows, once, game, recent, mx, mm):
     """eBay PSA 10 asks for up to mx cheap cards of one game; returns (hits sorted best first, searches made)."""
     games = {"pokemon": ("pokemon",), "pokemon-jp": ("pokemon-jp",)}.get(game, (game,))
@@ -112,6 +130,8 @@ def main(argv):
             best_try = (g, hits, t)
             break
     game, hits, t = best_try
+    if game != "one-piece":   # One Piece slides use Bandai's official image instead of TCGplayer's watermarked one
+        hits = [h for h in hits[:60] if has_photo(h["id"])]   # every card shown needs its own photo
     if game != tries[0]:
         print(f"::notice title=Grade scout::{tries[0]} had too few candidates; using {game}")
     if rp and len(tries) > 1:

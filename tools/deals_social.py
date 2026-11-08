@@ -14,7 +14,8 @@ import sys
 from datetime import date, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from social import BASE, FONT_CSS, LOGO, esc, img, money  # noqa: E402
+import social  # noqa: E402
+from social import BASE, FONT_CSS, LOGO, esc, img, money, url_ok  # noqa: E402
 
 SITE = "https://market.driveyourstyle.net"
 STORE = "https://driveyourstyle.net"
@@ -36,7 +37,7 @@ def pick(site_data):
         if off >= MIN_OFF:
             out.append({**r, "off": off, "name": clean(r["n"])})
     out.sort(key=lambda r: (-r["off"], -r["m"]))
-    return out[:MAX_ITEMS]
+    return [r for r in out if url_ok(img(r["id"], 400))][:MAX_ITEMS]   # every product shown needs its own photo
 
 
 def cover(items):
@@ -80,6 +81,7 @@ def main(argv):
     site_data, out_root = argv[0], argv[1]
     today = date.fromisoformat(argv[argv.index("--date") + 1]) if "--date" in argv else date.today()
     force = "--force" in argv
+    social.OFFLINE = "--offline" in argv
     os.makedirs(out_root, exist_ok=True)
     hpath = os.path.join(out_root, "history.json")
     try:
