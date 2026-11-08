@@ -1,0 +1,24 @@
+name: Extra card photos
+# Photos for cards with no photo anywhere on TCGplayer, only from sources whose written terms allow it
+# (tools/extra_photos.py). Results go to the card-photos branch; the nightly build copies them into the site.
+on:
+  schedule:
+    - cron: "47 11 * * 6"   # Saturdays ~3:47 AM PT, after the photo audit
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  photos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          git fetch -q --depth 1 origin img-audit && git show FETCH_HEAD:img-audit.json > /tmp/img-audit.json
+          mkdir -p /tmp/photos
+          if git fetch -q --depth 1 origin card-photos; then git archive FETCH_HEAD | tar -x -C /tmp/photos; fi
+          python3 tools/extra_photos.py audit=/tmp/img-audit.json out=/tmp/photos | tee /tmp/photos/log.txt
+          cd /tmp/photos
+          git init -q -b card-photos && git config user.name dys-market-bot && git config user.email dys-market-bot@users.noreply.github.com
+          git add -A && git commit -qm "Extra card photos $(date -u +%F)"
+          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" card-photos
