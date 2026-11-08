@@ -257,7 +257,7 @@ table.cmp th:first-child,table.cmp td:first-child{width:32%}
 .cal-body{min-width:0}
 .cal-name{font-weight:600}
 .cal-meta{font-size:13px;margin-top:2px}
-@media (max-width:520px){.cal-img{display:none}}
+@media (max-width:520px){.cal-img{flex-basis:44px;width:44px;height:44px}}
 
 /* deals, chase cards */
 .badge.deal{background:rgba(245,185,66,.16);color:#f5b942}
@@ -1524,3 +1524,12 @@ section.block.hub-sec{padding:6px 0 14px}
 .prod-img{position:relative}
 .borrow-note{display:none;position:absolute;left:50%;bottom:10px;transform:translateX(-50%);max-width:calc(100% - 20px);padding:5px 11px;border-radius:999px;background:rgba(11,13,20,.82);color:#fff;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .prod-img:has(img.borrowed) .borrow-note{display:block}
+/* release calendar: logo and code tiles when a set has no photo yet */
+.cal-img.logo{padding:4px;background:#fff}
+.cal-ph{display:grid;place-items:center;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 32%,var(--surface-2)),var(--surface-2));border:1px solid var(--line)}
+.cal-ph b{font:700 12px/1 var(--display);letter-spacing:.04em;color:var(--ink);text-align:center;padding:0 3px;word-break:break-all}
+.cal-ph.g-pokemon,.cal-ph.g-pokemon-jp{background:linear-gradient(135deg,#f5c84c55,var(--surface-2))}
+.cal-ph.g-one-piece{background:linear-gradient(135deg,#e2484855,var(--surface-2))}
+.cal-ph.g-gundam{background:linear-gradient(135deg,#3b82f655,var(--surface-2))}
+.cal-ph.g-yugioh{background:linear-gradient(135deg,#a16bff55,var(--surface-2))}
+.cal-ph.g-dragon-ball-fusion-world{background:linear-gradient(135deg,#ff8a3d55,var(--surface-2))}

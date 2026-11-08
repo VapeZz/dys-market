@@ -55,6 +55,13 @@ window.dysImg = (el) => {
   el.dataset.hops = hops + 1;   // no photo yet (new variant): show the same card's other version
   getJSON("img-alt.json").then((a) => { const n = a[m[1]]; if (n) { el.classList.add("borrowed"); el.src = img(n, m[2] === "in_1000x1000" ? 1000 : parseInt(m[2])); } else none(); }).catch(none);
 };
+// several photo candidates (a set's box, other sealed, top cards): try each until one loads, then a fallback tile
+window.dysNext = (el) => {
+  const q = (el.dataset.next || "").split(",").filter(Boolean);
+  if (q.length) { el.dataset.next = q.slice(1).join(","); el.src = img(q[0], +el.dataset.size || 200); } else el.outerHTML = el.dataset.ph;
+};
+const picTag = (ids, cls, ph, size = 200) => ids.length
+  ? `<img class="${cls}" src="${img(ids[0], size)}" data-next="${ids.slice(1).join(",")}" data-size="${size}" data-ph="${esc(ph)}" alt="" loading="lazy" onerror="dysNext(this)">` : ph;
 // shown on a card's page when its photo is borrowed from another printing (img-alt.json) until TCGplayer adds one
 const BORROW_NOTE = `<span class="borrow-note">Photo from another printing of this card</span>`;
 const imgTag = (id, cls = "thumb", size = 200, alt = "") =>
@@ -605,8 +612,9 @@ function eraOf(s) {
 const NEWG = new Set(["lorcana", "riftbound", "palworld", "gundam", "union-arena", "yugioh", "dragon-ball-fusion-world"]);
 function setTile(s, today) {
   return `<a class="stile" href="set.html?id=${s.id}">
-      <span class="simg${s.lg ? " logo" : s.tc?.length && (!s.bbId || NEWG.has(s.k)) ? " fan" : ""}">${s.lg ? `<img src="${esc(s.lg)}" alt="${esc(s.n)} logo" loading="lazy">` : s.bbId && !(s.tc?.length && NEWG.has(s.k)) ? imgTag(s.bbId, "", 1000)
-        : s.tc?.length ? s.tc.map(([id, im]) => `<span class="fc">${imgTag(id, "", 400, im || "")}</span>`).join("") : `<span class="sph">${esc((s.a || s.n).slice(0, 8))}</span>`}${s.pub && s.pub > today ? `<span class="badge up-next">Upcoming</span>` : ""}</span>
+      <span class="simg${s.lg ? " logo" : s.tc?.length && (!s.bbId || NEWG.has(s.k)) ? " fan" : ""}">${s.lg ? `<img src="${esc(s.lg)}" alt="${esc(s.n)} logo" loading="lazy">` : s.bbId && !(s.tc?.length && NEWG.has(s.k)) ? (s.pics ? picTag(s.pics, "", `<span class="sph">${esc((s.a || s.n).slice(0, 8))}</span>`, 1000) : imgTag(s.bbId, "", 1000))
+        : s.tc?.length ? s.tc.map(([id, im]) => `<span class="fc">${imgTag(id, "", 400, im || "")}</span>`).join("")
+        : s.pics?.length ? picTag(s.pics, "", `<span class="sph">${esc((s.a || s.n).slice(0, 8))}</span>`, 1000) : `<span class="sph">${esc((s.a || s.n).slice(0, 8))}</span>`}${s.pub && s.pub > today ? `<span class="badge up-next">Upcoming</span>` : ""}</span>
       <span class="sname">${esc(s.n.replace(/^(ME|SV|SWSH|SM|M)\d*[a-z]?:\s*/i, ""))}</span>
       <span class="smeta">${s.pub ? new Date(s.pub + "T12:00:00").toLocaleDateString("en-US", s.pub > today ? { month: "short", day: "numeric", year: "numeric" } : { month: "short", year: "numeric" }) : "—"}</span></a>`;
 }
@@ -1210,6 +1218,12 @@ function compareChart(el, series, rangeDays) {
   hit.addEventListener("mouseleave", leave); hit.addEventListener("touchend", leave);
 }
 
+// calendar photo: box -> other sealed -> top cards -> set logo -> a tile with the set code and game
+function calPic(s) {
+  const code = (s.a || s.n.replace(/^[^:]*:\s*/, "").split(/\s+/).map((w) => w[0]).join("").slice(0, 4)).toUpperCase();
+  const tile = s.lg ? `<img class="cal-img logo" src="${esc(s.lg)}" alt="" loading="lazy">` : `<span class="cal-img cal-ph g-${esc(s.k)}"><b>${esc(code)}</b></span>`;
+  return picTag(s.pics || (s.bbId ? [s.bbId] : []), "cal-img", tile);
+}
 async function pageCalendar() {
   const [meta, sets, announced] = await Promise.all([getJSON("meta.json"), getJSON("sets.json"), getJSON("announced.json").catch(() => [])]);
   const gl = Object.fromEntries(meta.games.map((g) => [g.slug, g.label]));
@@ -1229,7 +1243,7 @@ async function pageCalendar() {
         const d = new Date(s.pub + "T12:00:00");
         const tag = s.id ? "a" : "div";   // announced sets have no page yet
         return `<${tag} class="cal-item${s.id ? "" : " ann"}"${s.id ? ` href="set.html?id=${s.id}"` : ""}><div class="cal-date"><b>${d.getDate()}</b><span>${d.toLocaleDateString("en-US", { month: "short" })}</span></div>
-          ${s.bbId ? imgTag(s.bbId, "cal-img") : `<span class="cal-img"></span>`}
+          ${calPic(s)}
           <div class="cal-body"><div class="cal-name">${esc(s.n)}${s.pub > today ? ` <span class="badge up-next">${s.id ? "Upcoming" : "Announced"}</span>` : ""}</div>
           <div class="muted cal-meta">${esc(gl[s.k] || s.k)}${s.a && !s.id ? ` · ${esc(s.a)}` : ""}${s.np ? ` · ${s.np} products` : ""}${s.bb ? ` · ${esc(/booster box/i.test(s.bbN || "") ? "Booster box" : "Main sealed")} ${money(s.bb)}` : ""}${s.id ? "" : " · Prices once it's on TCGplayer"}</div></div></${tag}>`;
       }).join("")}</div>`).join("");

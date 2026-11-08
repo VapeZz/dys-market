@@ -234,6 +234,27 @@ def build(groups, products, stock, log=print):
         ids += [x for x in cards_in.get(gid, []) if x not in ids][: 3 - len(ids)]
         return [[int(x), ptcg_img(ptcg[gid], products[x].get("no")) if gid in ptcg else None] for x in ids]
 
+    prods_of = {}
+    for pid, p in products.items():
+        prods_of.setdefault(str(p["g"]), []).append(pid)
+    recent_cut = (date.fromisoformat(latest_day) - timedelta(days=120)).isoformat()
+
+    def pics(gid, keys, bb_key):
+        """Photo candidates for the release calendar and new-set tiles, tried in order until one loads: the main
+        sealed product, other sealed, then the top cards (TCGplayer often has card photos before box photos)."""
+        price = {}
+        for k in keys:
+            pid = k.split(":", 1)[0]
+            price[pid] = max(price.get(pid, 0), latest[k])
+        allp = prods_of.get(gid, [])
+        sealed = sorted((x for x in allp if products[x]["t"] == "s" and not re.search(r"\bcase\b", products[x]["n"], re.I)), key=lambda x: -price.get(x, 0))
+        cards = sorted((x for x in allp if products[x]["t"] == "c"), key=lambda x: -price.get(x, 0))
+        out = []
+        for x in ([bb_key.split(":")[0]] if bb_key else []) + sealed + cards:
+            if x not in out:
+                out.append(x)
+        return [int(x) for x in out[:6]]
+
     sets_out = []
     has_products = {str(p["g"]) for p in products.values()}
     for gid, g in groups.items():
@@ -262,6 +283,7 @@ def build(groups, products, stock, log=print):
             "bbN": products[bb_key.split(":")[0]]["n"] if bb_key else None,
             "c7": sealed_change.get(gid),
             **({"lg": g["lg"]} if g.get("lg") else {}),
+            **({"pics": pics(gid, keys, bb_key)} if not g["pub"] or g["pub"] >= recent_cut else {}),   # recent, upcoming, undated
             # newer games: show the set's top cards rather than a booster box when there's no logo
             **({"tc": top_cards(gid, keys)} if not g.get("lg") and (not bb_key or g["k"] in ("lorcana", "riftbound", "palworld", "gundam", "union-arena", "yugioh", "dragon-ball-fusion-world")) else {}),
         })
