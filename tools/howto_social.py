@@ -21,7 +21,7 @@ import urllib.request
 from datetime import date
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from social import BASE, FONT_CSS, LOGO, esc, money  # noqa: E402
+from social import BASE, FONT_CSS, LOGO, esc, img, money, url_ok  # noqa: E402
 
 SITE = "https://market.driveyourstyle.net"
 TAGS = "#pokemontcg #pokemoncards #pokemon #tcg #onepiecetcg #tradingcards #cardcollector #pokemoncollector #pokemoninvesting #driveyourstyle"
@@ -65,6 +65,8 @@ def features(ex):
                                           "max": round(x["p"] * (1.1 if i % 2 == 0 else 0.85) / 100) * 100, "ts": 0} for i, x in enumerate(ex[6:11])])
     return [
         {"key": "price", "cover": 2, "tag": "Free price check",
+         "guess": {"q": ("Guess this", "card's price"), "cards": [c], "answer": c["p"], "what": f"{c['name']} today",
+                   "first": f"Guess what this {c['name']} is worth today 👀 Answer in the last slide"},
          "hooks": [("What's your card", "worth today?"), ("Stop guessing", "card prices")],
          "sub": "Look up any card in 5 seconds. Free, no sign-up.",
          "steps": [("Search any card", "Name, set or card number. 120,000+ cards across 10 games.", {"url": f"search.html?q={c['name']}"}),
@@ -92,6 +94,9 @@ def features(ex):
                    "3. See your centering % and the best PSA, CGC and BGS grade it allows", "Your photo stays on your phone. Nothing is uploaded."],
          "yt": "Will your Pokémon card get a PSA 10? 📏 Free centering check #pokemon"},
         {"key": "collection", "cover": 2, "tag": "Collection tracker",
+         "guess": {"q": ("Guess what", "this binder's worth"), "cards": cards, "answer": sum(x["p"] for x in cards),
+                   "what": f"These {len(cards)} cards today",
+                   "first": f"Guess what this binder of {len(cards)} Pokémon cards is worth 👀 Answer in the last slide"},
          "hooks": [("What's your binder", "worth?"), ("Track your", "collection value")],
          "sub": "Add your cards and watch the total value update every night.",
          "steps": [("Add your cards", "Search, scan with your camera or tap + on any card.", {"url": f"search.html?q={cards[1]['name']}"}),
@@ -224,6 +229,42 @@ def step(n, total, title, text, img):
 <div style="margin-top:30px">{phone(img, 490, 720 / 390)}</div></div>"""
 
 
+def _cards(g, big):
+    cs = g["cards"]
+    if len(cs) == 1:
+        w = 420 if big else 380
+        return f'<div class="card" style="width:{w}px;height:{round(w * 1.4)}px"><img src="{img(cs[0]["id"])}"></div>'
+    w = 150 if big else 132
+    return ('<div style="display:grid;grid-template-columns:repeat(3,auto);gap:14px">' +
+            "".join(f'<div class="card" style="width:{w}px;height:{round(w * 1.4)}px"><img src="{img(x["id"], 400)}"></div>' for x in cs[:6]) + "</div>")
+
+
+def guess_cover(f, g):
+    """Challenge cover: guess the number first, then the steps show how to check it free, the last slide has the answer."""
+    return f"""<div class="slide">
+<div class="top"><img class="logo" src="file://{LOGO}"><div class="tag">Challenge</div></div>
+<div style="display:flex;gap:40px;margin-top:56px;flex:1;align-items:center">
+ <div style="flex:1;display:flex;flex-direction:column">
+  <div style="font-family:'Barlow Condensed';font-weight:800;font-size:110px;line-height:.92;text-transform:uppercase">{esc(g['q'][0])}<br><span class="holo">{esc(g['q'][1])}</span></div>
+  <div style="margin-top:26px;font-family:'Barlow Condensed';font-weight:800;font-size:150px;line-height:1" class="holo">$???</div>
+  <div style="margin-top:22px;font-size:34px;line-height:1.3;color:#d8d5cf">Comment your guess. Answer on the last slide, plus how to check any card free.</div>
+ </div>
+ <div>{_cards(g, False)}</div>
+</div>
+<div class="bar" style="margin:34px 0 26px"></div>
+<div class="foot"><span>Guess, then swipe →</span><span>market.driveyourstyle.net</span></div></div>"""
+
+
+def answer(f, g):
+    return f"""<div class="slide" style="align-items:center;text-align:center">
+<div class="top" style="width:100%"><img class="logo" src="file://{LOGO}" style="height:72px"><div class="tag">The answer</div></div>
+<div style="margin-top:40px">{_cards(g, True)}</div>
+<div style="margin-top:34px;font-size:40px;color:#d8d5cf">{esc(g['what'])}</div>
+<div style="font-family:'Barlow Condensed';font-weight:800;font-size:190px;line-height:1" class="holo">{money(g['answer'])}</div>
+<div style="margin-top:10px;font-family:'Barlow Condensed';font-weight:800;font-size:64px;text-transform:uppercase">How close were you?</div>
+<div style="margin-top:auto;font-size:26px;color:#8f8a84">Price: TCGplayer market, checked with our free {esc(f['tag'].lower())}</div></div>"""
+
+
 def cta(f):
     return f"""<div class="slide" style="justify-content:center;align-items:center;text-align:center">
 <img src="file://{LOGO}" style="height:190px">
@@ -270,7 +311,16 @@ def main(argv):
             shoot(b, root + spec["url"], spec, path, out, offline)
             shots.append(path)
         srv.shutdown()
-        slides = [cover(f, hook, shots[f.get('cover', 1) - 1])] + [step(i, len(shots), t, d, shots[i - 1]) for i, (t, d, _) in enumerate(f["steps"], 1)] + [cta(f)]
+        g = f.get("guess")
+        if g and not offline and not all(url_ok(img(x["id"], 400)) for x in g["cards"]):
+            g = None   # every card shown needs its own photo: no challenge this time
+        steps_ = [step(i, len(shots), t, d, shots[i - 1]) for i, (t, d, _) in enumerate(f["steps"], 1)]
+        if g:
+            slides = [guess_cover(f, g)] + steps_ + [answer(f, g), cta(f)]
+            per = [3.4] + [3.6] * len(steps_) + [3.6, 3.2]
+        else:
+            slides = [cover(f, hook, shots[f.get('cover', 1) - 1])] + steps_ + [cta(f)]
+            per = 3.6
         pg = b.new_page(viewport={"width": 1080, "height": 1350})
         if offline:
             pg.route(re.compile(r"tcgplayer-cdn"), lambda r: r.fulfill(path=os.environ["FAKE_CARD"], content_type="image/jpeg"))
@@ -289,16 +339,19 @@ def main(argv):
         if os.path.exists(s):
             os.remove(s)
     from tiktok import make_short
-    video = make_short(tt, os.path.join(out, "short.mp4"), per=3.6)
+    video = make_short(tt, os.path.join(out, "short.mp4"), per=per)
 
     first = f"🛠️ {hook[0]} {hook[1]}? Here's a free tool for it" if not hook[1].endswith("?") else f"🛠️ {hook[0]} {hook[1]} Here's a free tool for it"
-    caption = "\n".join([first, "", f"{f['tag']} on market.driveyourstyle.net (link in bio):", *f["lines"], "",
+    if g:
+        first = f"🛠️ {g['first']}"
+    caption = "\n".join([first, *(["How close were you? 👇 Then try it free:"] if g else []), "", f"{f['tag']} on market.driveyourstyle.net (link in bio):", *f["lines"], "",
                          "Free, no sign-up. Pokémon, One Piece, Lorcana, Riftbound and 6 more games, prices updated every night.",
                          "Save this for your next card show 🔖", "", TAGS])
-    caption_tt = (f"{hook[0]} {hook[1]}{'' if hook[1].endswith('?') else ''} 👀 Free {f['tag'].lower()} at market.driveyourstyle.net (link in bio)\n\n"
-                  "Save this for later 🔖\n\n#pokemon #pokemoncards #pokemontcg #tcg #cardcollecting")
+    caption_tt = ((f"{g['first']} Comment your guess, then check any card free at market.driveyourstyle.net (link in bio)\n\n" if g else
+                   f"{hook[0]} {hook[1]}{'' if hook[1].endswith('?') else ''} 👀 Free {f['tag'].lower()} at market.driveyourstyle.net (link in bio)\n\n")
+                  + "Save this for later 🔖\n\n#pokemon #pokemoncards #pokemontcg #tcg #cardcollecting")
     web = f"{SITE}/social-howto/{today.isoformat()}"
-    post = {"date": today.isoformat(), "post": True, "feature": key, "tag": f["tag"], "hook": " ".join(hook),
+    post = {"date": today.isoformat(), "post": True, "feature": key, "tag": f["tag"], "hook": " ".join(g["q"] if g else hook), "challenge": bool(g),
             "caption": caption, "caption_tiktok": caption_tt, "title": f"{f['tag']} 🛠️",
             "slides": [f"{web}/slide-{n}.jpg" for n in range(1, len(slides) + 1)],
             "slides_tiktok": [f"{web}/tt-{n}.jpg" for n in range(1, len(tt) + 1)],

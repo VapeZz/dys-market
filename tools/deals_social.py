@@ -2,7 +2,8 @@
 
     python tools/deals_social.py site/data data/social-deals [--date YYYY-MM-DD] [--force] [--offline]
 
-Posts only when there are real deals: at least 3 in-stock products priced 2%+ under market.
+Posts only when there are real deals: an in-stock product counts if it is 5%+ under market AND saves $3+.
+Needs 2+ of them, or 1 big one (10%+ and $10+ off) posted as "Deal of the week".
 Skips when the deals are the same as a post from the last 14 days (same products at the same prices).
 Writes <out>/<date>/slide-N.jpg (1080x1350), tt-N.jpg (1080x1920), short.mp4, post.json and <out>/latest.json
 ({"post": false, "reason"} on skipped weeks). The nightly job copies it to market.driveyourstyle.net/social-deals/.
@@ -19,7 +20,8 @@ from social import BASE, FONT_CSS, LOGO, esc, img, money, url_ok  # noqa: E402
 
 SITE = "https://market.driveyourstyle.net"
 STORE = "https://driveyourstyle.net"
-MIN_OFF, MIN_ITEMS, MAX_ITEMS = 0.02, 3, 5
+MIN_OFF, MIN_SAVE, MIN_ITEMS, MAX_ITEMS = 0.05, 300, 2, 5    # 5%+ under market and $3+ saved; 2+ items
+BIG_OFF, BIG_SAVE = 0.10, 1000                                 # or one item 10%+ and $10+ off
 TAGS = "#pokemontcg #pokemoncards #pokemon #tcg #onepiecetcg #tradingcards #cardcollector #lasvegas #vegaspokemon #driveyourstyle"
 
 
@@ -34,7 +36,7 @@ def pick(site_data):
         if not r.get("m") or not r.get("p") or r["p"] <= 0:
             continue
         off = 1 - r["p"] / r["m"]
-        if off >= MIN_OFF:
+        if off >= MIN_OFF and r["m"] - r["p"] >= MIN_SAVE:
             out.append({**r, "off": off, "name": clean(r["n"])})
     out.sort(key=lambda r: (-r["off"], -r["m"]))
     return [r for r in out if url_ok(img(r["id"], 400))][:MAX_ITEMS]   # every product shown needs its own photo
@@ -45,11 +47,13 @@ def cover(items):
         f'<div class="card" style="position:absolute;width:300px;height:300px;left:{x}px;top:{y}px;transform:rotate({rot}deg);z-index:{z}">'
         f'<img src="{img(c["id"], 400)}" style="padding:14px"></div>'
         for c, (x, y, rot, z) in zip(items, [(372, 60, 0, 5), (140, 110, -10, 4), (604, 110, 10, 4), (-40, 200, -18, 3), (794, 200, 18, 3)]))
-    top = max(i["off"] for i in items)
+    best = max(items, key=lambda i: i["m"] - i["p"])
+    title = "Deal of<br><span class=\"holo\">the week</span>" if len(items) == 1 else "Under<br><span class=\"holo\">market</span>"
     return f"""<div class="slide">
 <div class="top"><img class="logo" src="file://{LOGO}"><div class="tag">In stock now</div></div>
-<div style="margin-top:56px;font-family:'Barlow Condensed';font-weight:800;font-size:138px;line-height:.9;text-transform:uppercase">Under<br><span class="holo">market</span></div>
-<div style="margin-top:22px;font-size:40px;color:#d8d5cf">{len(items)} deals this week · up to {top * 100:.0f}% under market price</div>
+<div style="margin-top:56px;font-family:'Barlow Condensed';font-weight:800;font-size:138px;line-height:.9;text-transform:uppercase">{title}</div>
+<div style="margin-top:22px;font-size:44px;color:#f2f0eb;font-weight:700">Save {money(best['m'] - best['p'])} on {esc(best['name'])}</div>
+<div style="margin-top:10px;font-size:34px;color:#d8d5cf">{f"{len(items)} real deals this week" if len(items) > 1 else "A real deal this week"} · priced under today's market</div>
 <div style="position:relative;flex:1;margin-top:40px">{fan}</div>
 <div class="bar" style="margin-bottom:26px"></div>
 <div class="foot"><span>Swipe for prices →</span><span>Ships from Las Vegas</span></div></div>"""
@@ -91,8 +95,9 @@ def main(argv):
     items = pick(site_data)
     sig = "|".join(f"{i['id']}:{i['p']}" for i in sorted(items, key=lambda i: i["id"]))
     reason = ""
-    if len(items) < MIN_ITEMS:
-        reason = f"only {len(items)} in-stock products are 2%+ under market; need {MIN_ITEMS}"
+    if len(items) < MIN_ITEMS and not (items and items[0]["off"] >= BIG_OFF and items[0]["m"] - items[0]["p"] >= BIG_SAVE):
+        reason = (f"only {len(items)} in-stock product(s) are 5%+ under market and $3+ off; need {MIN_ITEMS} "
+                  "(or one 10%+ and $10+ off)")
     elif not force and any(h["sig"] == sig and h["date"] >= (today - timedelta(days=14)).isoformat() for h in history if h["date"] != today.isoformat()):
         reason = "same deals as a post in the last 14 days"
     if reason:
@@ -122,13 +127,15 @@ def main(argv):
         b.close()
     from tiktok import make_short
     video = make_short(tt, os.path.join(out, "short.mp4"), per=3.4)
-    lines = [f"🔥 In stock & under market this week ({today:%b %-d})", ""]
+    best = max(items, key=lambda c: c["m"] - c["p"])
+    lines = [f"🔥 Save {money(best['m'] - best['p'])} on {best['name']}: {'real deals' if len(items) > 1 else 'deal of the week'}, in stock and under market ({today:%b %-d})",
+             "Market price: TCGplayer market", ""]
     lines += [f"• {c['name']}: {money(c['p'])} (market {money(c['m'])}, {c['off'] * 100:.0f}% under)" for c in items]
     lines += ["", "Limited stock, ships from Las Vegas. Shop at driveyourstyle.net (link in bio) or DM us to hold one.", "",
               "Market prices are today's TCGplayer market prices, tracked every night at market.driveyourstyle.net.", "", TAGS]
     caption = "\n".join(lines)
     top = items[0]
-    caption_tt = (f"In stock and under market price this week 🔥 {top['name']} is {top['off'] * 100:.0f}% under market\nMarket price: TCGplayer market\n\n"
+    caption_tt = (f"Save {money(best['m'] - best['p'])} on {best['name']} 🔥 {best['off'] * 100:.0f}% under market, in stock now\nMarket price: TCGplayer market\n\n"
                   "Shop at driveyourstyle.net (link in bio)\n\n#pokemon #pokemoncards #pokemontcg #tcg #cardcollecting")
     base = f"{SITE}/social-deals/{today.isoformat()}"
     post = {"date": today.isoformat(), "post": True, "caption": caption, "caption_tiktok": caption_tt,

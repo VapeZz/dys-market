@@ -229,7 +229,81 @@ def build_post(site, today):
 <p class="rp-fine">Market prices come from public TCGplayer data recorded nightly and can lag by a day. Percent changes compare to the price {"7 days ago" if win == "7" else "when tracking began"}. For research only, not financial advice.</p>
 </article>'''
     return {"slug": slug, "date": today.isoformat(), "title": title, "summary": summary,
-            "image": img(lead["id"], 400) if lead and url_ok(img(lead["id"], 400)) else None, "body": body}
+            "image": img(lead["id"], 400) if lead and url_ok(img(lead["id"], 400)) else None, "body": body,
+            "movers": {"sealed": (s_up, s_down), "vintage": (v_up, v_down)}, "sets": sets, "span": span, "win": win}
+
+
+def report_video(p, out):
+    """~30 s video for the weekly report, made from the parts the Monday Trending post doesn't show:
+    sealed product and vintage card movers (every item shown has its photo). Returns (short_url, slide_urls) or (None, [])."""
+    import social
+    from social import BASE, FONT_CSS, LOGO, card_slide, chip, esc as sesc
+    sets = p["sets"]
+
+    def item(r):
+        return {"id": r[0], "name": clean_name(r[1]), "set": short_set((sets.get(r[2]) or {}).get("n", "")), "gid": r[2], "now": r[3], "old": r[4], "pct": r[5]}
+
+    def take(rows, n):
+        return [item(r) for r in rows if url_ok(img(r[0], 400))][:n]
+    s_up, s_down = p["movers"]["sealed"]
+    v_up, v_down = p["movers"]["vintage"]
+    picks = ([("Sealed riser", c) for c in take(s_up, 2)] + [("Sealed drop", c) for c in take(s_down, 1)] +
+             [("Vintage riser", c) for c in take(v_up, 1)] + [("Vintage drop", c) for c in take(v_down, 1)])
+    if len(picks) < 3:
+        print(f"blog: only {len(picks)} sealed/vintage movers with photos; no video")
+        return None, []
+    period, ago = ("this week", "a week ago") if p["win"] == "7" else ("since we started tracking", "when we started")
+    lead = picks[0][1]
+    fan = "".join(
+        f'<div class="card" style="position:absolute;width:280px;height:392px;left:{x}px;top:{y}px;transform:rotate({r}deg);z-index:{z}">'
+        f'<img src="{img(c["id"], 400)}">{chip(c)}</div>'
+        for (_, c), (x, y, r, z) in zip(picks, [(328, 20, 0, 5), (128, 70, -12, 4), (528, 70, 12, 4)]))
+    cover = f"""<div class="slide">
+<div class="top"><img class="logo" src="file://{LOGO}"><div class="tag">Weekly report</div></div>
+<div style="margin-top:50px;font-family:'Barlow Condensed';font-weight:800;font-size:150px;line-height:.9;text-transform:uppercase">Market<br><span class="holo">report</span></div>
+<div style="margin-top:20px;font-size:40px;color:#d8d5cf">{sesc(p['span'])} · sealed &amp; vintage</div>
+<div style="margin-top:12px;font-size:38px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{"▲" if lead['pct'] >= 0 else "▼"} {abs(lead['pct']):.0f}% {sesc(lead['name'])}</div>
+<div style="position:relative;flex:1;margin-top:30px">{fan}</div>
+<div class="bar" style="margin-bottom:26px"></div>
+<div class="foot"><span>Swipe for the movers →</span><span>market.driveyourstyle.net</span></div></div>"""
+    end = f"""<div class="slide" style="justify-content:center;align-items:center;text-align:center">
+<img src="file://{LOGO}" style="height:190px">
+<div style="margin-top:64px;font-family:'Barlow Condensed';font-weight:800;font-size:104px;line-height:.95;text-transform:uppercase">Full report<br><span class="holo">free</span></div>
+<div style="margin-top:34px;font-size:40px;color:#d8d5cf;max-width:860px">Biggest card gains and drops, sealed, vintage and new sets, every Sunday.</div>
+<div style="margin-top:56px;font-family:'Barlow Condensed';font-weight:700;font-size:54px;letter-spacing:.04em;border:4px solid #f2f0eb;padding:16px 34px 12px">market.driveyourstyle.net/blog</div>
+<div class="bar" style="width:100%;margin-top:80px"></div>
+<div class="foot" style="width:100%;margin-top:26px"><span>Prices: TCGplayer market</span><span>Not financial advice</span></div></div>"""
+    slides = [cover] + [card_slide(label, c, period, ago) for label, c in picks] + [end]
+    vdir = os.path.join(out, "video", p["date"])
+    os.makedirs(vdir, exist_ok=True)
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as pw:
+        b = pw.chromium.launch()
+        pg = b.new_page(viewport={"width": 1080, "height": 1350})
+        if social.OFFLINE:
+            pg.route(re.compile(r"tcgplayer-cdn"), lambda r: r.fulfill(path=os.environ["FAKE_CARD"], content_type="image/jpeg"))
+        tmp = os.path.abspath(os.path.join(vdir, "_slide.html"))
+        paths = []
+        for i, body in enumerate(slides, 1):
+            open(tmp, "w", encoding="utf-8").write(BASE % (FONT_CSS, body))
+            pg.goto("file://" + tmp, wait_until="networkidle")
+            pg.evaluate("document.fonts.ready")
+            paths.append(os.path.join(vdir, f"slide-{i}.jpg"))
+            pg.screenshot(path=paths[-1], type="jpeg", quality=92)
+        os.remove(tmp)
+        from tiktok import full_screen
+        tt = full_screen(pg, paths, vdir, foot="Weekly market report · market.driveyourstyle.net")
+        b.close()
+    from tiktok import make_short
+    video = make_short(tt, os.path.join(vdir, "short.mp4"), per=4.2)
+    old = sorted(d for d in os.listdir(os.path.join(out, "video")) if re.match(r"\d{4}-\d{2}-\d{2}$", d))[:-4]   # keep 4 weeks
+    for d in old:
+        for f in os.listdir(os.path.join(out, "video", d)):
+            os.remove(os.path.join(out, "video", d, f))
+        os.rmdir(os.path.join(out, "video", d))
+    web = f"{SITE}/blog/video/{p['date']}"
+    print(f"blog: video with {len(picks)} sealed/vintage movers")
+    return (f"{web}/short.mp4" if video else None), [f"{web}/slide-{i}.jpg" for i in range(1, len(slides) + 1)]
 
 
 def page(title, desc, canon, body, ld=None):
@@ -244,6 +318,8 @@ def page(title, desc, canon, body, ld=None):
 def main(argv):
     site, out = argv[0], argv[1]
     today = date.fromisoformat(argv[argv.index("--date") + 1]) if "--date" in argv else date.today()
+    import social
+    social.OFFLINE = "--offline" in argv   # local tests: photos are assumed to exist
     os.makedirs(out, exist_ok=True)
     idx_path = os.path.join(out, "posts.json")
     posts = load(idx_path, []) or []
@@ -258,7 +334,13 @@ def main(argv):
                 ld["image"] = p["image"]
             open(os.path.join(out, p["slug"] + ".html"), "w", encoding="utf-8").write(
                 page(p["title"] + " · Drive Your Style", p["summary"], f"blog/{p['slug']}.html", p["body"], ld))
-            posts = [x for x in posts if x["slug"] != p["slug"]] + [{k: p[k] for k in ("slug", "date", "title", "summary", "image")}]
+            entry = {k: p[k] for k in ("slug", "date", "title", "summary", "image")}
+            if "--no-video" not in argv:
+                try:
+                    entry["short"], entry["video_slides"] = report_video(p, out)
+                except Exception as e:   # the report itself must still publish
+                    print(f"blog: video failed ({e})")
+            posts = [x for x in posts if x["slug"] != p["slug"]] + [entry]
             print(f"blog: wrote {p['slug']}")
         else:
             print("blog: not enough data for a report")

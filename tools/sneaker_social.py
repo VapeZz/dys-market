@@ -1,4 +1,5 @@
-"""Weekly "Sneaker drops" Instagram carousel, made from the release calendar.
+"""Weekly "Sneaker drops" post, made from the release calendar: this week's most hyped drops as a countdown
+(#5 → #1, ranked by heat, our "cop" calls and retail price; every pair shown has its official photo).
 
     python tools/sneaker_social.py site data/social-sneakers [--date YYYY-MM-DD] [--offline]
 
@@ -50,6 +51,11 @@ def pick(site, start, end):
     return week, featured
 
 
+def hype(r):
+    """Hype order: heat (3 hot / 2 hyped / 1), then our "cop" call, then retail price (big collabs cost more)."""
+    return (r["h"], bool(r.get("pick") and r["pick"].get("v") == "cop"), r.get("r") or 0)
+
+
 def day(d, fmt):
     return date.fromisoformat(d).strftime(fmt).replace(" 0", " ")
 
@@ -70,14 +76,14 @@ def cover(feat, span):
         for r, (x, y, rot, z, w) in zip([f for f in feat if f.get("im")][:3], spots))
     return f"""<div class="slide">
 <div class="top"><img class="logo" src="file://{LOGO}"><div class="tag">Release week</div></div>
-<div style="margin-top:56px;font-family:'Barlow Condensed';font-weight:800;font-size:150px;line-height:.9;text-transform:uppercase">Sneaker<br><span class="holo">drops</span></div>
-<div style="margin-top:22px;font-size:40px;color:#d8d5cf">What's releasing {esc(span)}</div>
+<div style="margin-top:56px;font-family:'Barlow Condensed';font-weight:800;font-size:150px;line-height:.9;text-transform:uppercase">Most hyped<br><span class="holo">drops</span></div>
+<div style="margin-top:22px;font-size:40px;color:#d8d5cf">{len(feat)} pairs releasing {esc(span)}, ranked</div>
 <div style="position:relative;flex:1;margin-top:50px">{fan}</div>
 <div class="bar" style="margin-bottom:26px"></div>
-<div class="foot"><span>Swipe for this week's drops →</span><span>market.driveyourstyle.net</span></div></div>"""
+<div class="foot"><span>Countdown to #1 →</span><span>market.driveyourstyle.net</span></div></div>"""
 
 
-def drop_slide(r):
+def drop_slide(r, k=None):
     v = r.get("pick") and VERDICT.get(r["pick"]["v"])
     badge = ""
     if v:
@@ -90,7 +96,7 @@ def drop_slide(r):
  <div style="text-align:right;font-family:'Barlow Condensed';font-weight:800;line-height:.95;text-transform:uppercase"><div style="font-size:44px;color:#bdb9b2">{day(r["d"], "%A")}</div><div class="holo" style="font-size:96px">{day(r["d"], "%b %d")}</div></div></div>
 <div style="margin-top:30px;height:640px;background:#f2f2f2;border-radius:28px;overflow:hidden;position:relative">{shoe(r, True)}
  <div style="position:absolute;left:24px;top:24px">{badge}</div></div>
-<div style="margin-top:34px;font-family:'Barlow Condensed';font-weight:800;font-size:{64 if len(name) < 34 else 52}px;line-height:1.02;text-transform:uppercase;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{esc(name)}</div>
+<div style="margin-top:34px;font-family:'Barlow Condensed';font-weight:800;font-size:{64 if len(name) < 34 else 52}px;line-height:1.02;text-transform:uppercase;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{f'<span class="holo">#{k}</span> ' if k else ''}{esc(name)}</div>
 <div style="margin-top:10px;font-size:30px;color:#bdb9b2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{esc(r.get("cw") or "")}</div>
 <div style="margin-top:auto;display:flex;align-items:flex-end;justify-content:space-between">
  <div><div style="font-size:28px;color:#bdb9b2">Retail</div><div style="font-family:'Barlow Condensed';font-weight:800;font-size:96px;line-height:1">{usd(r.get("r"))}</div></div>
@@ -117,7 +123,9 @@ def main(argv):
         print(f"sneaker social: only {len(feat)} drops next week; skipping")
         return
     span = f"{start:%b %-d}–{end:%-d}" if start.month == end.month else f"{start:%b %-d}–{end:%b %-d}"
-    slides = [cover(feat, span)] + [drop_slide(r) for r in feat] + [cta()]   # no text-only "full list": every pair shown has its photo
+    ranked = sorted(feat, key=hype, reverse=True)          # #1 = most hyped
+    order = ranked[::-1]                                       # countdown: #N first, #1 last
+    slides = [cover(ranked, span)] + [drop_slide(r, len(ranked) - i) for i, r in enumerate(order)] + [cta()]   # every pair shown has its photo
     out = os.path.join(out_root, today.isoformat())
     os.makedirs(out, exist_ok=True)
     with sync_playwright() as p:
@@ -138,26 +146,26 @@ def main(argv):
         b.close()
     from tiktok import make_short
     video = make_short(tt, os.path.join(out, "short.mp4"), per=3.6)
-    lines = [f"👟 Sneaker drops {span}", ""]
-    for r in sorted(feat, key=lambda r: (r["d"], -r["h"])):   # only pairs with a photo are named
+    lines = [f"👟 The {len(ranked)} most hyped sneaker drops {span}, ranked", ""]
+    for i, r in enumerate(ranked, 1):   # only pairs with a photo are named
         call = f" · our call: {VERDICT[r['pick']['v']][0]}" if r.get("pick") and r["pick"]["v"] in VERDICT else ""
-        lines.append(f"{'🔥' if r['h'] == 3 else '•'} {day(r['d'], '%a %-m/%-d')}: {r['n']} ({usd(r.get('r'))}){call}")
+        lines.append(f"#{i} {r['n']} · {day(r['d'], '%a %-m/%-d')} ({usd(r.get('r'))}){' 🔥' if r['h'] == 3 else ''}{call}")
     more = len(week) - len(feat)
-    lines += ["", "Which pair are you copping? 👇", "",
+    lines += ["", "Agree with our #1? Which pair are you copping? 👇", "",
               (f"+{more} more drops this week on the full calendar. " if more > 0 else "") +
               "Release calendar with reminders and StockX/GOAT/eBay resale checks at market.driveyourstyle.net (link in bio). Dates can change.",
               "", HASHTAGS]
     caption = "\n".join(lines)
     open(os.path.join(out, "caption.txt"), "w").write(caption)
-    hot = next((r for r in feat if r["h"] == 3), feat[0])
-    caption_tt = (f"Sneaker drops this week 👟 {hot['n']} {day(hot['d'], '%a %-m/%-d')} at {usd(hot.get('r'))}\n\n"
+    hot = ranked[0]
+    caption_tt = (f"Most hyped sneaker drops this week 👟 #1: {hot['n']} {day(hot['d'], '%a %-m/%-d')} at {usd(hot.get('r'))}\n\n"
                   "Which pair are you copping? 👇 Full calendar at market.driveyourstyle.net\n\n"
                   "#sneakers #sneakerreleases #jordan #nike #kicks")
     post = {"date": today.isoformat(), "span": span, "caption": caption, "caption_tiktok": caption_tt,
             "slides_tiktok": [f"{SITE}/social-sneakers/{today.isoformat()}/tt-{i}.jpg" for i in range(1, len(tt) + 1)],
             "short": f"{SITE}/social-sneakers/{today.isoformat()}/short.mp4" if video else None,
-            "short_title": f"Biggest sneaker drops this week 👟 {hot['n']} — cop or drop? #sneakers"[:100],
-            "drops": [{k: r.get(k) for k in ("d", "n", "c", "r", "h")} for r in feat],
+            "short_title": f"Most hyped sneaker drops this week, ranked 👟 #1: {hot['n']} #sneakers"[:100],
+            "drops": [{k: r.get(k) for k in ("d", "n", "c", "r", "h")} for r in ranked],
             "slides": [f"{SITE}/social-sneakers/{today.isoformat()}/slide-{i}.jpg" for i in range(1, len(slides) + 1)]}
     json.dump(post, open(os.path.join(out, "post.json"), "w"), indent=1, ensure_ascii=False)
     json.dump(post, open(os.path.join(out_root, "latest.json"), "w"), indent=1, ensure_ascii=False)

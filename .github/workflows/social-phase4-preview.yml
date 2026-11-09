@@ -1,0 +1,65 @@
+name: Social upgrades phase 4 preview (test branch only)
+# Renders previews of the Phase 4 changes with real photos and saves them to the social-phase4-preview branch:
+# Sneaker drops hype countdown, Deals (real deals only), How-to challenge slides, Market Report video.
+# Changes nothing live: builders write into /tmp only; gh-pages is read, never pushed.
+on:
+  push:
+    branches: [social-phase4]
+    paths: [tools/sneaker_social.py, tools/deals_social.py, tools/howto_social.py, tools/blog.py, .github/workflows/social-phase4-preview.yml]
+permissions:
+  contents: write
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -q playwright==1.56.0 imageio-ffmpeg numpy pillow && python -m playwright install --with-deps chromium > /dev/null
+      - name: Live site data (read only)
+        run: |
+          git clone -q --depth 1 --filter=blob:none --sparse --branch gh-pages "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" /tmp/pages
+          git -C /tmp/pages sparse-checkout set --no-cone /data/sets.json /data/meta.json /data/set/ /data/movers/ /data/stock.json /data/grading.json /data/graded.json /data/sneaker-images.json /sitemap.xml
+          cp site/sneakers.json /tmp/pages/sneakers.json
+          mkdir -p /tmp/prev
+      - name: Sneaker drops (this week's real calendar)
+        run: python tools/sneaker_social.py /tmp/pages /tmp/prev/sneakers --date "$(TZ=America/Los_Angeles date +%F)"
+      - name: Deals (real rule first; then a layout sample with the old 2% rule, since no item qualifies this week)
+        run: |
+          python tools/deals_social.py /tmp/pages/data /tmp/prev/deals-real --date "$(TZ=America/Los_Angeles date +%F)" --force
+          cd tools && python -c "
+          import deals_social as d
+          d.MIN_OFF, d.MIN_SAVE = 0.02, 0
+          d.main(['/tmp/pages/data', '/tmp/prev/deals-sample', '--date', '$(TZ=America/Los_Angeles date +%F)', '--force'])"
+      - name: How-to challenge slides (guess cover + answer for the price check and collection tools)
+        run: |
+          cd tools && python - <<'EOF'
+          import os, howto_social as h
+          from datetime import date
+          from playwright.sync_api import sync_playwright
+          from social import BASE, FONT_CSS
+          ex = h.examples("/tmp/pages", date.today().isocalendar()[1])
+          feats = {f["key"]: f for f in h.features(ex)}
+          os.makedirs("/tmp/prev/howto", exist_ok=True)
+          with sync_playwright() as p:
+              pg = p.chromium.launch().new_page(viewport={"width": 1080, "height": 1350})
+              for key in ("price", "collection"):
+                  f = feats[key]
+                  for name, body in (("cover", h.guess_cover(f, f["guess"])), ("answer", h.answer(f, f["guess"]))):
+                      open("/tmp/s.html", "w").write(BASE % (FONT_CSS, body))
+                      pg.goto("file:///tmp/s.html", wait_until="networkidle")
+                      pg.evaluate("document.fonts.ready")
+                      pg.screenshot(path=f"/tmp/prev/howto/{key}-{name}.jpg", type="jpeg", quality=92)
+                  print(key, f["guess"]["first"])
+          EOF
+      - name: Market Report with video (real data, built as if it were Sunday)
+        run: python tools/blog.py /tmp/pages /tmp/prev/blog --date "$(TZ=America/Los_Angeles date +%F)" --force
+      - name: Save to social-phase4-preview branch
+        run: |
+          cd /tmp/prev
+          find . -name '*.html' -path './blog/*' -delete
+          git init -q -b social-phase4-preview && git config user.name "dys-market-bot" && git config user.email "dys-market-bot@users.noreply.github.com"
+          git add -A && git commit -q -m "Social upgrades phase 4 preview" && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" social-phase4-preview
+          echo "::notice title=Preview::$(python -c "import json; s=json.load(open('sneakers/latest.json')); r=json.load(open('deals-real/latest.json')); b=json.load(open('blog/latest.json')); print(len(s['slides']), 'sneaker slides |', 'deals real rule:', r.get('reason') or 'POST', '| report video:', b.get('short'))")"
