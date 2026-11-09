@@ -1,4 +1,7 @@
-"""Weekly "Trending cards" Instagram carousel, made from the market data.
+"""Weekly "Trending cards" post, made from the market data: this week's winners and losers.
+Cover hook "$100 → $X": what $100 in the #1 winner a week ago is worth now. Then 3 winners (▲) and 2 losers (▼);
+if fewer than 2 cards fell enough, 5 winners. The "cards" list in post.json holds all of them (Cards of the Day
+skips them for the week).
 
     python tools/social.py site/data data/social [--date YYYY-MM-DD] [--offline]
 
@@ -43,8 +46,9 @@ def clean_name(n):
     return n.replace(" (Reverse Holofoil)", " (Reverse Holo)")
 
 
-def pick(site_data, today, limit=5):
-    """Top 5 card risers from sets released in the last 3 years (priced $15+), max 2 per set."""
+def pick(site_data, today, limit=5, losers=2):
+    """Biggest card risers (and fallers) from sets released in the last 3 years (priced $10+), max 2 per set.
+    Returns (winners, losers, window, since): 3 winners + 2 losers, or 5 winners if fewer than 2 losers qualify."""
     meta = json.load(open(os.path.join(site_data, "meta.json")))
     recent = (today - timedelta(days=3 * 365)).isoformat()
     sets = [s for s in json.load(open(os.path.join(site_data, "sets.json"))) if (s.get("pub") or "") >= recent and s["pub"] <= today.isoformat()]
@@ -57,33 +61,49 @@ def pick(site_data, today, limit=5):
             if i["t"] == "c" and i.get("p") and i["p"] >= 1000 and i.get("ch") and not SKIP.search(i["n"]):
                 items.append((s, i))
     win = "7" if sum(1 for _, i in items if i["ch"].get("7") is not None) > 50 else "a"
-    rows = []
+    up, down = [], []
     for s, i in items:
         pct = i["ch"].get(win)
-        if pct is None or not (5 <= pct <= 150):
+        if pct is None:
             continue
         old = round(i["p"] / (1 + pct / 100))
-        rows.append((pct, s, i, old))
-    rows.sort(key=lambda r: -r[0])
-    out, per_set, used = [], {}, set()
-    def take(limit_pokemon, limit_other):
-        quota = {"pokemon": limit_pokemon, "other": limit_other}
+        if 5 <= pct <= 150:
+            up.append((pct, s, i, old))
+        elif -60 <= pct <= -5:
+            down.append((pct, s, i, old))
+    up.sort(key=lambda r: -r[0])
+    down.sort(key=lambda r: r[0])
+    per_set, used = {}, set()
+
+    def take(rows, n):
+        out = []
         for pct, s, i, old in rows:
-            if len(out) == limit:
-                return
-            bucket = "pokemon" if s["k"].startswith("pokemon") else "other"
-            if i["id"] in used or per_set.get(s["id"], 0) >= 2 or quota[bucket] <= 0:
+            if len(out) == n:
+                break
+            # Pokémon only: TCGplayer's One Piece photos carry a "SAMPLE" watermark
+            if not s["k"].startswith("pokemon") or i["id"] in used or per_set.get(s["id"], 0) >= 2:
                 continue
             if not url_ok(img(i["id"], 400)):   # every card shown needs its own photo
                 continue
             per_set[s["id"]] = per_set.get(s["id"], 0) + 1
-            quota[bucket] -= 1
             used.add(i["id"])
             out.append({"id": i["id"], "name": clean_name(i["n"]), "set": short_set(s["n"]), "gid": s["id"], "game": s["k"], "now": i["p"], "old": old, "pct": pct})
-    take(limit, 0)   # Pokémon only: TCGplayer's One Piece photos carry a "SAMPLE" watermark
-    out.sort(key=lambda c: -c["pct"])
+        return out
+    winners = take(up, limit - losers)
+    lost = take(down, losers)
+    if len(lost) < losers:   # not enough fallers this week: all winners, as before
+        for c in lost:
+            used.discard(c["id"])
+            per_set[c["gid"]] -= 1
+        lost = []
+        winners += take(up, limit - len(winners))
     since = meta.get("anchors", {}).get("7") if win == "7" else meta.get("first")
-    return out, ("7" if win == "7" else "all"), since
+    return winners, lost, ("7" if win == "7" else "all"), since
+
+
+def worth(c):
+    """What $100 in this card at the start of the window is worth now."""
+    return 100 * c["now"] / c["old"]
 
 
 FONT_CSS = "".join(
@@ -140,37 +160,54 @@ def url_ok(u):
     return _ok[u]
 
 
-def cover(cards, period):
+GREEN, RED = "#3ee08f", "#ff7a59"
+
+
+def chip(c):
+    up = c["pct"] >= 0
+    return (f'<div style="position:absolute;left:12px;top:12px;font-family:\'Barlow Condensed\';font-weight:800;font-size:34px;'
+            f'color:#050404;background:{GREEN if up else RED};border-radius:999px;padding:4px 14px 1px">{"▲" if up else "▼"} {abs(c["pct"]):.0f}%</div>')
+
+
+def cover(winners, losers, span, ago):
+    top = winners[0]
+    order = [winners[0]] + ([winners[1], losers[0]] + winners[2:3] + losers[1:2] if losers else winners[1:5])
     fan = "".join(
-        f'<div class="card" style="position:absolute;width:300px;height:420px;left:{x}px;top:{y}px;transform:rotate({r}deg);z-index:{z}">'
-        f'<img src="{img(c["id"], 400)}"></div>'
-        for c, (x, y, r, z) in zip(cards, [(372, 40, 0, 5), (150, 90, -12, 4), (594, 90, 12, 4), (-40, 170, -22, 3), (784, 170, 22, 3)]))
+        f'<div class="card" style="position:absolute;width:280px;height:392px;left:{x}px;top:{y}px;transform:rotate({r}deg);z-index:{z}">'
+        f'<img src="{img(c["id"], 400)}">{chip(c)}</div>'
+        for c, (x, y, r, z) in zip(order, [(328, 30, 0, 5), (128, 80, -12, 4), (528, 80, 12, 4), (-30, 160, -20, 3), (686, 160, 20, 3)]))
+    lose = (f'<div style="margin-top:14px;font-size:34px;color:#d8d5cf;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">…but $100 → <b style="color:{RED}">${worth(losers[0]):.0f}</b> in {esc(losers[0]["name"])}</div>'
+            if losers else "")
     return f"""<div class="slide">
-<div class="top"><img class="logo" src="file://{LOGO}"><div class="tag">Market report</div></div>
-<div style="margin-top:56px;font-family:'Barlow Condensed';font-weight:800;font-size:150px;line-height:.9;text-transform:uppercase">Trending<br><span class="holo">cards</span></div>
-<div style="margin-top:22px;font-size:40px;color:#d8d5cf">Biggest price jumps {esc(period)}</div>
-<div style="position:relative;flex:1;margin-top:40px">{fan}</div>
+<div class="top"><img class="logo" src="file://{LOGO}"><div class="tag">{"Winners &amp; losers" if losers else "Trending cards"}</div></div>
+<div style="margin-top:44px;font-family:'Barlow Condensed';font-weight:800;font-size:170px;line-height:.9;text-transform:uppercase">$100 <span style="color:#bdb9b2">→</span> <span class="holo">${worth(top):.0f}</span></div>
+<div style="margin-top:20px;font-size:40px;color:#f2f0eb;font-weight:700;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">If you bought {esc(top['name'])} {esc(ago)}</div>
+{lose}
+<div style="position:relative;flex:1;margin-top:34px">{fan}</div>
 <div class="bar" style="margin-bottom:26px"></div>
-<div class="foot"><span>Swipe for the top 5 →</span><span>market.driveyourstyle.net</span></div></div>"""
+<div class="foot"><span>{esc(span)} · swipe →</span><span>market.driveyourstyle.net</span></div></div>"""
 
 
-def card_slide(i, c, period):
+def card_slide(label, c, period, ago="a week ago"):
+    up = c["pct"] >= 0
     return f"""<div class="slide">
-<div class="top"><img class="logo" src="file://{LOGO}" style="height:72px"><div style="font-family:'Barlow Condensed';font-weight:800;font-size:110px;line-height:1" class="holo">#{i}</div></div>
+<div class="top"><img class="logo" src="file://{LOGO}" style="height:72px"><div style="font-family:'Barlow Condensed';font-weight:800;font-size:84px;line-height:1;text-transform:uppercase;color:{GREEN if up else RED}">{esc(label)}</div></div>
 <div style="display:flex;justify-content:center;margin-top:24px"><div class="card" style="width:500px;height:700px"><img src="{img(c['id'])}"></div></div>
 <div style="margin-top:36px;font-family:'Barlow Condensed';font-weight:800;font-size:{60 if len(c['name']) < 30 else 50}px;line-height:1.05;text-transform:uppercase;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{esc(c['name'])}</div>
 <div style="margin-top:10px;font-size:30px;color:#bdb9b2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{esc(c['set'])}</div>
 <div style="margin-top:auto;display:flex;align-items:flex-end;justify-content:space-between">
  <div><div style="font-size:28px;color:#bdb9b2">Market price</div><div style="font-family:'Barlow Condensed';font-weight:800;font-size:96px;line-height:1">{money(c['now'])}</div></div>
- <div style="text-align:right"><div style="font-family:'Barlow Condensed';font-weight:800;font-size:80px;line-height:1;color:#3ee08f">▲ {c['pct']:.0f}%</div><div style="font-size:28px;color:#bdb9b2">was {money(c['old'])} · {esc(period)}</div></div>
-</div></div>"""
+ <div style="text-align:right"><div style="font-family:'Barlow Condensed';font-weight:800;font-size:80px;line-height:1;color:{GREEN if up else RED}">{"▲" if up else "▼"} {abs(c['pct']):.0f}%</div><div style="font-size:28px;color:#bdb9b2">was {money(c['old'])} · {esc(period)}</div></div>
+</div>
+<div style="margin-top:14px;display:flex;justify-content:space-between;font-size:28px;color:#8f8a84"><span>$100 {esc(ago)} → <b style="color:{GREEN if up else RED}">${worth(c):.0f}</b> now</span><span>Price: TCGplayer market</span></div></div>"""
 
 
-def cta():
+def cta(losers=True):
+    head = 'Buy the dip or<br>chase the <span class="holo">pump?</span>' if losers else 'What\'s <span class="holo">your</span><br>card worth?'
     return f"""<div class="slide" style="justify-content:center;align-items:center;text-align:center">
 <img src="file://{LOGO}" style="height:200px">
-<div style="margin-top:70px;font-family:'Barlow Condensed';font-weight:800;font-size:110px;line-height:.95;text-transform:uppercase">What's <span class="holo">your</span><br>card worth?</div>
-<div style="margin-top:34px;font-size:40px;color:#d8d5cf;max-width:820px">Free live prices on 59,000+ Pokémon &amp; One Piece cards and sealed, updated every night.</div>
+<div style="margin-top:70px;font-family:'Barlow Condensed';font-weight:800;font-size:110px;line-height:.95;text-transform:uppercase">{head}</div>
+<div style="margin-top:34px;font-size:40px;color:#d8d5cf;max-width:820px">{"Tell us in the comments. " if losers else ""}Free live prices on 59,000+ Pokémon &amp; One Piece cards and sealed, updated every night.</div>
 <div style="margin-top:56px;font-family:'Barlow Condensed';font-weight:700;font-size:58px;letter-spacing:.04em;border:4px solid #f2f0eb;padding:16px 36px 12px">market.driveyourstyle.net</div>
 <div class="bar" style="width:100%;margin-top:80px"></div>
 <div class="foot" style="width:100%;margin-top:26px"><span>Shop + all links in bio</span><span>DM @drive.yourstyle</span></div></div>"""
@@ -181,20 +218,24 @@ def main(argv):
     OFFLINE = "--offline" in argv
     site_data, out_root = argv[0], argv[1]
     today = date.fromisoformat(argv[argv.index("--date") + 1]) if "--date" in argv else date.today()
-    cards, win, since = pick(site_data, today)
-    if len(cards) < 3:
-        print(f"social: only {len(cards)} cards qualified; skipping")
+    winners, losers, win, since = pick(site_data, today)
+    if len(winners) < 3:
+        print(f"social: only {len(winners)} rising cards qualified; skipping")
         return
+    cards = winners + losers
     if win == "7":
         start = today - timedelta(days=7)
-        period = "this week"
+        period, ago = "this week", "a week ago"
         span = f"{start:%b %-d}–{today:%b %-d}"
     else:
         period = f"since {date.fromisoformat(since):%b %-d}"
+        ago = f"on {date.fromisoformat(since):%b %-d}"
         span = f"{date.fromisoformat(since):%b %-d}–{today:%b %-d}"
     out = os.path.join(out_root, today.isoformat())
     os.makedirs(out, exist_ok=True)
-    slides = [cover(cards, f"{span}")] + [card_slide(i + 1, c, period) for i, c in enumerate(cards)] + [cta()]
+    slides = ([cover(winners, losers, span, ago)] +
+              [card_slide(f"Winner #{i}" if losers else f"#{i}", c, period, ago) for i, c in enumerate(winners, 1)] +
+              [card_slide(f"Loser #{i}", c, period, ago) for i, c in enumerate(losers, 1)] + [cta(bool(losers))])
     offline = "--offline" in argv
     with sync_playwright() as p:
         b = p.chromium.launch()
@@ -213,22 +254,30 @@ def main(argv):
         b.close()
     from tiktok import make_short
     video = make_short(tt, os.path.join(out, "short.mp4"), per=3.6)
-    lines = [f"📈 Trending cards {span}", ""]
-    lines += [f"{i}. {c['name']} ({c['set']}): {money(c['now'])}, up {c['pct']:.0f}%" for i, c in enumerate(cards, 1)]
-    lines += ["", "Which one are you chasing? 👇", "",
+    top = winners[0]
+    hook = f"$100 in {top['name']} {ago} is worth ${worth(top):.0f} today"
+    lines = [f"{'📈📉' if losers else '📈'} {hook}", "Prices: TCGplayer market", ""]
+    lines += [f"{'Winners' if losers else 'Trending'} {span}:"]
+    lines += [f"{i}. {c['name']} ({c['set']}): {money(c['now'])}, up {c['pct']:.0f}%" for i, c in enumerate(winners, 1)]
+    if losers:
+        lines += ["", "Losers:"]
+        lines += [f"{i}. {c['name']} ({c['set']}): {money(c['now'])}, down {abs(c['pct']):.0f}%" for i, c in enumerate(losers, 1)]
+    lines += ["", "Buy the dip or chase the pump? 👇" if losers else "Which one are you chasing? 👇", "",
               "Prices are TCGplayer market prices we track every night. Look up any card free at market.driveyourstyle.net (link in bio).",
               "", HASHTAGS]
     caption = "\n".join(lines)
     open(os.path.join(out, "caption.txt"), "w").write(caption)
-    top = cards[0]
-    caption_tt = (f"These Pokémon cards jumped {period} 📈 #1 is up {top['pct']:.0f}%\nPrices: TCGplayer market\n\n"
-                  "Which one do you have? 👇 Free prices at market.driveyourstyle.net (link in bio)\n\n"
-                  "#pokemon #pokemoncards #pokemontcg #cardcollecting #tcg")
+    caption_tt = (f"$100 in this Pokémon card {ago} = ${worth(top):.0f} today 📈"
+                  + (f" …and one lost {abs(losers[0]['pct']):.0f}% 📉" if losers else "") + "\nPrices: TCGplayer market\n\n"
+                  + ("Winner or loser, which would you buy? 👇" if losers else "Which one do you have? 👇")
+                  + " Free prices at market.driveyourstyle.net (link in bio)\n\n#pokemon #pokemoncards #pokemontcg #cardcollecting #tcg")
     post = {"date": today.isoformat(), "span": span, "caption": caption, "caption_tiktok": caption_tt, "cards": cards,
+            "winners": [c["id"] for c in winners], "losers": [c["id"] for c in losers],
             "slides": [f"{SITE}/social/{today.isoformat()}/slide-{i}.jpg" for i in range(1, len(slides) + 1)],
             "slides_tiktok": [f"{SITE}/social/{today.isoformat()}/tt-{i}.jpg" for i in range(1, len(tt) + 1)],
             "short": f"{SITE}/social/{today.isoformat()}/short.mp4" if video else None,
-            "short_title": f"These Pokémon cards jumped up to {top['pct']:.0f}% in ONE week 📈 Is #1 worth buying now? #pokemon"}
+            "short_title": (f"$100 in this Pokémon card {ago} is now ${worth(top):.0f} 📈 "
+                            + ("Winners & losers #pokemon" if losers else "Is it worth buying now? #pokemon"))[:100]}
     json.dump(post, open(os.path.join(out, "post.json"), "w"), indent=1, ensure_ascii=False)
     json.dump(post, open(os.path.join(out_root, "latest.json"), "w"), indent=1, ensure_ascii=False)
     # keep the last 8 weeks

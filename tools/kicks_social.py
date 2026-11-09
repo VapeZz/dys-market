@@ -179,6 +179,9 @@ def cover(pairs, mode, when, sc=(0, 0)):
     sub = (f"Retail vs eBay resale · {esc(when)}" if mode == "drop" else f"Last week's drops, retail vs eBay sold · {esc(when)}")
     hook = (f"{esc(best['n'])}: {usd(best['r'])} retail → {usd(best['v'])} on eBay" if best["profit"] > 0
             else "Which ones are worth it? Swipe")
+    if mode == "drop":   # countdown + reveal: don't give away any eBay price or call on the cover
+        sub = f"{len(pairs)} pairs · {esc(when)}"
+        hook = "Vote cop or drop on each pair, then swipe for our call" if len(pairs) > 1 else "Vote cop or drop, then swipe for our call"
     score_html = ""
     if mode == "recap" and sc[1] >= 2:
         score_html = ("<div style=\"margin-top:14px;font-family:'Barlow Condensed';font-weight:800;font-size:44px;letter-spacing:.04em;"
@@ -191,7 +194,25 @@ def cover(pairs, mode, when, sc=(0, 0)):
 {score_html}
 <div style="position:relative;height:{390 if score_html else 520}px;margin-top:{20 if score_html else 30}px{';transform:scale(.78);transform-origin:top center' if score_html else ''}">{fan}</div>
 <div class="bar" style="margin-top:auto;margin-bottom:26px"></div>
-<div class="foot"><span>Swipe for the numbers →</span><span>market.driveyourstyle.net</span></div></div>"""
+<div class="foot"><span>{'Swipe to vote →' if mode == 'drop' else 'Swipe for the numbers →'}</span><span>market.driveyourstyle.net</span></div></div>"""
+
+
+def vote_slide(p, k):
+    """Cop or drop countdown: same layout as the reveal, with the eBay price and our call hidden."""
+    name = p["n"]
+    return f"""<div class="slide">
+<div class="top"><img class="logo" src="file://{LOGO}" style="height:72px">
+ <div style="text-align:right;font-family:'Barlow Condensed';font-weight:800;line-height:.95;text-transform:uppercase"><div style="font-size:40px;color:#bdb9b2">Drops {day(p['d'], '%a')} · #{k}</div><div class="holo" style="font-size:88px">{day(p['d'], '%b %d')}</div></div></div>
+<div style="margin-top:26px;height:560px;background:#f2f2f2;border-radius:28px;overflow:hidden;position:relative">{shoe(p, True)}
+ <div style="position:absolute;left:24px;top:24px;font-family:'Barlow Condensed';font-weight:800;font-size:46px;letter-spacing:.06em;text-transform:uppercase;color:#050404;background:#a78bfa;padding:10px 24px 6px;border-radius:999px">Cop or drop?</div></div>
+<div style="margin-top:30px;font-family:'Barlow Condensed';font-weight:800;font-size:{60 if len(name) < 34 else 50}px;line-height:1.02;text-transform:uppercase;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{esc(name)}</div>
+<div style="margin-top:auto;display:flex;align-items:flex-end;gap:40px">
+ <div><div style="font-size:28px;color:#bdb9b2">Retail</div><div style="font-family:'Barlow Condensed';font-weight:800;font-size:104px;line-height:1">{usd(p['r'])}</div></div>
+ <div style="font-family:'Barlow Condensed';font-weight:800;font-size:80px;color:#bdb9b2;padding-bottom:10px">→</div>
+ <div><div style="font-size:28px;color:#bdb9b2">eBay resale</div><div class="holo" style="font-family:'Barlow Condensed';font-weight:800;font-size:104px;line-height:1">$???</div></div>
+</div>
+<div style="margin-top:18px;font-size:34px;font-weight:700">Cop or drop? <span style="color:#bdb9b2;font-weight:500">Vote in the comments, then swipe for our call →</span></div>
+<div style="margin-top:10px;font-size:26px;color:#8f8a84">{esc(p['c'])}</div></div>"""
 
 
 def said_line(p):
@@ -202,15 +223,16 @@ def said_line(p):
     return f'<div style="margin-top:12px;font-size:32px;color:#bdb9b2">We said <b style="color:{color}">{label}</b> before it dropped · {mark}</div>'
 
 
-def pair_slide(p, mode, i, n):
+def pair_slide(p, mode, i, n, count=None):
     label, color = CALL[mode][p["call"]]
     name = p["n"]
     what = "eBay sold" if p["src"] == "sold" else "eBay resale"
+    count = count or f"{i} / {n}"
     return f"""<div class="slide">
 <div class="top"><img class="logo" src="file://{LOGO}" style="height:72px">
- <div style="text-align:right;font-family:'Barlow Condensed';font-weight:800;line-height:.95;text-transform:uppercase"><div style="font-size:40px;color:#bdb9b2">{'Drops ' if mode == 'drop' else 'Dropped '}{day(p['d'], '%a')} · {i} / {n}</div><div class="holo" style="font-size:88px">{day(p['d'], '%b %d')}</div></div></div>
+ <div style="text-align:right;font-family:'Barlow Condensed';font-weight:800;line-height:.95;text-transform:uppercase"><div style="font-size:40px;color:#bdb9b2">{'Drops ' if mode == 'drop' else 'Dropped '}{day(p['d'], '%a')} · {count}</div><div class="holo" style="font-size:88px">{day(p['d'], '%b %d')}</div></div></div>
 <div style="margin-top:26px;height:560px;background:#f2f2f2;border-radius:28px;overflow:hidden;position:relative">{shoe(p, True)}
- <div style="position:absolute;left:24px;top:24px;font-family:'Barlow Condensed';font-weight:800;font-size:46px;letter-spacing:.06em;text-transform:uppercase;color:#050404;background:{color};padding:10px 24px 6px;border-radius:999px">{label}</div></div>
+ <div style="position:absolute;left:24px;top:24px;font-family:'Barlow Condensed';font-weight:800;font-size:46px;letter-spacing:.06em;text-transform:uppercase;color:#050404;background:{color};padding:10px 24px 6px;border-radius:999px">{'Our call: ' if mode == 'drop' else ''}{label}</div></div>
 <div style="margin-top:30px;font-family:'Barlow Condensed';font-weight:800;font-size:{60 if len(name) < 34 else 50}px;line-height:1.02;text-transform:uppercase;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{esc(name)}</div>
 {said_line(p) if mode == 'recap' else ''}
 <div style="margin-top:auto;display:flex;align-items:flex-end;gap:40px">
@@ -223,11 +245,11 @@ def pair_slide(p, mode, i, n):
 
 
 def cta(mode):
-    head = "Copping one?" if mode == "drop" else "Missed one?"
+    head = "Agree with<br>our calls?" if mode == "drop" else "Missed one?"
     return f"""<div class="slide" style="justify-content:center;align-items:center;text-align:center">
 <img src="file://{LOGO}" style="height:200px">
-<div style="margin-top:70px;font-family:'Barlow Condensed';font-weight:800;font-size:110px;line-height:.95;text-transform:uppercase">{head}<br><span class="holo">Links in bio</span></div>
-<div style="margin-top:34px;font-size:40px;color:#d8d5cf;max-width:880px">Retail, eBay, StockX and GOAT links for every pair, plus the full release calendar.</div>
+<div style="margin-top:70px;font-family:'Barlow Condensed';font-weight:800;font-size:110px;line-height:.95;text-transform:uppercase">{head}<br><span class="holo">{'Tell us below' if mode == 'drop' else 'Links in bio'}</span></div>
+<div style="margin-top:34px;font-size:40px;color:#d8d5cf;max-width:880px">{'Links in bio: ' if mode == 'drop' else ''}Retail, eBay, StockX and GOAT links for every pair, plus the full release calendar.</div>
 <div style="margin-top:56px;font-family:'Barlow Condensed';font-weight:700;font-size:52px;letter-spacing:.04em;border:4px solid #f2f0eb;padding:16px 36px 12px">market.driveyourstyle.net/social-kicks</div>
 <div class="bar" style="width:100%;margin-top:80px"></div>
 <div class="foot" style="width:100%;margin-top:26px"><span>Prices change fast. Not financial advice.</span><span>@drive.yourstyle</span></div></div>"""
@@ -269,9 +291,12 @@ def captions(pairs, mode, when):
     best = max(pairs, key=lambda p: p["profit"])
     right, called = score(pairs)
     scored = mode == "recap" and called >= 2
-    if mode == "drop":
-        first = f"Cop or drop? 👟 {best['n']} retails for {usd(best['r'])} and eBay pairs are going for {usd(best['v'])}"
-        ask = "Which one are you copping? 👇"
+    if mode == "drop":   # countdown + reveal: the first line asks for votes; our calls sit lower in the caption
+        lo, hi = min(p["r"] for p in pairs), max(p["r"] for p in pairs)
+        rng = usd(lo) if lo == hi else f"{usd(lo)}–{usd(hi)}"
+        first = (f"Cop or drop? 👟 {len(pairs)} pair{'s' if len(pairs) > 1 else ''} drop {when}, {rng} retail. "
+                 + ("Vote on each before you swipe 👀" if len(pairs) > 1 else "Vote before you swipe 👀"))
+        ask = "Agree with our calls? 👇"
     else:
         flips = sum(p["call"] == "cop" for p in pairs)
         first = f"Did it flip? 📈 {flips} of last week's {len(pairs)} drops made money on eBay after fees"
@@ -279,10 +304,10 @@ def captions(pairs, mode, when):
     note = ("eBay = median sold price (5+ sales) or the low end of new pairs listed. Profit after ~8% tax, eBay fees and shipping. "
             "Prices vary by size and change fast.")
     scoreline = (f"Our calls before release: {right} of {called} right {'✅' if right * 2 >= called else '😬'}\n\n" if scored else "")
-    cap = (f"{first}\n\n{scoreline}" + "\n".join(lines) + f"\n\n{note}\n\n{ask}\n\n"
+    cap = (f"{first}\n\n{scoreline}" + ("Our calls (no peeking 🙈):\n" if mode == "drop" else "") + "\n".join(lines) + f"\n\n{note}\n\n{ask}\n\n"
            f"🛒 Links for every pair (eBay links are affiliate links): market.driveyourstyle.net/social-kicks (link in bio)\n\n{HASHTAGS}")
     cap_tt = f"{first}{f'. Our calls went {right} for {called}' if scored else ''} {ask} Links in bio #sneakers #copordrop #resell #jordan #nike"
-    short = (f"Cop or drop? Retail vs resale for {when} 👟" if mode == "drop" else
+    short = (f"Cop or drop? Vote before the reveal 👟 Sneakers dropping {when}" if mode == "drop" else
              f"Did these sneakers flip? Our calls went {right} for {called} 👟" if scored else "Did these sneakers flip? Retail vs resale 👟")[:100]
     return first, cap, cap_tt, short
 
@@ -303,8 +328,17 @@ def main(argv):
     title = ("Cop or drop? " if mode == "drop" else "Did it flip? ") + when
     out = os.path.join(out_root, day_)
     os.makedirs(out, exist_ok=True)
-    slides = ([cover(pairs, mode, when, sc)] + [pair_slide(p, mode, i, len(pairs)) for i, p in enumerate(pairs, 1)] +
-              ([scorecard(pairs)] if mode == "recap" and sc[1] >= 2 else []) + [cta(mode)])
+    if mode == "drop":   # countdown: vote slide then reveal for each pair, the best flip (#1) last
+        n = len(pairs)
+        body = []
+        for idx, p in enumerate(pairs[::-1]):
+            body += [vote_slide(p, n - idx), pair_slide(p, mode, 0, n, count=f"#{n - idx}")]
+        slides = [cover(pairs, mode, when, sc)] + body + [cta(mode)]
+        per = [3.2] + [2.6, 3.4] * n + [3.2]
+    else:
+        slides = ([cover(pairs, mode, when, sc)] + [pair_slide(p, mode, i, len(pairs)) for i, p in enumerate(pairs, 1)] +
+                  ([scorecard(pairs)] if mode == "recap" and sc[1] >= 2 else []) + [cta(mode)])
+        per = 3.6
     from playwright.sync_api import sync_playwright
     with sync_playwright() as pw:
         b = pw.chromium.launch()
@@ -326,7 +360,7 @@ def main(argv):
     video = None
     if "--no-video" not in argv:
         from tiktok import make_short
-        video = make_short(tt, os.path.join(out, "short.mp4"), per=3.6)
+        video = make_short(tt, os.path.join(out, "short.mp4"), per=per)
     base = f"{SITE}/social-kicks/{day_}"
     post = {"date": day_, "mode": mode, "title": title, "first": first, "caption": cap, "caption_tiktok": cap_tt, "short_title": short,
             "slides": [f"{base}/slide-{i}.jpg" for i in range(1, len(slides) + 1)],

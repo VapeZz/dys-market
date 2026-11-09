@@ -564,7 +564,7 @@ async function heroFan(meta, allSets) {
   if (rows.length < 3) {   // short history: fall back to this week's Trending cards carousel picks
     try {
       const t = await fetch("social/latest.json", { cache: "no-cache" }).then((r) => r.json());
-      rows = (t.cards || []).map((c) => [c.id, c.name, c.gid, c.now, c.old, c.pct]);
+      rows = (t.cards || []).filter((c) => c.pct > 0).map((c) => [c.id, c.name, c.gid, c.now, c.old, c.pct]);   // winners only (the feed also lists losers)
     } catch (e) { return; }
   }
   const seen = new Set(); rows = rows.filter((r) => !seen.has(r[0]) && seen.add(r[0])).slice(0, 5);

@@ -142,7 +142,7 @@ def build_post(site, today):
     sets = {s["id"]: s for s in sets_list}
     start = today - timedelta(days=6)
     span = f"{start.strftime('%b %-d')}–{today.strftime('%b %-d, %Y')}"
-    up, win, _ = pick(sd, today, limit=12)
+    up, _lost, win, _ = pick(sd, today, limit=12, losers=0)   # risers only; fallers come from fallers()
     up = [c for c in up if not SIDEWAYS.search(c["name"])][:8]
     down = [c for c in fallers(sd, today, limit=12) if not SIDEWAYS.search(c["name"])][:8]
     modern = (today - timedelta(days=3 * 365)).isoformat()
