@@ -286,6 +286,38 @@ jobs:
           if [ -d data/social-grade ]; then mkdir -p site/social-grade && cp -r data/social-grade/. site/social-grade/; fi
           if [ -d data/social-kicks ]; then mkdir -p site/social-kicks && cp -r data/social-kicks/. site/social-kicks/; fi
 
+      - name: Keep earlier videos and make the feeds honest
+        continue-on-error: true
+        run: |
+          # Videos are only built on the night their post is made, and the data branch holds none, so each new
+          # publish used to wipe the previous videos while latest.json still pointed at them (Mon Trending Reel and
+          # YouTube Short -> "Failed to normalize media"). Carry them over from the live site, then null any
+          # "short" in a feed whose file is really missing so posting tasks fall back to the carousel.
+          if git fetch -q --depth 1 origin gh-pages; then
+            git ls-tree -r --name-only FETCH_HEAD | grep -E '\.mp4$' > /tmp/old-mp4.txt || true
+            n=0
+            while IFS= read -r f; do
+              if [ -d "site/$(dirname "$f")" ] && [ ! -e "site/$f" ]; then git show "FETCH_HEAD:$f" > "site/$f" && n=$((n+1)); fi
+            done < /tmp/old-mp4.txt
+            echo "::notice title=Videos::carried over $n earlier video(s) from the live site"
+          fi
+          python3 - <<'PY'
+          import glob, json, os
+          fixed = 0
+          for f in glob.glob("site/social*/latest.json") + glob.glob("site/social*/*/post.json"):
+              try:
+                  d = json.load(open(f))
+              except Exception:
+                  continue
+              u = d.get("short")
+              if u and not os.path.exists("site/" + u.split("market.driveyourstyle.net/", 1)[-1]):
+                  d["short"] = None
+                  json.dump(d, open(f, "w"), indent=1, ensure_ascii=False)
+                  fixed += 1
+                  print("short missing, set to null:", f)
+          print(f"::notice title=Feeds::{fixed} feed(s) pointed at a missing video")
+          PY
+
       - name: Link-in-bio pictures
         continue-on-error: true
         run: |
