@@ -4,7 +4,7 @@ name: Grade scout (eBay PSA 10 vs raw)
 # checks each shortlisted card's real eBay SOLD prices before anything is built or posted.
 on:
   schedule:
-    - cron: "20 8 * * 1-6"      # Mon-Sat, 12:20 am Pacific (GitHub often runs it hours late; must finish before the 9:47 am Grade it? task)
+    - cron: "20 8 * * 1-6"      # Mon-Sat, 12:20 am Pacific (GitHub usually runs it 8-12 h late; if the shortlist is not ready at 9:47 am the Grade it? task dispatches this workflow itself)
   workflow_dispatch:
     inputs:
       game:
@@ -38,6 +38,11 @@ jobs:
           git clone -q --depth 1 --branch gh-pages "$R" /tmp/pages
           git clone -q --depth 1 --branch data "$R" /tmp/db
           mkdir -p /tmp/db/data/social-grade
+          # The Grade it? task dispatches this run itself when the schedule is late; skip the late scheduled run
+          # so it doesn't overwrite today's shortlist or advance the game rotation twice.
+          if [ "${{ github.event_name }}" = "schedule" ] && python3 -c "import json,sys,datetime; sys.exit(0 if json.load(open('/tmp/db/data/social-grade/shortlist.json')).get('date') == datetime.date.today().isoformat() else 1)" 2>/dev/null; then
+            echo "::notice title=Grade scout::today's shortlist already exists (made by a run the Grade it? task started); skipping"; exit 0
+          fi
           python tools/grade_scout.py /tmp/pages "$GAME" --max "$MAX" --out /tmp/db/data/social-grade/shortlist.json --history /tmp/db/data/social-grade/history.json
           git -C /tmp/db config user.name "dys-market-bot"; git -C /tmp/db config user.email "dys-market-bot@users.noreply.github.com"
           git -C /tmp/db add data/social-grade/shortlist.json $(ls /tmp/db/data/social-grade/rotation.json 2>/dev/null) && (git -C /tmp/db diff --cached --quiet || (git -C /tmp/db commit -q -m "Grade scout shortlist" && git -C /tmp/db push -q origin data))
