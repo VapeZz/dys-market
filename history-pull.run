@@ -1,4 +1,4 @@
 # Settings for the one-time history pull (.github/workflows/history-pull.yml). Changing this file runs it again.
 # PULL_MAX = most days to download in one run (leave empty for all that are missing).
-PULL_MAX=5
+PULL_MAX=
 PULL_PAUSE=7
