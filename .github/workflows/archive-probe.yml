@@ -1,0 +1,42 @@
+name: Archive probe (one day, test only)
+
+# One-off test: can GitHub's runners download ONE tcgcsv daily price archive, and what is in it?
+# Lives only on the archive-probe branch and runs when that branch is pushed.
+# Saves nothing to the data branch and does not touch the live site.
+on:
+  push:
+    branches: [archive-probe]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: archive-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Probe one archive day
+        env:
+          PROBE_DAY: "2025-11-11"
+        run: |
+          which 7z || sudo apt-get install -y p7zip-full
+          python tools/archive_probe.py
+
+      - name: Keep the downloaded archive (tcgcsv asks that an archive is never downloaded twice)
+        if: ${{ hashFiles('probe-out/*.7z') != '' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: tcgcsv-prices-2025-11-11
+          path: probe-out/*.7z
+          retention-days: 90
