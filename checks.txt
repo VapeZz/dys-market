@@ -1,0 +1,7 @@
+ok      Daily Scout: scout: 101 buys, 79 to watch (60 flips, 60 rides, 60 dips), 20 to avoid
+ok      Buyer dashboard: buyer: 9593 under market, 7830 dips, 5 store prices to check, 1 rising in stock
+ok      Grading candidates: grading: 11176 cards with trusted prices, plus 25840 singles $1-$15 for the 10x finder
+ok      Market Intel: intel: 3 indices, 133 rising / 598 cooling signals, 10 gainers, 0 deals · Modern chase cards and sealed both slip this week
+ok      Price pages: price pages: 9000 written
+ok      Card of the Day: daily cards: already made for 2026-11-12 (dip)
+ok      Card of the Day, other TCGs: daily cards: already made for 2026-11-12 (dip)
