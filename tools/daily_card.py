@@ -485,6 +485,8 @@ def main(argv):
     out = os.path.join(out_root, today.isoformat())
     os.makedirs(out, exist_ok=True)
     n, video, info = render(site_data, cards, theme, period, game, out, OFFLINE)
+    if VOICED and not info.get("voice"):   # shows up as a warning on the GitHub run
+        print("::warning title=Cards of the Day voice::the voice could not be made; this video has music only")
     caption = caption_for(theme, cards, period, game)
     post = {"date": today.isoformat(), "game": game, "theme": theme, "cards": cards, "card": cards[0], "caption": caption,
             "slides": [f"{web}/{today.isoformat()}/slide-{k}.jpg" for k in range(1, n + 1)],

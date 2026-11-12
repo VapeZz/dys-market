@@ -17,7 +17,7 @@ os.environ["DYS_KEEP_VOICE"] = "1"
 import daily_card as dc
 import voice as v
 
-JOBS = [("social-daily", "am_michael"), ("social-daily", "af_heart"), ("social-daily-other", "am_michael")]
+JOBS = [("social-daily", "af_heart"), ("social-daily-other", "af_heart")]   # the voice Keo picked
 _ear = None
 
 

@@ -267,6 +267,7 @@ jobs:
         run: |
           set +e
           python -c "import playwright" 2>/dev/null || { pip install -q playwright==1.56.0 && python -m playwright install --with-deps chromium; }; pip install -q imageio-ffmpeg numpy > /tmp/daily.log 2>&1
+          pip install -q kokoro-onnx==0.6.1 > /tmp/voice.log 2>&1 || echo "::warning title=Voice::the voice package did not install; the Cards of the Day videos have music only today"
           python tools/daily_card.py site/data data/social-daily --date "$(date -u +%F)" > /tmp/daily.log 2>&1; rc=$?
           cat /tmp/daily.log
           if [ $rc -ne 0 ]; then echo "::error title=Card of the Day::$(tail -c 600 /tmp/daily.log | tr '\n' ' ')"; exit 1; fi

@@ -9,6 +9,8 @@ jobs:
   preview:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -19,8 +21,37 @@ jobs:
           pip install -q playwright==1.56.0 imageio-ffmpeg numpy pillow kokoro-onnx==0.6.1 faster-whisper > /tmp/pip.log 2>&1 || { echo "::error title=pip::$(tail -c 800 /tmp/pip.log | tr '\n' ' ')"; exit 1; }
           python -m playwright install --with-deps chromium > /tmp/pw.log 2>&1 || { echo "::error title=playwright::$(tail -c 800 /tmp/pw.log | tr '\n' ' ')"; exit 1; }
           R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          # our own copy of the voice model files, made once (the nightly reads this release first)
+          if ! gh release view voice-kokoro-v1 > /dev/null 2>&1; then
+            mkdir -p /tmp/model && cd /tmp/model
+            for f in kokoro-v1.0.onnx voices-v1.0.bin; do curl -sSfL -o $f https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/$f; done
+            ls -la; sha256sum * > SHA256SUMS.txt
+            gh release create voice-kokoro-v1 kokoro-v1.0.onnx voices-v1.0.bin SHA256SUMS.txt --latest=false --title "Voice model files (Kokoro-82M v1.0)" \
+              --notes "The two files tools/voice.py needs for the voice-over on the short videos: the Kokoro-82M v1.0 text-to-speech model (ONNX) and its voices. Kokoro-82M is by hexgrad, Apache License 2.0 (https://huggingface.co/hexgrad/Kokoro-82M). Copied once, unchanged, from https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0 on Nov 12, 2026. Do not delete: the nightly job downloads them from here."
+            cd "$GITHUB_WORKSPACE"
+          fi
           git clone -q --depth 1 --branch gh-pages "$R" /tmp/pages
+          mkdir -p /tmp/out
+          D=$(python -c "import json;print(json.load(open('/tmp/pages/social-daily/latest.json'))['date'])")
           set +e
+          # 1. the real nightly command, with the voice
+          python tools/daily_card.py /tmp/pages/data /tmp/real/social-daily --date "$D" --force > /tmp/real.log 2>&1; r1=$?
+          # 2. the same command when the voice package is missing: the post must still be made, music only
+          pip uninstall -q -y kokoro-onnx > /dev/null 2>&1
+          python tools/daily_card.py /tmp/pages/data /tmp/plain/social-daily --date "$D" --force > /tmp/plain.log 2>&1; r2=$?
+          pip install -q kokoro-onnx==0.6.1 > /dev/null 2>&1
+          python - "$r1" "$r2" > /tmp/out/real-test.txt 2>&1 <<'PY'
+          import json, os, sys
+          for name, rc in (("real", sys.argv[1]), ("plain", sys.argv[2])):
+              p = f"/tmp/{name}/social-daily/latest.json"
+              post = json.load(open(p)) if os.path.exists(p) else {}
+              mp4 = f"/tmp/{name}/social-daily/{post.get('date')}/short.mp4"
+              left = sorted(f for f in os.listdir(os.path.dirname(mp4)) if not f.startswith("slide-")) if post else []
+              print(name, "exit", rc, "| theme", post.get("theme"), "| voice", post.get("voice"), "| seconds", post.get("seconds"),
+                    "| short", post.get("short"), "| mp4 bytes", os.path.getsize(mp4) if os.path.exists(mp4) else None, "| other files", left)
+              print("   log tail:", " / ".join(open(f"/tmp/{name}.log").read().strip().splitlines()[-3:])[:600])
+          PY
+          cp /tmp/real/social-daily/*/short.mp4 /tmp/out/real-nightly-command.mp4 2>/dev/null
           python tools/voice_preview.py /tmp/pages /tmp/out > /tmp/g.log 2>&1; rc=$?
           set -e
           if [ $rc -ne 0 ]; then echo "::error title=Voice preview::$(tail -c 1500 /tmp/g.log | tr '\n' ' ')"; fi

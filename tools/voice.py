@@ -24,13 +24,12 @@ import wave
 import numpy as np
 
 SR = 24000
-VOICE = os.environ.get("DYS_VOICE", "am_michael")
+VOICE = os.environ.get("DYS_VOICE", "af_heart")   # Keo picked this one from the Nov 12 preview
 SPEED = float(os.environ.get("DYS_VOICE_SPEED", "1.2"))   # a little faster than normal speech: short-video pace
 VOICE_DIR = os.environ.get("DYS_VOICE_DIR", os.path.join(os.path.expanduser("~"), ".cache", "dys-voice"))
-FILES = {   # our copy of the files would be safer than a third party's release; see 07 (go-live step)
-    "kokoro-v1.0.onnx": ("https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx", 300_000_000),
-    "voices-v1.0.bin": ("https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin", 20_000_000),
-}
+OURS = "https://github.com/VapeZz/dys-market/releases/download/voice-kokoro-v1/"            # our own copy (kept for good)
+THEIRS = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/"   # where it was copied from
+FILES = {"kokoro-v1.0.onnx": 300_000_000, "voices-v1.0.bin": 20_000_000}   # file: smallest size that can be right
 UA = {"User-Agent": "DriveYourStyleMarket/1.0 (+https://driveyourstyle.net)"}
 
 SAY = {   # lower-case word: sounds (IPA, US English, the symbols espeak uses)
@@ -52,6 +51,25 @@ SAY = {   # lower-case word: sounds (IPA, US English, the symbols espeak uses)
     "feraligatr": "fəɹˈælɪɡˌeɪɾɚ", "typhlosion": "taɪflˈoʊʒən", "blaziken": "blˈeɪzɪkən", "togekiss": "tˈoʊɡəkˌɪs",
     "lugia": "lˈuːdʒiə", "tinkaton": "tˈɪŋkətˌɑːn", "deoxys": "diːˈɑːksɪs", "entei": "ˈɛnteɪ", "dialga": "daɪˈælɡə",
     "salamence": "sˈæləmˌɛns", "golisopod": "ɡoʊlˈɪsəpˌɑːd", "jirachi": "dʒɪɹˈɑːtʃi",
+    "bastiodon": "bˈæstioʊdˌɑːn", "meloetta": "mˌɛloʊˈɛɾə", "drifloon": "dɹˈɪfluːn", "cobalion": "koʊbˈeɪliən",
+    "tirtouga": "tɪɹtˈuːɡə", "musharna": "muːʃˈɑːɹnə", "maractus": "məɹˈæktəs", "simisage": "sˈɪmisˌeɪdʒ",
+    "simipour": "sˈɪmipˌɔːɹ", "simisear": "sˈɪmisˌɪɹ", "escavalier": "ɛskˈævəlˌɪɹ", "duosion": "duːˈoʊʒən",
+    "morpeko": "mɔːɹpˈɛkoʊ", "tatsugiri": "tˌɑːtsuːɡˈɪɹi", "applin": "ˈæplɪn", "maushold": "mˈaʊshoʊld",
+    "zapdos": "zˈæpdoʊs", "charmeleon": "tʃɑːɹmˈiːliən", "raichu": "ɹˈaɪtʃuː", "liepard": "lˈaɪpɚd",
+    "leavanny": "liːvˈæni", "cofagrigus": "kˌɔfəɡɹˈiːɡəs", "garbodor": "ɡɑːɹbˈoʊdɔːɹ", "archen": "ˈɑːɹkən",
+    "archeops": "ˈɑːɹkiˌɑːps", "deino": "dˈaɪnoʊ", "zweilous": "zwˈaɪləs", "volcanion": "vɑːlkˈeɪniən",
+    "ribombee": "ɹɪbˈɑːmbiː", "tangela": "tˈæŋɡələ", "mawile": "mˈɔːwaɪl", "numel": "nˈʌməl", "milotic": "maɪlˈoʊɾɪk",
+    "lisia": "lˈɪsiə", "vivillon": "vˈɪviˌɑːn", "shiinotic": "ʃiːnˈɑːɾɪk", "zarude": "zəɹˈuːd", "munna": "mˈuːnə",
+    "pansage": "pˈænseɪdʒ", "thundurus": "θˈʌndɚɹəs", "pokegear": "pˈoʊkeɪɡˌɪɹ", "sinistcha": "sɪnˈɪstʃə",
+    "hisuian": "hˈɪswiən", "phione": "fiːˈoʊni", "chimecho": "tʃaɪmˈɛkoʊ", "heliolisk": "hˈiːlioʊlˌɪsk",
+    "horsea": "hˈɔːɹsi", "hitmonchan": "hˈɪtməntʃˌæn", "sewaddle": "səwˈɑːdəl", "gothitelle": "ɡˈɑːθɪtˌɛl",
+    "salvatore": "sˈælvətˌɔːɹ", "cutiefly": "kjˈuːɾiflˌaɪ", "relicanth": "ɹˈɛlɪkˌænθ", "noctowl": "nˈɑːktaʊl",
+    "aromatisse": "əɹˈoʊmətˌiːs", "hippowdon": "hɪpˈaʊdən", "nidoking": "nˈiːdoʊkˌɪŋ", "nidoqueen": "nˈiːdoʊkwˌiːn",
+    "nidorina": "nˌiːdɚɹˈiːnə", "nidorino": "nˌiːdɚɹˈiːnoʊ", "zamazenta": "zˌɑːməzˈɛntə", "solgaleo": "sˌoʊlɡəlˈeɪoʊ",
+    "uxie": "jˈuːksi", "dedenne": "dɛdˈɛneɪ", "dragalge": "dɹəɡˈældʒi", "floette": "floʊˈɛt", "lechonk": "lətʃˈɑːŋk",
+    "chi-yu": "tʃˈiː jˈuː", "kadabra": "kədˈæbɹə", "pachirisu": "pˌætʃiɹˈiːsuː", "staryu": "stˈɑːɹjuː",
+    "baxcalibur": "bækskˈælɪbɚ", "doduo": "doʊdˈuːoʊ", "dodrio": "doʊdɹˈiːoʊ", "skwovet": "skwˈʌvɪt",
+    "kingambit": "kɪŋɡˈæmbɪt",
 }
 _WORD = re.compile(r"[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’\-]*")
 _engine = None
@@ -84,19 +102,28 @@ def engine():
         from kokoro_onnx import Kokoro
         os.makedirs(VOICE_DIR, exist_ok=True)
         paths = []
-        for fn, (url, least) in FILES.items():
+        for fn, least in FILES.items():
             p = os.path.join(VOICE_DIR, fn)
             if not os.path.exists(p) or os.path.getsize(p) < least:
-                tmp = p + ".part"
-                with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=300) as r, open(tmp, "wb") as f:
-                    while True:
-                        chunk = r.read(1 << 20)
-                        if not chunk:
+                tmp, err = p + ".part", None
+                for base in (OURS, THEIRS):
+                    try:
+                        with urllib.request.urlopen(urllib.request.Request(base + fn, headers=UA), timeout=300) as r, open(tmp, "wb") as f:
+                            while True:
+                                chunk = r.read(1 << 20)
+                                if not chunk:
+                                    break
+                                f.write(chunk)
+                        if os.path.getsize(tmp) >= least:
+                            err = None
                             break
-                        f.write(chunk)
-                if os.path.getsize(tmp) < least:
-                    os.remove(tmp)
-                    raise RuntimeError(f"voice: {fn} came back too small")
+                        err = f"{fn} came back too small from {base}"
+                    except Exception as e:
+                        err = f"{fn} from {base}: {e!r}"
+                if err:
+                    if os.path.exists(tmp):
+                        os.remove(tmp)
+                    raise RuntimeError("voice: " + err[:200])
                 os.replace(tmp, p)
             paths.append(p)
         _engine = Kokoro(*paths)
