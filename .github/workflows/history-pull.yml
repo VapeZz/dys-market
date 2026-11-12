@@ -1,0 +1,51 @@
+name: History pull (tcgcsv archives, one time)
+
+# One-time job for the price-history rebuild. Downloads each missing tcgcsv daily archive ONCE and
+# stores it in the "tcgcsv-<year>" releases, exactly as downloaded. Days already stored are skipped,
+# so running it again only fetches what is missing.
+# Lives only on the history-rebuild branch. Does not touch the data branch or the live site.
+# Runs when this file or history-pull.run changes (edit history-pull.run to run it again).
+on:
+  push:
+    branches: [history-rebuild]
+    paths:
+      - ".github/workflows/history-pull.yml"
+      - "history-pull.run"
+
+permissions:
+  contents: write   # create the releases and add files to them
+  actions: read     # read the day an earlier test run already downloaded
+
+concurrency:
+  group: history-pull
+  cancel-in-progress: false
+
+jobs:
+  pull:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Pull the missing archive days
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SEED_ARTIFACT: "13913493897"   # 2025-11-11, downloaded by the Nov 11 one-day test
+          SEED_DAY: "2025-11-11"
+        run: |
+          set -a
+          [ -f history-pull.run ] && . ./history-pull.run
+          set +a
+          python tools/history_pull.py
+
+      - name: Keep any day that was downloaded but could not be stored
+        if: ${{ always() && hashFiles('pull-out/*.7z') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tcgcsv-not-stored
+          path: pull-out/*.7z
+          retention-days: 90
