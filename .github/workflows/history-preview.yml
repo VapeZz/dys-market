@@ -1,0 +1,88 @@
+name: History preview (test branch only)
+
+# Phase 2 of the price-history rebuild. Builds the history days from the stored tcgcsv archives, rebuilds
+# the site data from saved prices with that history, runs the nightly steps that read price series, and
+# photographs a few pages. The result (report + screenshots) goes to the branch history-rebuild-preview.
+# It works on a throwaway copy of the saved data: nothing is written to the data branch or the live site,
+# and no PokemonPriceTracker key is given to it, so the locked days cannot be opened here.
+# Runs when this file or history-preview.run changes.
+on:
+  push:
+    branches: [history-rebuild]
+    paths:
+      - ".github/workflows/history-preview.yml"
+      - "history-preview.run"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: history-preview
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-24.04   # same image as the nightly job (Playwright 1.56 needs it)
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Tests
+        run: python -m unittest tests/test_history.py tests/test_feeds.py
+
+      - name: Copy of the saved prices (data branch, read only)
+        run: |
+          git clone --depth 1 --branch data "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" /tmp/data-branch
+          rm -rf data && cp -r /tmp/data-branch/data ./data
+          echo "Copied $(ls data/snapshots | wc -l) snapshot files"
+          if [ -f store-overrides.json ]; then cp store-overrides.json data/store-overrides.json; fi
+          pip install -q cryptography
+
+      - name: Build the history days from the stored archives
+        run: |
+          which 7z || sudo apt-get install -y p7zip-full
+          python tools/history_build.py
+
+      - name: Cards with no TCGplayer photo (from the weekly photo audit)
+        continue-on-error: true
+        run: git fetch -q --depth 1 origin img-audit && git show FETCH_HEAD:img-audit.json > /tmp/img-audit.json || true
+
+      - name: Rebuild site data from saved prices (no new download)
+        env:
+          IMG_AUDIT: /tmp/img-audit.json
+        run: python pipeline/run.py --rebuild
+
+      - name: Nightly steps that read the price series
+        run: |
+          mkdir -p preview-out
+          check() {   # name, command...
+            name="$1"; shift
+            if "$@" > /tmp/check.log 2>&1; then echo "ok      $name: $(tail -n 1 /tmp/check.log | cut -c1-150)" >> preview-out/checks.txt
+            else echo "FAILED  $name: $(tail -n 2 /tmp/check.log | tr '\n' ' ' | cut -c1-300)" >> preview-out/checks.txt; fi
+          }
+          check "Daily Scout" python pipeline/scout.py
+          check "Buyer dashboard" python pipeline/buyer.py
+          check "Grading candidates" python tools/grading.py site
+          check "Market Intel" python tools/intel.py site
+          check "Price pages" python tools/price_pages.py site
+          pip install -q playwright==1.56.0 imageio-ffmpeg numpy > /dev/null 2>&1
+          python -m playwright install --with-deps chromium > /dev/null 2>&1
+          check "Card of the Day" python tools/daily_card.py site/data data/social-daily --date "$(date -u +%F)"
+          check "Card of the Day, other TCGs" python tools/daily_card.py site/data data/social-daily-other --rotate --date "$(date -u +%F)"
+          cat preview-out/checks.txt
+
+      - name: Report and screenshots
+        run: python tools/history_preview.py site preview-out
+
+      - name: Publish the preview branch
+        run: |
+          cd preview-out
+          git init -q -b history-rebuild-preview
+          git config user.name "dys-market-bot"; git config user.email "dys-market-bot@users.noreply.github.com"
+          git add -A && git commit -q -m "History preview $(date -u +%F)"
+          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" history-rebuild-preview
+          echo "::notice title=History preview::published to branch history-rebuild-preview"

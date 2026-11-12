@@ -5,3 +5,8 @@ __pycache__/
 .DS_Store
 site/sitemap.xml
 archive-out/
+
+# made by the history rebuild jobs
+preview-out/
+pull-out/
+probe-out/

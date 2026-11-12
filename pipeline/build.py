@@ -134,11 +134,11 @@ def build(groups, products, stock, log=print):
     products = {k: v for k, v in products.items() if not is_code_card(v)}
     matched = stock
     stock = {k: {"u": v["u"], "p": v["p"]} for k, v in matched.items() if v.get("a", True)}
-    days = snapshots.available()
+    days = snapshots.site_days()      # our own snapshots plus the days rebuilt from tcgcsv's archives
     if not days:
         raise RuntimeError("No price snapshots yet. Run the nightly job first.")
     latest_day = days[-1]
-    latest = snapshots.load(latest_day)
+    latest = snapshots.view(latest_day)
     # keep only keys we know about
     latest = {k: v for k, v in latest.items() if k.split(":", 1)[0] in products}
     log(f"build: latest snapshot {latest_day}, {len(latest)} prices, {len(days)} snapshots on hand")
@@ -167,7 +167,8 @@ def build(groups, products, stock, log=print):
         if w == "all":
             d = days[0] if days[0] != latest_day else None
         else:
-            d = snapshots.closest_on_or_before(days, snapshots.minus_days(latest_day, w))
+            # older days are kept one per week, so the 1-year anchor may sit up to 6 days before its target
+            d = snapshots.closest_on_or_before(days, snapshots.minus_days(latest_day, w), tolerance=7 if w >= 365 else 4)
         anchors[str(w)] = d
 
     # ---- per-item changes for 7/30/90 (used on set pages) --------------
@@ -176,7 +177,7 @@ def build(groups, products, stock, log=print):
         d = anchors.get(w)
         if not d:
             continue
-        old = snapshots.load(d)
+        old = snapshots.view(d)
         for k, v in latest.items():
             o = old.get(k)
             if o and o >= 50:
@@ -187,21 +188,37 @@ def build(groups, products, stock, log=print):
     kinds = {"s": "sealed", "c": "cards"}
     game_slugs = ["all"] + [g["slug"] for g in config.GAMES]
     movers = {f"{kind}-{gs}": {"anchors": anchors, "windows": {}} for kind in kinds.values() for gs in game_slugs}
+    short_gain = getattr(config, "MOVER_MAX_GAIN_DEFAULT", 300)
+    long_gain = getattr(config, "MOVER_MAX_GAIN", {})
+    suspect = set()     # prices that moved more in the last 7 or 30 days than the short lists accept
+    for w in ("7", "30"):
+        if long_gain and anchors.get(w):
+            old = snapshots.view(anchors[w])
+            for k, v in latest.items():
+                o = old.get(k)
+                if o and o >= 100 and not -75 <= pct(v, o) <= short_gain:
+                    suspect.add(k)
+            del old
     for w, d in anchors.items():
         if not d:
             continue
-        old = snapshots.load(d)
+        old = snapshots.view(d)
         buckets = {}
+        long_window = str(w) in long_gain
+        max_gain = long_gain.get(str(w), short_gain)
+        min_start = max(100, getattr(config, "MOVER_LONG_MIN_START", 100)) if long_window else 100
         for k, v in latest.items():
             o = old.get(k)
-            if not o or o < 100:  # ignore items that were under $1
+            if not o or o < min_start:  # ignore items that were under $1 (under $5 on the 1-year and all-time lists)
+                continue
+            if long_window and k in suspect:   # jumped past the short-window limits this week or month: a suspect listing
                 continue
             pid = k.split(":", 1)[0]
             p = products[pid]
             if v < config.MOVER_THRESHOLDS[0] * 100:
                 continue
             row = [int(pid), label(products, k)[1], p["g"], v, o, pct(v, o)]
-            if row[5] > 300 or row[5] < -75:  # almost always a one-off sale or bad listing, not a real move
+            if row[5] > max_gain or row[5] < -75:  # almost always a one-off sale or bad listing, not a real move
                 continue
             for gs in ("all", p["k"]):
                 buckets.setdefault(f"{kinds[p['t']]}-{gs}", []).append(row)
@@ -229,7 +246,7 @@ def build(groups, products, stock, log=print):
     sealed_change = {}
     d7 = anchors.get("7")
     if d7:
-        old = snapshots.load(d7)
+        old = snapshots.view(d7)
         for gid, keys in by_set.items():
             now_sum = old_sum = 0
             for k in keys:
@@ -332,7 +349,7 @@ def build(groups, products, stock, log=print):
     idx = {k: i for i, k in enumerate(tracked)}
     series = [[None] * len(series_days) for _ in tracked]
     for j, d in enumerate(series_days):
-        snap = latest if d == latest_day else snapshots.load(d)
+        snap = latest if d == latest_day else snapshots.view(d)
         for k, i in idx.items():
             v = snap.get(k)
             if v is not None:

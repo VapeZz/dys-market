@@ -3,6 +3,12 @@
 Days before config.SEALED_BEFORE hold price history filled in from PokemonPriceTracker, which we may
 store but not publish, so those files are encrypted (<day>.json.gz.enc, see sealed.py). Everything
 here reads and writes both kinds; reading a sealed day without the key gives an empty snapshot.
+
+Separate from those: data/history/<day>.json.gz holds days before SEALED_BEFORE rebuilt from tcgcsv's
+own daily archives (tools/history_build.py). That is TCGplayer data like our nightly snapshots, with
+nothing from PokemonPriceTracker in it, so the site may show it. It is never sealed and never mixed
+into the snapshot files. The site reads days through site_days() and view(); the functions that
+manage the snapshot files themselves (load, save, seal_old ...) are unchanged.
 """
 import gzip
 import json
@@ -13,6 +19,7 @@ import config
 import sealed
 
 SNAP_DIR = os.path.join(config.DATA_DIR, "snapshots")
+HIST_DIR = os.path.join(config.DATA_DIR, "history")
 SEALED_BEFORE = getattr(config, "SEALED_BEFORE", "")
 _warned = []
 
@@ -77,6 +84,87 @@ def available():
     """Days the site may use. The PokemonPriceTracker-filled days count only on its Business plan."""
     days = _days()
     return days if getattr(config, "PPT_BUSINESS_PLAN", True) else [d for d in days if not protected(d)]
+
+
+def _hist(day):
+    return os.path.join(HIST_DIR, f"{day}.json.gz")
+
+
+def history_days():
+    if not os.path.isdir(HIST_DIR):
+        return []
+    return sorted({f[:10] for f in os.listdir(HIST_DIR) if f.endswith(".json.gz")})
+
+
+def has_history(day):
+    return os.path.exists(_hist(day))
+
+
+def save_history(day, snap):
+    """A day rebuilt from tcgcsv's archive. Only for days before our own tracking started."""
+    if SEALED_BEFORE and day >= SEALED_BEFORE:
+        raise ValueError(f"{day} is covered by our own nightly snapshots")
+    os.makedirs(HIST_DIR, exist_ok=True)
+    tmp = _hist(day) + ".tmp"
+    with open(tmp, "wb") as f:
+        f.write(gzip.compress(json.dumps(snap, separators=(",", ":")).encode("utf-8")))
+    os.replace(tmp, _hist(day))
+
+
+def load_history(day):
+    if not os.path.exists(_hist(day)):
+        return {}
+    with gzip.open(_hist(day), "rt", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def site_days():
+    """Every day the site may show: our own snapshots plus the days rebuilt from tcgcsv's archives."""
+    return sorted(set(available()) | set(history_days()))
+
+
+def view(day):
+    """Prices the site may show for one day. For a day before SEALED_BEFORE that is the tcgcsv rebuild;
+    the PokemonPriceTracker-filled snapshot is added only on its Business plan, and only where the
+    rebuild has no price."""
+    snap = load_history(day)
+    if not protected(day) or getattr(config, "PPT_BUSINESS_PLAN", True):
+        for k, v in load(day).items():
+            snap.setdefault(k, v)
+    return snap
+
+
+def keep_days(days, today, monthly=False):
+    """Which of `days` the retention rule keeps: every day for KEEP_DAILY_DAYS, then the newest day of each
+    week up to KEEP_WEEKLY_DAYS; with monthly=True, the newest day of each month after that."""
+    t = date.fromisoformat(today)
+    keep, weeks, months = set(), set(), set()
+    for day in sorted(days, reverse=True):      # newest first, so the latest day of each old week or month wins
+        d = date.fromisoformat(day)
+        age = (t - d).days
+        if age <= config.KEEP_DAILY_DAYS:
+            keep.add(day)
+        elif age <= config.KEEP_WEEKLY_DAYS:
+            if d.isocalendar()[:2] not in weeks:
+                weeks.add(d.isocalendar()[:2])
+                keep.add(day)
+        elif monthly and (d.year, d.month) not in months:
+            months.add((d.year, d.month))
+            keep.add(day)
+    return keep
+
+
+def prune_history(today):
+    """Same thinning as the snapshots, plus one day a month kept for good (a few files a year), so the
+    site's "All" view keeps reaching back to the first archive."""
+    days = history_days()
+    keep = keep_days(days, today, monthly=True)
+    removed = 0
+    for day in days:
+        if day not in keep:
+            os.remove(_hist(day))
+            removed += 1
+    return removed
 
 
 def seal_old():
