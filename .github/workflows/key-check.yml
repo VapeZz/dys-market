@@ -1,0 +1,32 @@
+# One-off, read-only check: do the keys saved in GitHub still open the locked files on the data branch?
+# Runs only when this branch (key-check) is pushed. It reads a copy of the data branch, prints counts,
+# and writes nothing: no data, no site, no secrets. Safe to delete with the branch afterwards.
+name: Key check (read-only)
+
+on:
+  push:
+    branches: [key-check]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q cryptography
+      - name: Copy the data branch (read-only)
+        run: git clone -q --depth 1 --branch data "https://github.com/${{ github.repository }}.git" "$RUNNER_TEMP/data"
+      - name: Try every saved key on every locked file
+        env:
+          PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
+          PPT_API_KEY_NEW: ${{ secrets.PPT_API_KEY_NEW }}
+          PPT_API_KEY_OLD: ${{ secrets.PPT_API_KEY_OLD }}
+          EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+          EBAY_CLIENT_SECRET_OLD: ${{ secrets.EBAY_CLIENT_SECRET_OLD }}
+        run: python tools/key_check.py "$RUNNER_TEMP/data"
