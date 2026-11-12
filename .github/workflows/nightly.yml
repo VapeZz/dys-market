@@ -111,6 +111,17 @@ jobs:
         continue-on-error: true
         run: git fetch -q --depth 1 origin img-audit && git show FETCH_HEAD:img-audit.json > /tmp/img-audit.json || true
 
+      # Price history for the days before our own tracking (Feb 8, 2024 to Oct 11, 2026). Builds any day the
+      # retention rule wants that data/history doesn't hold yet, from this repo's own tcgcsv-<year> releases
+      # (never from tcgcsv). First run: about 150 days, a few minutes; after that it finds nothing to do.
+      # If it fails, the run goes on and the site is built with the history already saved.
+      - name: Price history before our own tracking (from our stored tcgcsv archives)
+        continue-on-error: true
+        timeout-minutes: 30
+        run: |
+          which 7z || sudo apt-get install -y p7zip-full
+          python tools/history_build.py
+
       - name: Download today's prices and build site data
         env:
           IMG_AUDIT: /tmp/img-audit.json

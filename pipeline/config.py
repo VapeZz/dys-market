@@ -28,6 +28,15 @@ STORE_URL = os.environ.get("STORE_URL", "https://driveyourstyle.net").rstrip("/"
 MOVER_THRESHOLDS = [5, 20, 100]
 MOVER_WINDOWS = [7, 30, 90, 365, "all"]
 MOVERS_PER_LIST = 50
+# A move bigger than this is almost always a one-off sale or a bad listing, not a real move.
+MOVER_MAX_GAIN_DEFAULT = 300                     # percent, for the 7, 30 and 90-day lists (unchanged)
+# Over a year or more, real moves get much bigger (in Nov 2026 the median 1-year gain of Pokémon cards worth
+# $20+ was over 100%, and about 990 of them had more than quadrupled), so the long lists get more room and
+# two extra checks instead: the item must have been worth MOVER_LONG_MIN_START back then (a card going from
+# $1 to $20 is noise), and anything that jumped past the short-window limits in the last 7 or 30 days is
+# left out as a suspect listing.
+MOVER_MAX_GAIN = {"365": 2500, "all": 5000}      # percent, for the 1-year and all-time lists
+MOVER_LONG_MIN_START = 500                       # cents
 
 # Snapshot retention: keep every day for this many days, then one per week.
 KEEP_DAILY_DAYS = 120

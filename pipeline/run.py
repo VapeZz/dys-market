@@ -43,6 +43,9 @@ def main(argv):
         removed = snapshots.prune(day)
         if removed:
             print(f"snapshots: pruned {removed} old files")
+        removed = snapshots.prune_history(day)
+        if removed:
+            print(f"history: thinned {removed} older days (their archives stay in the tcgcsv releases)")
     try:
         n = snapshots.seal_old()
         if n:
