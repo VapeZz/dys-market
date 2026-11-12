@@ -62,17 +62,28 @@ def shoe(r, h=None):
             f'{esc(r["b"])}</div>')
 
 
+def lead(feat):
+    """The pair the post leads with: hottest first, then one we made a call on."""
+    return max([f for f in feat if f.get("im")], key=lambda r: (r["h"], r.get("pick") is not None))
+
+
 def cover(feat, span):
-    spots = [(330, 10, 0, 5, 420), (60, 150, -9, 4, 360), (660, 150, 9, 4, 360)]
-    fan = "".join(
-        f'<div style="position:absolute;left:{x}px;top:{y}px;width:{w}px;height:{w}px;transform:rotate({rot}deg);z-index:{z};'
-        f'background:#f2f2f2;border-radius:28px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6)">{shoe(r)}</div>'
-        for r, (x, y, rot, z, w) in zip([f for f in feat if f.get("im")][:3], spots))
+    """Number-first cover: the hottest pair, big, with its retail price and drop day."""
+    top = lead(feat)
+    rest = [f for f in feat if f.get("im") and f is not top][:2]
+    box = "background:#f2f2f2;overflow:hidden;position:absolute"
+    peeks = "".join(f'<div style="{box};left:{x}px;top:{y}px;width:330px;height:330px;transform:rotate({rot}deg);z-index:3;border-radius:28px;'
+                    f'box-shadow:0 30px 80px rgba(0,0,0,.6)">{shoe(r)}</div>' for r, (x, y, rot) in zip(rest, [(-40, 160, -10), (646, 160, 10)]))
+    hero = (f'<div style="{box};left:198px;top:0;width:540px;height:540px;transform:rotate(-3deg);z-index:5;border-radius:32px;'
+            f'box-shadow:0 0 0 6px #a78bfa,0 0 90px rgba(167,139,250,.6),0 30px 90px rgba(0,0,0,.7)">{shoe(top, 1)}</div>')
+    more = len(feat) - 1
     return f"""<div class="slide">
-<div class="top"><img class="logo" src="file://{LOGO}"><div class="tag">Release week</div></div>
-<div style="margin-top:56px;font-family:'Barlow Condensed';font-weight:800;font-size:150px;line-height:.9;text-transform:uppercase">Sneaker<br><span class="holo">drops</span></div>
-<div style="margin-top:22px;font-size:40px;color:#d8d5cf">What's releasing {esc(span)}</div>
-<div style="position:relative;flex:1;margin-top:50px">{fan}</div>
+<div class="top"><img class="logo" src="file://{LOGO}" style="height:78px"><div class="tag">Drops {esc(span)}</div></div>
+<div style="margin-top:38px;font-family:'Barlow Condensed';font-weight:800;font-size:84px;line-height:.95;text-transform:uppercase">Drops {esc(day(top['d'], '%a %-m/%-d'))}{' for' if top.get('r') else ''}</div>
+<div class="holo" style="font-family:'Barlow Condensed';font-weight:800;font-size:230px;line-height:.9">{usd(top.get('r'))}</div>
+<div style="margin-top:10px;font-size:40px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{esc(top['n'])}</div>
+<div style="margin-top:4px;font-size:34px;color:#bdb9b2">Cop or skip?{f" +{more} more drop{'s' if more != 1 else ''} this week" if more > 0 else ""}</div>
+<div style="position:relative;flex:1;margin-top:34px">{peeks}{hero}</div>
 <div class="bar" style="margin-bottom:26px"></div>
 <div class="foot"><span>Swipe for this week's drops →</span><span>market.driveyourstyle.net</span></div></div>"""
 
@@ -138,7 +149,8 @@ def main(argv):
         b.close()
     from tiktok import make_short
     video = make_short(tt, os.path.join(out, "short.mp4"), per=3.6)
-    lines = [f"👟 Sneaker drops {span}", ""]
+    top = lead(feat)
+    lines = [f"{top['n']} drops {day(top['d'], '%a %-m/%-d')}" + (f" for {usd(top['r'])}" if top.get("r") else "") + f" 👟 Cop or skip? Sneaker drops {span}", ""]
     for r in sorted(feat, key=lambda r: (r["d"], -r["h"])):   # only pairs with a photo are named
         call = f" · our call: {VERDICT[r['pick']['v']][0]}" if r.get("pick") and r["pick"]["v"] in VERDICT else ""
         lines.append(f"{'🔥' if r['h'] == 3 else '•'} {day(r['d'], '%a %-m/%-d')}: {r['n']} ({usd(r.get('r'))}){call}")

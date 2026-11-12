@@ -41,18 +41,25 @@ def pick(site_data):
 
 
 def cover(items):
-    fan = "".join(
-        f'<div class="card" style="position:absolute;width:300px;height:300px;left:{x}px;top:{y}px;transform:rotate({rot}deg);z-index:{z}">'
-        f'<img src="{img(c["id"], 400)}" style="padding:14px"></div>'
-        for c, (x, y, rot, z) in zip(items, [(372, 60, 0, 5), (140, 110, -10, 4), (604, 110, 10, 4), (-40, 200, -18, 3), (794, 200, 18, 3)]))
-    top = max(i["off"] for i in items)
+    """Price-first cover: the best deal's price is the biggest thing on the slide, with that product in front."""
+    top = max(items, key=lambda i: i["off"])
+    rest = [i for i in items if i is not top][:2]
+    peeks = "".join(
+        f'<div class="card" style="position:absolute;width:300px;height:300px;left:{x}px;top:{y}px;transform:rotate({rot}deg);z-index:3">'
+        f'<img src="{img(c["id"], 400)}" style="padding:14px"></div>' for c, (x, y, rot) in zip(rest, [(-30, 170, -12), (666, 170, 12)]))
+    hero = (f'<div class="card" style="position:absolute;width:520px;height:520px;left:208px;top:0;transform:rotate(-3deg);z-index:5;'
+            f'box-shadow:0 0 0 6px #a78bfa,0 0 90px rgba(167,139,250,.6),0 30px 80px rgba(0,0,0,.7)"><img src="{img(top["id"], 1000)}" style="padding:20px"></div>'
+            f'<div style="position:absolute;left:560px;top:-26px;z-index:6;transform:rotate(8deg);font-family:\'Barlow Condensed\';font-weight:800;font-size:52px;'
+            f'text-transform:uppercase;color:#050404;background:#3ee08f;border-radius:999px;padding:8px 26px 2px;box-shadow:0 12px 30px rgba(0,0,0,.5)">{top["off"] * 100:.0f}% under</div>')
+    price = money(top["p"])
     return f"""<div class="slide">
-<div class="top"><img class="logo" src="file://{LOGO}"><div class="tag">In stock now</div></div>
-<div style="margin-top:56px;font-family:'Barlow Condensed';font-weight:800;font-size:138px;line-height:.9;text-transform:uppercase">Under<br><span class="holo">market</span></div>
-<div style="margin-top:22px;font-size:40px;color:#d8d5cf">{len(items)} deals this week · up to {top * 100:.0f}% under market price</div>
-<div style="position:relative;flex:1;margin-top:40px">{fan}</div>
+<div class="top"><img class="logo" src="file://{LOGO}" style="height:78px"><div class="tag">In stock now</div></div>
+<div style="margin-top:38px;font-family:'Barlow Condensed';font-weight:800;font-size:84px;line-height:.95;text-transform:uppercase">Below market price</div>
+<div class="holo" style="font-family:'Barlow Condensed';font-weight:800;font-size:{230 if len(price) <= 7 else 190}px;line-height:.9">{price}</div>
+<div style="margin-top:10px;font-size:40px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><s style="color:#8f8a84">{money(top["m"])} market</s> · {esc(top["name"])}</div>
+<div style="position:relative;flex:1;margin-top:54px">{peeks}{hero}</div>
 <div class="bar" style="margin-bottom:26px"></div>
-<div class="foot"><span>Swipe for prices →</span><span>Ships from Las Vegas</span></div></div>"""
+<div class="foot"><span>Swipe for all {len(items)} →</span><span>Ships from Las Vegas</span></div></div>"""
 
 
 def item_slide(n, c):
@@ -75,6 +82,12 @@ def cta():
 <div style="margin-top:56px;font-family:'Barlow Condensed';font-weight:700;font-size:62px;letter-spacing:.04em;border:4px solid #f2f0eb;padding:16px 36px 12px">driveyourstyle.net</div>
 <div class="bar" style="width:100%;margin-top:80px"></div>
 <div class="foot" style="width:100%;margin-top:26px"><span>Link in bio</span><span>DM @drive.yourstyle</span></div></div>"""
+
+
+def title_name(n, k=45):
+    """Product name for the YouTube title: no "(Retail Version)" notes, brackets opened up, cut at a word (never mid-word or mid-bracket)."""
+    n = re.sub(r"\s+", " ", re.sub(r"[\[\]]", "", re.sub(r"\([^)]*\)", "", n))).strip() or n
+    return n if len(n) <= k else n[:k + 1].rsplit(" ", 1)[0]
 
 
 def main(argv):
@@ -136,7 +149,7 @@ def main(argv):
             "slides": [f"{base}/slide-{n}.jpg" for n in range(1, len(slides) + 1)],
             "slides_tiktok": [f"{base}/tt-{n}.jpg" for n in range(1, len(tt) + 1)],
             "short": f"{base}/short.mp4" if video else None,
-            "short_title": f"{top['name'][:45]} for {top['off'] * 100:.0f}% UNDER market price 🔥 Is it a steal? #pokemon"}
+            "short_title": f"{title_name(top['name'])} for {top['off'] * 100:.0f}% UNDER market price 🔥 Is it a steal? #pokemon"}
     json.dump(post, open(os.path.join(out, "post.json"), "w"), indent=1, ensure_ascii=False)
     json.dump(post, open(os.path.join(out_root, "latest.json"), "w"), ensure_ascii=False)
     history = [h for h in history if h["date"] != today.isoformat()] + [{"date": today.isoformat(), "sig": sig}]
