@@ -29,7 +29,7 @@ const V2 = (() => {
 if (V2) document.documentElement.classList.add("v2");
 const cache = {};
 const getJSON = (path) => (cache[path] ||= fetch(`data/${path}`, { cache: "no-cache" }).then((r) => {
-  if (!r.ok) throw new Error(`${path}: ${r.status}`);
+  if (!r.ok) throw Object.assign(new Error(`${path}: ${r.status}`), { status: r.status });
   return r.json();
 }));
 
@@ -75,7 +75,33 @@ const picTag = (ids, cls, ph, size = 200) => ids.length
 const BORROW_NOTE = `<span class="borrow-note">Photo from another printing of this card</span>`;
 const imgTag = (id, cls = "thumb", size = 200, alt = "") =>
   `<img class="${cls}" src="${img(id, size)}"${alt ? ` data-alt="${esc(alt)}"` : ""} alt="" loading="lazy" onerror="dysImg(this)">`;
-const prodUrl = (id, gid) => `product.html?id=${encodeURIComponent(id ?? "")}&set=${encodeURIComponent(gid ?? "")}`;
+// pg: the item's static price page (p/<pg>.html) when it has one ("pg" in data/set/<id>.json, written by
+// tools/price_pages.py). That page is the same card page, at the address search engines index.
+const prodUrl = (id, gid, pg) => (pg && /^[a-z0-9-]+$/.test(pg) ? `p/${pg}.html`
+  : `product.html?id=${encodeURIComponent(id ?? "")}&set=${encodeURIComponent(gid ?? "")}`);
+/* Search engines: set.html and product.html are one file for every set or card, so each page names itself here:
+   its own title, description and address (canonical). Google's rule for a canonical added by script: the page's
+   HTML must not carry one, and there must be only one. Static price pages (p/) carry theirs in the HTML and are
+   never changed here. */
+const SITE_URL = "https://market.driveyourstyle.net/";
+function seo({ title, desc, path }) {
+  const meta = (attr, name, val) => {
+    let m = document.head.querySelector(`meta[${attr}="${name}"]`);
+    if (!m) { m = document.createElement("meta"); m.setAttribute(attr, name); document.head.appendChild(m); }
+    m.setAttribute("content", val);
+  };
+  if (title) { document.title = title; meta("property", "og:title", title); meta("name", "twitter:title", title); }
+  if (desc) { meta("name", "description", desc); meta("property", "og:description", desc); meta("name", "twitter:description", desc); }
+  if (path != null && !document.head.querySelector('link[rel="canonical"]')) {
+    const l = document.createElement("link"); l.rel = "canonical"; l.href = SITE_URL + path; document.head.appendChild(l);
+    meta("property", "og:url", SITE_URL + path);
+  }
+}
+// a set or card address that doesn't exist: tell search engines not to keep the empty page
+function noindex() {
+  if (document.head.querySelector('meta[name="robots"]')) return;
+  const m = document.createElement("meta"); m.name = "robots"; m.content = "noindex"; document.head.appendChild(m);
+}
 const fmtDate = (d) => d ? new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
 const below = (ours, mkt) => ours != null && mkt != null && ours < mkt;
 const BELOW = `<span class="badge deal">Below market</span>`;
@@ -214,7 +240,7 @@ const NAV = [
     ["trends", "Sealed trends", "Booster boxes, ETBs, bundles", '<path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/>'],
     ["compare", "Compare", "Two products side by side", '<rect x="3" y="5" width="7" height="14" rx="1.5"/><rect x="14" y="5" width="7" height="14" rx="1.5"/>'],
     ["calendar", "Release calendar", "Upcoming sets, every game", '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>'],
-  ], ["set", "product", "static"]],
+  ], ["set", "product", "static", "price"]],
   ["Grading", [
     ["grading", "Grading Insights", "Which cards pay to grade", '<path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/>'],
     ["centering", "Centering check", "Snap a photo, get the grade", '<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M12 8v8M8 12h8"/>'],
@@ -343,7 +369,7 @@ function crumbs(path, parent) {   // path: [[href or null, label], ...]; parent:
   try {
     const r = document.referrer ? new URL(document.referrer) : null;
     if (r && r.origin === location.origin && history.length > 1) {
-      const up = new URL(parent[0], location.href);
+      const up = new URL(parent[0], document.baseURI);
       const pg = r.pathname.includes("/blog/") ? "blog" : (r.pathname.split("/").pop() || "index.html").replace(/\.html$/, "");
       if (r.pathname === up.pathname && r.searchParams.get("id") === up.searchParams.get("id")) hist = true;   // came from the parent: go back so its filters and scroll are kept
       else if (PAGE_NAME[pg] && pg !== PAGE) { back = [r.href, PAGE_NAME[pg]]; hist = true; }
@@ -689,6 +715,9 @@ async function pageSet() {
   document.title = `${set.n} prices · Drive Your Style Market Insights`;
   const gl = Object.fromEntries(meta.games.map((g) => [g.slug, g.label]));
   const game = gl[set.k] || set.k;
+  seo({ title: `${set.n} prices · Drive Your Style Market Insights`,
+    desc: `Every card and sealed product in ${set.n} (${game}) with today's TCGplayer market price and recent price changes.`,
+    path: `set.html?id=${set.id}` });
   crumbs([["sets.html", "Sets"], [`sets.html?game=${set.k}`, game], [null, set.n]], [`sets.html?game=${set.k}`, `all ${game} sets`]);
   $("#title").textContent = set.n;
   const sinfo = allSets.find((s) => String(s.id) === String(set.id));
@@ -732,11 +761,11 @@ async function pageSet() {
     $("#grid").innerHTML = shown.map((i) => {
       const k = ownKey(i), qty = own.get(k) || 0, pr = tab === "c" ? printing(i) : "";
       return view === "grid"
-        ? `<div class="ctile${tab === "s" ? " sealed" : ""}${qty ? " owned" : ""}"><a href="${prodUrl(i.id, set.id)}" class="cimg">${imgTag(i.id, "", 1000, i.im)}</a>
+        ? `<div class="ctile${tab === "s" ? " sealed" : ""}${qty ? " owned" : ""}"><a href="${prodUrl(i.id, set.id, i.pg)}" class="cimg">${imgTag(i.id, "", 1000, i.im)}</a>
             <button class="cadd" type="button" data-add="${esc(k)}" aria-label="Add ${esc(i.n)} to My Collection">${qty ? `✓${qty > 1 ? qty : ""}` : "+"}</button>
-            <a href="${prodUrl(i.id, set.id)}" class="cinfo"><span class="cn"><b>${esc(tab === "c" ? short(i) : i.n)}</b>${i.no ? `<small>${esc(i.no)}</small>` : ""}</span>
+            <a href="${prodUrl(i.id, set.id, i.pg)}" class="cinfo"><span class="cn"><b>${esc(tab === "c" ? short(i) : i.n)}</b>${i.no ? `<small>${esc(i.no)}</small>` : ""}</span>
             <span class="cp">${i.p == null ? `<small class="muted">No price yet</small>` : `<b>${money(i.p)}</b>`}${bestCh(i.ch) != null ? `<small class="cchg">${chg(bestCh(i.ch))}</small>` : ""}${pr ? `<em>${esc(pr)}</em>` : ""}${i.dys ? `<em class="instock">In stock</em>` : ""}</span></a></div>`
-        : `<div class="crow${qty ? " owned" : ""}"><a href="${prodUrl(i.id, set.id)}">${imgTag(i.id, "", 200, i.im)}<span><b>${esc(i.n)}</b><small>${esc([i.r, i.no].filter(Boolean).join(" · "))}</small></span></a>
+        : `<div class="crow${qty ? " owned" : ""}"><a href="${prodUrl(i.id, set.id, i.pg)}">${imgTag(i.id, "", 200, i.im)}<span><b>${esc(i.n)}</b><small>${esc([i.r, i.no].filter(Boolean).join(" · "))}</small></span></a>
             <span class="num"><b>${money(i.p)}</b>${chg(i.ch?.["7"])}</span><button class="cadd" type="button" data-add="${esc(k)}" aria-label="Add ${esc(i.n)} to My Collection">${qty ? `✓${qty > 1 ? qty : ""}` : "+"}</button></div>`;
     }).join("") + (items.length > lim ? `<div class="cmore"><button class="btn" id="more" type="button">Show all ${items.length}</button></div>` : "");
     $("#more")?.addEventListener("click", () => { lim = 1e9; draw(); });
@@ -773,13 +802,13 @@ function moreHtml(set, id) {
   const seen = new Set([id]), cards = set.items.filter((i) => i.t === "c" && !seen.has(i.id) && seen.add(i.id));
   if (!cards.length) return "";
   return `<section style="grid-column:1/-1;margin-top:28px;min-width:0"><div class="block-head"><div><h2 style="font-size:24px">More from ${esc(set.n)}</h2><p>The most valuable cards in this set.</p></div><a class="more" href="set.html?id=${set.id}">All cards →</a></div>
-    <div class="chase-row">${cards.slice(0, 12).map((c) => `<a class="chase" href="${prodUrl(c.id, set.id)}">${imgTag(c.id, "", 1000)}<span class="t">${esc(c.n)}</span><span class="p"><b>${money(c.p)}</b>${chg(bestCh(c.ch))}</span></a>`).join("")}</div></section>`;
+    <div class="chase-row">${cards.slice(0, 12).map((c) => `<a class="chase" href="${prodUrl(c.id, set.id, c.pg)}">${imgTag(c.id, "", 1000)}<span class="t">${esc(c.n)}</span><span class="p"><b>${money(c.p)}</b>${chg(bestCh(c.ch))}</span></a>`).join("")}</div></section>`;
 }
 function pullsHtml(set) {
   const seen = new Set(), cards = set.items.filter((i) => i.t === "c" && !seen.has(i.id) && seen.add(i.id));
   if (!cards.length) return "";
   return `<section style="grid-column:1/-1;margin-top:28px;min-width:0"><div class="block-head"><div><h2 style="font-size:24px">Top cards you could pull</h2><p>The most valuable singles in ${esc(set.n)} at today's market price.</p></div><a class="more" href="set.html?id=${set.id}">All ${cards.length} cards →</a></div>
-    <div class="chase-row">${cards.slice(0, 18).map((c, i) => `<a class="chase" href="${prodUrl(c.id, set.id)}"><span class="rank">${i + 1}</span>${imgTag(c.id, "", 1000)}<span class="t">${esc(c.n)}</span><span class="p"><b>${money(c.p)}</b>${chg(c.ch?.["7"])}</span></a>`).join("")}</div></section>`;
+    <div class="chase-row">${cards.slice(0, 18).map((c, i) => `<a class="chase" href="${prodUrl(c.id, set.id, c.pg)}"><span class="rank">${i + 1}</span>${imgTag(c.id, "", 1000)}<span class="t">${esc(c.n)}</span><span class="p"><b>${money(c.p)}</b>${chg(c.ch?.["7"])}</span></a>`).join("")}</div></section>`;
 }
 
 function gradedHtml(base, set, v) {
@@ -933,18 +962,27 @@ function ebayRow(e, mkt) {
 }
 
 async function pageProduct() {
-  const id = Number(params.get("id")), gid = params.get("set");
+  const ds = document.body.dataset;   // a static price page (p/<slug>.html, data-page="price") names its item here
+  const id = Number(params.get("id") || ds.id), gid = params.get("set") || ds.set;
   if (!id || !gid) { location.replace("sets.html"); return; }   // bare product.html (old links, crawlers)
   const [meta, set, graded, eb] = await Promise.all([getJSON("meta.json"), getJSON(`set/${gid}.json`), getJSON("graded.json").catch(() => ({ cards: {} })), getJSON("ebay.json").catch(() => ({ cards: {} }))]);
   const variants = set.items.filter((i) => i.id === id);
   let gr = variants.length === 1 ? graded.cards?.[id]?.g || null : null;   // graded sales are per product; skip when it has several printings
   if (gr?.psa10 && variants[0].p && !(gr.psa10[0] >= variants[0].p * 1.1 && gr.psa10[0] <= variants[0].p * 60)) gr = null;   // mismatched comp
   const ebc = variants.length === 1 ? eb.cards?.[id] || null : null;
-  if (!variants.length) { $("#prod").innerHTML = `<p class="empty-note">We don't have a price for this product yet.</p>`; return; }
-  let v = variants[0];
+  if (!variants.length) {   // a price page keeps what its HTML already shows
+    if (PAGE !== "price") { $("#prod").innerHTML = `<p class="empty-note">We don't have a price for this product yet.</p>`; noindex(); }
+    return;
+  }
+  let v = variants.find((x) => x.n === ds.var) || variants[0];   // a price page opens on its own printing
   const base = v.n.replace(/ \((Holofoil|Reverse Holofoil|Normal|1st Edition.*?)\)$/, "");
-  document.title = `${base} price · Drive Your Style Market Insights`;
   const gl = Object.fromEntries(meta.games.map((g) => [g.slug, g.label]));
+  if (PAGE !== "price") {   // product.html?id=…: point search engines at this item's static price page when it has one
+    const twin = v.pg ? v : variants.find((x) => x.pg);
+    seo({ title: `${base} price · Drive Your Style Market Insights`,
+      desc: `${base} (${set.n}, ${gl[set.k] || set.k})${v.p == null ? "" : ` market price today: ${money(v.p)}`}. Price history, recent changes and grading math.`,
+      path: twin ? prodUrl(id, set.id, twin.pg) : `product.html?id=${id}&set=${set.id}` });
+  }
   const setHref = `set.html?id=${set.id}${v.t === "s" ? "&tab=sealed" : ""}`;
   crumbs([["sets.html", "Sets"], [`sets.html?game=${set.k}`, gl[set.k] || set.k], [setHref, set.n], [null, base]], [setHref, set.n]);
   // Fourth change box: over a year when this item has a year of prices, else over the months the chart covers.
@@ -956,10 +994,11 @@ async function pageProduct() {
     return { l: days >= 350 ? "1 year" : `${Math.round(days / 30.4)} months`, v: Math.round((x.p - ser[i]) / ser[i] * 1000) / 10 };
   };
   const draw = () => {
+    $("#pp-static")?.remove();   // a price page's plain "More from this set" list: the full one is drawn below
     const long = longChange(v);
     $("#prod").innerHTML = `<div class="prod-img">${imgTag(id, "", 1000, v.im)}${BORROW_NOTE}</div>
       <div><span class="muted">${esc(gl[set.k] || "")} · ${esc(set.n)}${v.no ? " · #" + esc(v.no) : ""}${v.r ? " · " + esc(v.r) : ""}</span>
-        <h1 style="font-size:clamp(26px,3.4vw,38px);margin-top:6px">${esc(base)}</h1>
+        <h1 style="font-size:clamp(26px,3.4vw,38px);margin-top:6px">${esc(PAGE === "price" ? `${base.replaceAll(" - ", " ")} price` : base)}</h1>
         ${variants.length > 1 ? `<div id="var" style="margin-top:12px"></div>` : ""}
         <div class="muted" style="margin-top:14px">Market price</div><div class="price-big">${v.p == null ? `<span class="muted" style="font-size:.6em">No market price yet</span>` : money(v.p)}</div>
         ${v.dys && below(v.dys.p, v.p) ? `<p style="margin:6px 0 0">${BELOW} <span class="muted">Our price ${money(v.dys.p)} is ${Math.round((1 - v.dys.p / v.p) * 100)}% under market</span></p>` : ""}
@@ -2991,10 +3030,21 @@ async function pageCentering() {
   window.dysCentering($("#cz-root"));
 }
 
-const pages = { investing: pageInvesting, centering: pageCentering, search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, demand: pageDemand, importer: pageImporter, collection: pageCollection, collectors: pageCollectors, sell: pageSell, buyer: pageBuyer, scout: pageScout, giveaway: pageGiveaway, intel: pageIntel, grading: pageGrading };
+/* 404.html: an old price-page address still says what the visitor wanted, so offer that search */
+function pageNotFound() {
+  const m = location.pathname.match(/\/p\/([a-z0-9-]+)\.html$/), el = $("#nf-try");
+  if (!m || !el) return;
+  const q = m[1].split("-").filter((w) => w && !/^\d{5,}$/.test(w)).slice(0, 6).join(" ");
+  if (!q) return;
+  el.innerHTML = `Looking for <a href="search.html?q=${encodeURIComponent(q)}" style="color:var(--accent);font-weight:600">“${esc(q)}”</a>? Search it →`;
+  el.hidden = false;
+}
+
+const pages = { price: pageProduct, "404": pageNotFound, investing: pageInvesting, centering: pageCentering, search: pageSearch, index: pageIndex, sets: pageSets, set: pageSet, product: pageProduct, trends: pageTrends, cards: pageCards, compare: pageCompare, calendar: pageCalendar, sneakers: pageSneakers, watchlist: pageWatchlist, demand: pageDemand, importer: pageImporter, collection: pageCollection, collectors: pageCollectors, sell: pageSell, buyer: pageBuyer, scout: pageScout, giveaway: pageGiveaway, intel: pageIntel, grading: pageGrading };
 getJSON("stock.json").then((a) => a.forEach((x) => STK.set(x.id, x))).catch(() => {})
   .then(() => (pages[PAGE] || (async () => {}))()).then(() => offerNudge()).catch((err) => {
   console.error(err);
+  if (err?.status === 404 && (PAGE === "set" || PAGE === "product")) noindex();
   const main = $("main");
   if (main) main.insertAdjacentHTML("afterbegin", `<div class="wrap"><p class="panel empty-note" style="margin-top:24px">Couldn't load market data right now. Please refresh in a minute.</p></div>`);
 });

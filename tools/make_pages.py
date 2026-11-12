@@ -355,8 +355,8 @@ def investing_body():
 INVESTING_BODY = investing_body()
 
 PAGES = {
-"index": ("Market Insights · Drive Your Style",
-          "Nightly market prices, biggest movers and set values for Pokémon, One Piece, Lorcana, Riftbound, Gundam, Union Arena, Yu-Gi-Oh!, Dragon Ball and Palworld sealed product and cards.", f'''
+"index": ("Pokémon Card Prices & Price History · Drive Your Style",
+          "Free Pokémon card and sealed prices, updated nightly: price history, biggest movers, set values and grading math. Also One Piece, Lorcana, Yu-Gi-Oh! and more.", f'''
 <section class="hero hero-deal"><div class="wrap hd-grid">
   <div class="hd-copy">
     <h1>What are your cards worth today?</h1>
@@ -432,6 +432,12 @@ PAGES = {
 </section></div>'''),
 "product": ("Price history · Drive Your Style Market Insights", "Market price history.", '''
 <div class="wrap"><div class="crumbs" id="crumbs"></div><div class="prod" id="prod"><div class="skeleton" style="height:320px"></div></div></div>'''),
+"404": ("Page not found · Drive Your Style Market Insights", "That page isn't here. Search every card, set and sealed product we track.", '''
+<div class="wrap"><section class="block" style="max-width:760px">
+  <div class="block-head"><div><h1 style="font-size:36px">We couldn't find that page</h1><p>The link may be old or mistyped. Search for the card, set or product instead.</p></div></div>
+  <p id="nf-try" hidden style="font-size:17px;margin:0 0 14px"></p>
+  <div class="btns"><a class="btn primary" href="search.html">Price check</a><a class="btn" href="sets.html">All sets</a><a class="btn" href="index.html">Home</a></div>
+</section></div>'''),
 "trends": ("Sealed trends · Drive Your Style Market Insights",
            "Biggest sealed product price movers across Pokémon, One Piece, Lorcana, Riftbound, Gundam, Union Arena, Yu-Gi-Oh!, Dragon Ball and Palworld.", '''
 <div class="wrap"><section class="block">
@@ -878,8 +884,14 @@ a:focus-visible{{outline:2px solid var(--ink);outline-offset:3px}}
 def main():
     for page, (title, desc, body) in PAGES.items():
         canon = "" if page == "index" else f"{page}.html"
-        hidden = ("importer", "demand", "buyer") + (() if GIVEAWAY_ON else ("giveaway",))
+        hidden = ("importer", "demand", "buyer", "404") + (() if GIVEAWAY_ON else ("giveaway",))
         head = HEAD.replace("<link rel=\"canonical\"", "<meta name=\"robots\" content=\"noindex\">\n<link rel=\"canonical\"") if page in hidden else HEAD
+        # Set and card pages are one file for every set or card, so their HTML names no address: app.js adds each
+        # page's own (Google: a script may set the canonical only when the HTML has none). A not-found page has none.
+        if page in ("set", "product", "404"):
+            head = re.sub(r'<link rel="canonical"[^>]*>\n', "", head)
+        if page == "404":   # served at any depth (/p/old-page.html), so its links and files resolve from the site root
+            head = head.replace('<meta charset="utf-8">', '<meta charset="utf-8">\n<base href="/">')
         if page == "index":   # impact.com site ownership check
             head = head.replace('<meta name="theme-color" content="#0b0d14">', '<meta name="theme-color" content="#0b0d14">\n<meta name="impact-site-verification" value="9961457d-75f1-4449-9d0a-10bb739058b9">')
         body = body.replace("@@GWBANNER@@", GW_BANNER if GIVEAWAY_ON else "")
