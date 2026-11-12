@@ -22,13 +22,14 @@ jobs:
           python -m playwright install --with-deps chromium > /tmp/pw.log 2>&1 || { echo "::error title=playwright::$(tail -c 800 /tmp/pw.log | tr '\n' ' ')"; exit 1; }
           R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
           # our own copy of the voice model files, made once (the nightly reads this release first)
-          if ! gh release view voice-kokoro-v1 > /dev/null 2>&1; then
-            mkdir -p /tmp/model && cd /tmp/model
-            for f in kokoro-v1.0.onnx voices-v1.0.bin; do curl -sSfL -o $f https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/$f; done
-            ls -la; sha256sum * > SHA256SUMS.txt
-            gh release create voice-kokoro-v1 kokoro-v1.0.onnx voices-v1.0.bin SHA256SUMS.txt --latest=false --title "Voice model files (Kokoro-82M v1.0)" \
-              --notes "The two files tools/voice.py needs for the voice-over on the short videos: the Kokoro-82M v1.0 text-to-speech model (ONNX) and its voices. Kokoro-82M is by hexgrad, Apache License 2.0 (https://huggingface.co/hexgrad/Kokoro-82M). Copied once, unchanged, from https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0 on Nov 12, 2026. Do not delete: the nightly job downloads them from here."
-            cd "$GITHUB_WORKSPACE"
+          if ! gh release view voice-kokoro-v1 --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            ( mkdir -p /tmp/model && cd /tmp/model &&
+              for f in kokoro-v1.0.onnx voices-v1.0.bin; do curl -sSfL -o $f https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/$f || exit 1; done &&
+              sha256sum * > SHA256SUMS.txt && ls -la &&
+              gh release create voice-kokoro-v1 kokoro-v1.0.onnx voices-v1.0.bin SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target main --latest=false \
+                --title "Voice model files (Kokoro-82M v1.0)" \
+                --notes "The two files tools/voice.py needs for the voice-over on the short videos: the Kokoro-82M v1.0 text-to-speech model (ONNX) and its voices. Kokoro-82M is by hexgrad, Apache License 2.0 (https://huggingface.co/hexgrad/Kokoro-82M). Copied once, unchanged, from https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0 on Nov 12, 2026. Do not delete: the nightly job downloads them from here." ) > /tmp/rel.log 2>&1 \
+              || echo "::warning title=Voice files release::$(tail -c 700 /tmp/rel.log | tr '\n' ' ')"
           fi
           git clone -q --depth 1 --branch gh-pages "$R" /tmp/pages
           mkdir -p /tmp/out
