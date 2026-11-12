@@ -38,6 +38,9 @@ on:
         description: "Make a How-to tool post now (runs automatically on Tuesdays and Fridays)"
         type: boolean
         default: false
+      rank:
+        description: "Set ranking video now: true = next set in the rotation, or type a set name (runs automatically for Saturdays)"
+        default: "false"
 
 permissions:
   contents: write
@@ -219,6 +222,24 @@ jobs:
           if [ $rc -ne 0 ]; then echo "::error title=Deals carousel::$(tail -c 600 /tmp/deals.log | tr '\n' ' ')"; exit 1; fi
           echo "::notice title=Deals carousel::$(tail -n 1 /tmp/deals.log)"
 
+      - name: Weekly set ranking video (Saturdays)
+        continue-on-error: true
+        env:
+          RANK: ${{ inputs.rank }}
+        run: |
+          # "Top 20 <set> cards ranked by price": next set in the rotation, or the set named in the "rank" input
+          if [ -z "$RANK" ] || [ "$RANK" = "false" ]; then
+            if [ "$(date -u +%u)" != "6" ]; then echo "Not Saturday; skipping"; exit 0; fi
+            RANK=true
+          fi
+          set +e
+          python -c "import playwright" 2>/dev/null || { pip install -q playwright==1.56.0 && python -m playwright install --with-deps chromium; }; pip install -q imageio-ffmpeg numpy > /tmp/rank.log 2>&1
+          if [ "$RANK" = "true" ]; then python tools/set_rank.py site/data data/social-rank --date "$(date -u +%F)" > /tmp/rank.log 2>&1; rc=$?
+          else python tools/set_rank.py site/data data/social-rank --set "$RANK" --force --date "$(date -u +%F)" > /tmp/rank.log 2>&1; rc=$?; fi
+          cat /tmp/rank.log
+          if [ $rc -ne 0 ]; then echo "::error title=Set ranking::$(tail -c 600 /tmp/rank.log | tr '\n' ' ')"; exit 1; fi
+          echo "::notice title=Set ranking::$(tail -n 1 /tmp/rank.log)"
+
       - name: How-to tool post (Tuesdays and Fridays)
         continue-on-error: true
         run: |
@@ -282,6 +303,7 @@ jobs:
           if [ -d data/social-daily-other ]; then mkdir -p site/social-daily-other && cp -r data/social-daily-other/. site/social-daily-other/; fi
           if [ -d data/intel-daily ]; then mkdir -p site/intel-daily && cp -r data/intel-daily/. site/intel-daily/; fi
           if [ -d data/social-deals ]; then mkdir -p site/social-deals && cp -r data/social-deals/. site/social-deals/; fi
+          if [ -d data/social-rank ]; then mkdir -p site/social-rank && cp -r data/social-rank/. site/social-rank/; fi
           if [ -d data/social-howto ]; then mkdir -p site/social-howto && cp -r data/social-howto/. site/social-howto/; fi
           if [ -d data/social-grade ]; then mkdir -p site/social-grade && cp -r data/social-grade/. site/social-grade/; fi
           if [ -d data/social-kicks ]; then mkdir -p site/social-kicks && cp -r data/social-kicks/. site/social-kicks/; fi

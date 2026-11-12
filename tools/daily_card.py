@@ -46,7 +46,8 @@ GAMES = {   # slug: (display name, hashtags, photo watermarked on TCGplayer?)
 # One Piece stays out while TCGplayer's One Piece photos carry a "SAMPLE" watermark (every post needs real photos).
 ROTATION = ["riftbound", "lorcana", "yugioh", "riftbound", "gundam", "union-arena", "dragon-ball-fusion-world"]
 THEMES = ["jumps", "under10", "highs", "dip", "newset"]
-THEME_DAYS = {0: "newset", 1: "under10", 2: "highs", 3: "dip", 4: "jumps", 5: "under10", 6: "jumps"}   # Mon=0; Monday's Trending covers jumps
+THEME_DAYS = {0: "dip", 1: "under10", 2: "highs", 3: "dip", 4: "jumps", 5: "under10", 6: "jumps"}   # Mon=0; Monday's Trending covers jumps,
+# and the Saturday set ranking (set_rank.py) covers the newest set, so "newset" is only a fallback theme now
 MIN_CARDS, MAX_CARDS, PER_SET = 3, 5, 2
 SIDEWAYS = re.compile(r"\bBREAK\b|\bLEGEND\b|jumbo|oversize", re.I)   # landscape cards don't fit the portrait slides
 NOT_CARDS = re.compile(r"action point card|\btoken\b", re.I)   # game pieces, not collectible cards
