@@ -32,6 +32,7 @@ jobs:
           EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
           GAME: ${{ inputs.game || 'auto' }}
           MAX: ${{ inputs.max || '300' }}
+          TZ: America/Los_Angeles     # date the shortlist with the Pacific date: the posting task's "today" is Pacific, so an evening run (already tomorrow in UTC) still counts as today's list
         run: |
           set -e
           R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
