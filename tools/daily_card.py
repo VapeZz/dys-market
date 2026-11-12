@@ -17,6 +17,10 @@ Writes <out>/<date>/slide-N.jpg, short.mp4, post.json and <out>/latest.json. pos
 (the #1 card) for older readers and adds "cards" and "theme". The nightly workflow copies the folder
 to https://market.driveyourstyle.net/<out name>/.
 --sample renders every theme (or, with --rotate, every game) into <out>/samples/ and records nothing.
+
+The video has a voice-over and quick cuts (VOICED): cover, then for each card a big "reveal" frame and its
+price slide, then the ending; each frame lasts as long as its spoken line. The carousel slides are unchanged.
+If the voice can't be made (tools/voice.py), the video is the old one: 3 seconds a slide, music only.
 """
 import json
 import os
@@ -56,6 +60,9 @@ B = BASE.replace("height:1350px", "height:1920px")
 GREEN, RED = "#3ee08f", "#ff6b6b"
 _photo = {}
 OFFLINE = False
+VOICED = os.environ.get("DYS_VOICE_OFF") != "1"   # voice-over + quick cuts on the video
+NAMES_ALOUD = {"pokemon"}   # games whose card names the voice says (sounds checked in tools/voice.py);
+# the other games get "Number 3." and the move only, until their names are checked too
 
 
 def has_photo(pid):
@@ -299,25 +306,91 @@ def slides(cards, theme, period, game, sparks):
     return out
 
 
+def reveal(c, rank, n):
+    """Video-only frame shown just before a card's price slide: the card, big, with its rank and name."""
+    nm = re.sub(r"\s+-\s+[\w/]*\d[\w/]*\s*$", "", re.sub(r"\s*\(.*$", "", c["name"])) or c["name"]
+    return f"""<div class="slide" style="height:1920px;padding:150px 80px 400px;align-items:center;text-align:center">
+<div style="display:flex;width:100%;justify-content:space-between;align-items:center"><img src="file://{LOGO}" style="height:70px">
+ <div style="font-family:'Barlow Condensed';font-weight:800;font-size:110px;line-height:1" class="holo">#{rank}<span style="font-size:44px;color:#bdb9b2;-webkit-text-fill-color:#bdb9b2"> / {n}</span></div></div>
+<div class="card" style="margin-top:40px;width:640px;height:896px;box-shadow:0 0 0 6px #a78bfa,0 0 90px rgba(167,139,250,.6),0 30px 80px rgba(0,0,0,.7)"><img src="{img(c['id'])}"></div>
+<div style="margin-top:40px;font-family:'Barlow Condensed';font-weight:800;font-size:{84 if len(nm) < 18 else 66 if len(nm) < 30 else 52}px;line-height:1;text-transform:uppercase">{esc(nm)}</div>
+<div style="margin-top:12px;font-size:36px;color:#bdb9b2">{esc(c['set'])}</div></div>"""
+
+
+def script(cards, theme, period, game):
+    """What the voice says on each video frame: the cover, each card's reveal and price slide, the ending.
+    Short on purpose: the numbers are on screen, the voice carries the countdown."""
+    import voice as v
+    label = "Pokemon" if game == "pokemon" else GAMES[game][0].replace("!", "")
+    top, n = cards[0], len(cards)
+    if theme == "newset" or top.get("pct") is None:
+        hook = f"The chase card of {top['set']} is worth {v.dollars(top['now'])}."
+    else:
+        pct = f"{abs(top['pct']):.0f} percent {period}"
+        hook = {"jumps": f"This {label} card jumped {pct}.",
+                "under10": f"This {label} card is under 10 dollars, and up {pct}.",
+                "highs": f"This {label} card just hit a new high, up {pct}.",
+                "dip": f"This {label} card dropped {pct}."}[theme]
+    lines = [hook]
+    for rank in range(n, 0, -1):
+        c = cards[rank - 1]
+        who = f": {v.name(c['name'])}" if game in NAMES_ALOUD else ""
+        lines.append(f"{'And number' if rank == 1 else 'Number'} {rank}{who}.")
+        if c.get("pct") is None:
+            lines.append(f"{v.dollars(c['now'])}.".capitalize())
+        else:
+            lines.append(f"{'Up' if c['pct'] >= 0 else 'Down'} {abs(c['pct']):.0f} percent{' ' + period if rank == 1 else ''}.")
+    lines.append(f"{'Would you buy the dip' if theme == 'dip' else 'Which one would you buy'}? Follow for daily price moves.")
+    return lines
+
+
 def render(site_data, cards, theme, period, game, out, offline=False):
     sparks = {c["id"]: spark(site_data, c) for c in cards}
     bodies = slides(cards, theme, period, game, sparks)
+    nc = len(cards)
+    extra = [reveal(cards[rank - 1], rank, nc) for rank in range(nc, 0, -1)] if VOICED else []
     with sync_playwright() as p:
         b = p.chromium.launch()
         pg = b.new_page(viewport={"width": 1080, "height": 1920})
         if offline:
             pg.route(re.compile(r"tcgplayer-cdn"), lambda r: r.fulfill(path=os.environ["FAKE_CARD"], content_type="image/jpeg"))
         tmp = os.path.abspath(os.path.join(out, "_slide.html"))
-        for n, body in enumerate(bodies, 1):
+        for k, body in enumerate(bodies + extra, 1):   # carousel slides, then the video-only reveal frames
+            shot = f"slide-{k}.jpg" if k <= len(bodies) else f"v-{k - len(bodies)}.jpg"
             open(tmp, "w", encoding="utf-8").write(B % (FONT_CSS, body))
             pg.goto("file://" + tmp, wait_until="networkidle")
             pg.evaluate("document.fonts.ready")
-            pg.screenshot(path=os.path.join(out, f"slide-{n}.jpg"), type="jpeg", quality=90)
+            pg.screenshot(path=os.path.join(out, shot), type="jpeg", quality=90)
         b.close()
         os.remove(tmp)
-    from tiktok import make_short
-    return len(bodies), make_short([os.path.join(out, f"slide-{n}.jpg") for n in range(1, len(bodies) + 1)],
-                                   os.path.join(out, "short.mp4"), per=3.0)
+    from tiktok import make_short, make_voiced
+    slide = lambda k: os.path.join(out, f"slide-{k}.jpg")
+    target = os.path.join(out, "short.mp4")
+    video, info = None, {"voice": None, "seconds": round(3.0 * len(bodies), 1)}
+    if extra:
+        frames, floors, zooms = [slide(1)], [2.4], [0.0007]
+        for j in range(1, nc + 1):          # j-th card of the countdown: its reveal frame, then its price slide
+            last = j == nc
+            frames += [os.path.join(out, f"v-{j}.jpg"), slide(1 + j)]
+            floors += [1.2 if last else 0.9, 2.2 if last else 1.5]
+            zooms += [0.0025, 0.0008]
+        frames.append(slide(len(bodies)))
+        floors.append(2.6)
+        zooms.append(0.0007)
+        try:
+            video, secs, said = make_voiced(frames, script(cards, theme, period, game), target, floors, zoom=zooms)
+        except Exception as e:   # the voice must never cost us the post
+            print("daily cards: voice video failed, music only:", repr(e)[:300])
+            video = None
+        if video:
+            import voice as v
+            info = {"voice": v.VOICE, "seconds": secs, "said": said}
+        if os.environ.get("DYS_KEEP_VOICE") != "1":   # the reveal frames are only for the video
+            for j in range(1, nc + 1):
+                os.remove(os.path.join(out, f"v-{j}.jpg"))
+    if not video:
+        video = make_short([slide(k) for k in range(1, len(bodies) + 1)], target, per=3.0)
+    return len(bodies), video, info
 
 
 def caption_for(theme, cards, period, game):
@@ -388,10 +461,10 @@ def main(argv):
                 continue
             out = os.path.join(out_root, "samples", name)
             os.makedirs(out, exist_ok=True)
-            n, video = render(site_data, cards, t, period, g, out, OFFLINE)
+            n, video, info = render(site_data, cards, t, period, g, out, OFFLINE)
             cap = caption_for(t, cards, period, g)
             open(os.path.join(out, "caption.txt"), "w").write(cap)
-            summary.append({"sample": name, "slides": n, "video": bool(video), "first": cap.split("\n")[0],
+            summary.append({"sample": name, "slides": n, "video": bool(video), "voice": info, "first": cap.split("\n")[0],
                             "yt": yt_title(t, cards, period, g), "cards": cards})
             print(f"sample {name}: {cap.splitlines()[0]}")
         os.makedirs(os.path.join(out_root, "samples"), exist_ok=True)
@@ -411,13 +484,14 @@ def main(argv):
     label = GAMES[game][0]
     out = os.path.join(out_root, today.isoformat())
     os.makedirs(out, exist_ok=True)
-    n, video = render(site_data, cards, theme, period, game, out, OFFLINE)
+    n, video, info = render(site_data, cards, theme, period, game, out, OFFLINE)
     caption = caption_for(theme, cards, period, game)
     post = {"date": today.isoformat(), "game": game, "theme": theme, "cards": cards, "card": cards[0], "caption": caption,
             "slides": [f"{web}/{today.isoformat()}/slide-{k}.jpg" for k in range(1, n + 1)],
             "short": f"{web}/{today.isoformat()}/short.mp4" if video else None,
             "short_title": yt_title(theme, cards, period, game),
-            "title": tt_title(theme, cards, label)}
+            "title": tt_title(theme, cards, label),
+            "voice": info.get("voice") if video else None, "seconds": info.get("seconds") if video else None}
     json.dump(post, open(os.path.join(out, "post.json"), "w"), indent=1, ensure_ascii=False)
     json.dump(post, open(os.path.join(out_root, "latest.json"), "w"), indent=1, ensure_ascii=False)
     for c in cards:

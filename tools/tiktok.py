@@ -31,10 +31,12 @@ def full_screen(page, slide_paths, out_dir, foot="Free card prices · market.dri
     return outs
 
 
-def make_short(slide_paths, out_path, per=3.2, fade=0.4, fps=30, music=True):
+def make_short(slide_paths, out_path, per=3.2, fade=0.4, fps=30, music=True, voice=None, zoom=0.0007, duck=0.16):
     """Stitch 1080x1920 slides into a vertical MP4 (slow zoom + crossfades) for YouTube Shorts.
     per = seconds per slide, or a list with one value per slide (e.g. short "guess" slides, longer reveals).
     Original background music (tools/music.py), different for every post; silent if that fails.
+    voice = a WAV laid out on the video's timeline (tools/voice.py): mixed over the music, which is turned
+    down to `duck`. zoom = how fast each slide pushes in (one value, or one per slide).
     Returns out_path, or None if ffmpeg fails."""
     import shutil
     import subprocess
@@ -51,6 +53,8 @@ def make_short(slide_paths, out_path, per=3.2, fade=0.4, fps=30, music=True):
     n = len(slide_paths)
     pers = list(per) if isinstance(per, (list, tuple)) else [per] * n
     pers = (pers + [pers[-1]] * n)[:n]
+    zooms = list(zoom) if isinstance(zoom, (list, tuple)) else [zoom] * n
+    zooms = (zooms + [zooms[-1]] * n)[:n]
     args = [exe, "-y", "-loglevel", "error"]
     for p in slide_paths:
         args += ["-i", p]
@@ -65,13 +69,23 @@ def make_short(slide_paths, out_path, per=3.2, fade=0.4, fps=30, music=True):
         except Exception as e:
             print("make_short: music failed, silent track:", e)
     args += audio
-    f = [f"[{i}:v]scale=2160:3840,zoompan=z='min(zoom+0.0007,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+    amap = f"{n}:a"
+    if voice and os.path.exists(voice):
+        args += ["-i", voice]
+    else:
+        voice = None
+    f = [f"[{i}:v]scale=2160:3840,zoompan=z='min(zoom+{zooms[i]},1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
          f":d={int((pers[i] + fade) * fps)}:s=1080x1920:fps={fps},setsar=1,format=yuv420p[v{i}]" for i in range(n)]
     last, t = "v0", pers[0]
     for i in range(1, n):
         f.append(f"[{last}][v{i}]xfade=transition=fade:duration={fade}:offset={t:.2f}[x{i}]")
         last, t = f"x{i}", t + pers[i]
-    args += ["-filter_complex", ";".join(f), "-map", f"[{last}]", "-map", f"{n}:a", "-shortest",
+    if voice:   # music under the voice
+        f.append(f"[{n}:a]volume={duck}[bed];[{n + 1}:a]aresample=44100,apad[say];"
+                 f"[bed][say]amix=inputs=2:duration=first:dropout_transition=0:normalize=0,"
+                 f"loudnorm=I=-14:TP=-1.5:LRA=11,aresample=44100[mix]")   # phone-loud, like other short videos
+        amap = "[mix]"
+    args += ["-filter_complex", ";".join(f), "-map", f"[{last}]", "-map", amap, "-shortest",
              "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-r", str(fps),
              "-c:a", "aac", "-b:a", "128k", "-ac", "2", "-movflags", "+faststart", out_path]
     try:
@@ -83,3 +97,23 @@ def make_short(slide_paths, out_path, per=3.2, fade=0.4, fps=30, music=True):
     finally:
         if audio[0] == "-i" and os.path.exists(audio[1]):
             os.remove(audio[1])
+
+
+def make_voiced(frames, lines, out_path, floors, fade=0.1, zoom=0.0018, voice=None):
+    """make_short with a voice-over: each frame lasts as long as its spoken line (never less than its floor).
+    Returns (out_path, seconds, lines), or (None, 0, []) when the voice can't be made, so the caller can fall
+    back to the music-only video."""
+    wav = os.path.splitext(out_path)[0] + "-voice.wav"
+    try:
+        import voice as _v
+        pers, track = _v.lay(_v.say(lines, voice=voice), floors, lead=fade + 0.04)
+        _v.write(wav, track)
+    except Exception as e:
+        print("make_voiced: no voice, falling back to music only:", repr(e)[:300])
+        return None, 0, []
+    try:
+        out = make_short(frames, out_path, per=pers, fade=fade, voice=wav, zoom=zoom)
+    finally:
+        if os.environ.get("DYS_KEEP_VOICE") != "1" and os.path.exists(wav):
+            os.remove(wav)
+    return (out, round(sum(pers), 1), [[round(p, 2), ln] for p, ln in zip(pers, lines)]) if out else (None, 0, [])
