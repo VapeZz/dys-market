@@ -181,7 +181,8 @@ def cover(pairs, mode, when, sc=(0, 0)):
             else "Which ones are worth it? Swipe")
     if mode == "drop":   # countdown + reveal: don't give away any eBay price or call on the cover
         sub = f"{len(pairs)} pairs · {esc(when)}"
-        hook = "Vote cop or drop on each pair, then swipe for our call" if len(pairs) > 1 else "Vote cop or drop, then swipe for our call"
+        lead = max(pairs, key=lambda p: (p.get("h", 1), p["r"]))
+        hook = f"{esc(lead['n'])}: {usd(lead['r'])} retail → $??? resale. Vote, then swipe for our call"
     score_html = ""
     if mode == "recap" and sc[1] >= 2:
         score_html = ("<div style=\"margin-top:14px;font-family:'Barlow Condensed';font-weight:800;font-size:44px;letter-spacing:.04em;"

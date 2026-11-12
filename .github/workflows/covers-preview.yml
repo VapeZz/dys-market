@@ -1,0 +1,29 @@
+name: Covers preview (test branch only)
+# Renders the new cover slides with real photos into the covers-v3-preview branch. Publishes nothing.
+on:
+  push:
+    branches: [covers-v3]
+permissions:
+  contents: write
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: |
+          set -e
+          pip install -q playwright==1.56.0 imageio-ffmpeg numpy pillow > /tmp/pip.log 2>&1 || { echo "::error title=pip::$(tail -c 800 /tmp/pip.log | tr '\n' ' ')"; exit 1; }
+          python -m playwright install --with-deps chromium > /tmp/pw.log 2>&1 || { echo "::error title=playwright::$(tail -c 800 /tmp/pw.log | tr '\n' ' ')"; exit 1; }
+          R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git clone -q --depth 1 --branch gh-pages "$R" /tmp/pages
+          set +e
+          python tools/cover_preview.py /tmp/pages /tmp/out > /tmp/g.log 2>&1; rc=$?
+          set -e
+          if [ $rc -ne 0 ]; then echo "::error title=Covers preview::$(tail -c 1500 /tmp/g.log | tr '\n' ' ')"; exit 1; fi
+          cd /tmp/out && git init -q -b covers-v3-preview && git config user.name "dys-market-bot" && git config user.email "dys-market-bot@users.noreply.github.com"
+          git add -A && git commit -q -m "Covers preview" && git push -q -f "$R" covers-v3-preview
+          echo "::notice title=Covers preview::$(tail -n 1 /tmp/g.log)"

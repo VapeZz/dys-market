@@ -209,31 +209,37 @@ def short_name(c):
     return re.sub(r"\s*-\s*\S+/\S+$", "", c["name"])
 
 
-def headline(theme, n, period, cards):
-    if theme == "jumps":
-        return f"{n} cards<br><span style='color:{GREEN}'>jumped</span><br>{esc(period)}"
-    if theme == "under10":
-        return f"{n} cards under<br><span class='holo'>$10</span><br>climbing"
-    if theme == "highs":
-        return f"{n} cards hit<br>a <span style='color:{GREEN}'>new high</span><br>this month"
-    if theme == "dip":
-        return f"{n} cards<br><span style='color:{RED}'>dropped</span><br>{esc(period)}"
-    st = cards[0]["set"]
-    size = "" if len(st) <= 16 else " style='font-size:.62em;display:inline-block;line-height:1.05'" if len(st) <= 26 else " style='font-size:.46em;display:inline-block;line-height:1.1'"
-    return f"The {n} chase<br>cards of<br><span class='holo'{size}>{esc(st)}</span>"
-
-
 def first_line(theme, n, label, period, cards):
+    """First caption line = the hook: the #1 card's number, without naming it (the countdown reveals it)."""
     top = cards[0]
+    if theme == "newset" or top.get("pct") is None:
+        return f"The {money(top['now'])} chase card of {top['set']} 💎 Top {n} {label} cards by price"
+    pct = f"{abs(top['pct']):.0f}%"
     if theme == "jumps":
-        return f"{n} {label} cards that jumped {period} 📈 #1 is up {top['pct']:.0f}%"
+        return f"This {label} card jumped {pct} {period} 📈 Can you guess it before #1?"
     if theme == "under10":
-        return f"{n} {label} cards under $10 that are climbing 📈 #1 is up {top['pct']:.0f}%"
+        return f"This {label} card is under $10 and up {pct} {period} 📈 Can you guess it?"
     if theme == "highs":
-        return f"{n} {label} cards just hit a new high 🚀 #1 is up {top['pct']:.0f}% {period}"
-    if theme == "dip":
-        return f"{n} {label} cards that dropped {period} 📉 #1 is down {abs(top['pct']):.0f}%. Buy the dip?"
-    return f"The {n} chase cards of {top['set']} 💎 #1 is worth {money(top['now'])}"
+        return f"This {label} card just hit a new high, up {pct} {period} 🚀 Can you guess it?"
+    return f"This {label} card dropped {pct} {period} 📉 Buy the dip?"
+
+
+def hook_parts(theme, n, period, cards):
+    """Cover hook: (kicker, big number, colour or "holo", sub line), all about the #1 card."""
+    top = cards[0]
+    if theme == "newset" or top.get("pct") is None:
+        return "The chase card of", f"${top['now'] / 100:,.0f}", "holo", f"{esc(top['set'])} · top {n} by price"
+    num = f"{'+' if top['pct'] >= 0 else '−'}{abs(top['pct']):.0f}%"
+    sub = f"{esc(period)} · {money(top['old'])} → <b style='color:#f2f0eb'>{money(top['now'])}</b>"
+    kick = {"jumps": "This card jumped", "under10": "Under $10 and up", "highs": "Just hit a new high", "dip": "This card dropped"}[theme]
+    return kick, num, (RED if top["pct"] < 0 else GREEN), sub
+
+
+def tt_title(theme, cards, label):
+    top = cards[0]
+    if theme == "newset" or top.get("pct") is None:
+        return f"The ${top['now'] / 100:,.0f} chase card 💎"
+    return f"{label} card {'up' if top['pct'] >= 0 else 'down'} {abs(top['pct']):.0f}% 👀 Guess it"
 
 
 def move_html(c, big=96):
@@ -247,17 +253,26 @@ def move_html(c, big=96):
 def slides(cards, theme, period, game, sparks):
     label = GAMES[game][0]
     n = len(cards)
-    spots = {3: [(300, 40, 0, 5), (70, 110, -12, 4), (530, 110, 12, 4)],
-             4: [(190, 40, -5, 5), (410, 40, 5, 5), (-20, 130, -16, 4), (620, 130, 16, 4)],
-             5: [(305, 30, 0, 5), (135, 90, -11, 4), (475, 90, 11, 4), (-15, 170, -19, 3), (625, 170, 19, 3)]}[n]
+    kick, num, col, sub = hook_parts(theme, n, period, cards)
+    size = 330 if len(num) <= 5 else 270 if len(num) <= 6 else 220
+    sides = {2: [(100, 100, -10, 4), (500, 100, 10, 4)],
+             3: [(-15, 150, -18, 3), (120, 85, -9, 4), (520, 100, 12, 4)],
+             4: [(-15, 150, -18, 3), (125, 85, -9, 4), (475, 85, 9, 4), (615, 150, 18, 3)]}[n - 1]
     fan = "".join(f'<div class="card" style="position:absolute;width:300px;height:420px;left:{x}px;top:{y}px;transform:rotate({r}deg);z-index:{z}">'
-                  f'<img src="{img(c["id"], 400)}"></div>' for c, (x, y, r, z) in zip(cards, spots))
-    hook = f"""<div class="slide" style="height:1920px;padding:170px 80px 400px;align-items:center;text-align:center">
-<img src="file://{LOGO}" style="height:100px">
-<div class="tag" style="margin-top:46px">{esc(label)} · Cards of the day</div>
-<div style="margin-top:40px;font-family:'Barlow Condensed';font-weight:800;font-size:118px;line-height:.95;text-transform:uppercase">{headline(theme, n, period, cards)}</div>
-<div style="position:relative;width:900px;height:600px;margin-top:44px;flex-shrink:0">{fan}</div>
-<div style="margin-top:auto;font-size:40px;color:#bdb9b2">Counting down #{n} → #1 →</div></div>"""
+                  f'<img src="{img(c["id"], 400)}"></div>' for c, (x, y, r, z) in zip(cards[1:], sides))
+    # the #1 card sits in front, blurred: the cover gives its number, the countdown reveals the card
+    mystery = (f'<div class="card" style="position:absolute;width:380px;height:532px;left:260px;top:10px;z-index:6;background:#111;'
+               f'box-shadow:0 0 0 6px #a78bfa,0 0 90px rgba(167,139,250,.75),0 30px 80px rgba(0,0,0,.7)">'
+               f'<img src="{img(cards[0]["id"], 400)}" style="filter:blur(26px) brightness(.6) saturate(1.4);transform:scale(1.15)">'
+               f'<div class="holo" style="position:absolute;inset:0;display:grid;place-content:center;font-family:\'Barlow Condensed\';font-weight:800;font-size:330px;line-height:1">?</div>'
+               f'<div style="position:absolute;left:14px;top:12px;font-family:\'Barlow Condensed\';font-weight:800;font-size:46px;color:#050404;background:#f2f0eb;border-radius:999px;padding:2px 18px 0">#1</div></div>')
+    hook = f"""<div class="slide" style="height:1920px;padding:170px 70px 400px;align-items:center;text-align:center">
+<div style="display:flex;width:100%;justify-content:space-between;align-items:center"><img src="file://{LOGO}" style="height:78px"><div class="tag" style="font-size:26px">{esc(label)} · Cards of the day</div></div>
+<div style="margin-top:56px;font-family:'Barlow Condensed';font-weight:800;font-size:104px;line-height:.95;text-transform:uppercase">{kick}</div>
+<div class="{'holo' if col == 'holo' else ''}" style="font-family:'Barlow Condensed';font-weight:800;font-size:{size}px;line-height:.88{'' if col == 'holo' else ';color:' + col}">{num}</div>
+<div style="margin-top:14px;font-size:46px;font-weight:700;color:#bdb9b2">{sub}</div>
+<div style="position:relative;width:900px;height:600px;margin-top:50px;flex-shrink:0">{fan}{mystery}</div>
+<div style="margin-top:auto;font-family:'Barlow Condensed';font-weight:700;font-size:48px;letter-spacing:.04em;text-transform:uppercase">Which card? Counting down #{n} → #1</div></div>"""
     out = [hook]
     for rank in range(n, 0, -1):   # countdown: best card last
         c = cards[rank - 1]
@@ -319,7 +334,7 @@ def caption_for(theme, cards, period, game):
 def yt_title(theme, cards, period, game):
     label, tags, _ = GAMES[game]
     base = first_line(theme, len(cards), label, period, cards).replace(". Buy the dip?", "")
-    for t in (f"{base} — which would you buy? {tags.split()[0]}", f"{base} {tags.split()[0]}", base):
+    for t in (f"{base} {tags.split()[0]}", base):
         if len(t) <= 100:
             return t
     return base[:100]
@@ -401,7 +416,7 @@ def main(argv):
             "slides": [f"{web}/{today.isoformat()}/slide-{k}.jpg" for k in range(1, n + 1)],
             "short": f"{web}/{today.isoformat()}/short.mp4" if video else None,
             "short_title": yt_title(theme, cards, period, game),
-            "title": f"{label} cards of the day 📈"}
+            "title": tt_title(theme, cards, label)}
     json.dump(post, open(os.path.join(out, "post.json"), "w"), indent=1, ensure_ascii=False)
     json.dump(post, open(os.path.join(out_root, "latest.json"), "w"), indent=1, ensure_ascii=False)
     for c in cards:
