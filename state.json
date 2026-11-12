@@ -10,7 +10,7 @@
   "pokemon-jp|Aura Seeker": "2026-11-27",
   "pokemon-jp|Special Deck Set MEGA": "2026-11-13",
   "pokemon|Flowing Fists": "2027-02-05",
-  "riftbound|Gift of the Rift Bundle": "2026-12-04",
+  "riftbound|Gift of the Rift Bundles": "2026-12-04",
   "riftbound|Legacy": "2027-01-29",
   "union-arena|UE25BT: My Hero Academia Special Booster": "2026-12-11",
   "union-arena|UEX08BT: BLEACH: Thousand-Year Blood War Vol.3": "2026-11-13",
@@ -86,7 +86,7 @@
    "available": true,
    "handle": "30th-celebration-knock-out-collection",
    "image": "https://cdn.shopify.com/s/files/1/0733/4635/1331/files/704152_in_1000x1000_199f8b6b-8ec7-484b-ad57-6c2db7cb75f0.jpg?v=1792032056",
-   "price": 20.82,
+   "price": 21.76,
    "title": "30th Celebration Knock Out Collection",
    "type": "Pok\u00e9mon Sealed"
   },
@@ -94,7 +94,7 @@
    "available": true,
    "handle": "mew-r-rgb-holofoil",
    "image": "https://cdn.shopify.com/s/files/1/0733/4635/1331/files/717607_in_1000x1000_71b39e88-7df2-4915-8e84-204bd905b1aa.jpg?v=1792032638",
-   "price": 4492.45,
+   "price": 4129.49,
    "title": "Mew - R/RGB (Holofoil)",
    "type": "Pok\u00e9mon Single"
   },
@@ -659,5 +659,5 @@
    "type": "Collectible"
   }
  },
- "updated": "2026-11-11T22:40:51Z"
+ "updated": "2026-11-12T03:46:06Z"
 }
