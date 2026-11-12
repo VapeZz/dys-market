@@ -1,0 +1,29 @@
+name: Set ranking preview (test branch only)
+# Renders the "Top 20 <set> cards" ranking video with real photos into the rank-v1-preview branch. Publishes nothing.
+on:
+  push:
+    branches: [rank-v1]
+permissions:
+  contents: write
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: |
+          set -e
+          pip install -q playwright==1.56.0 imageio-ffmpeg numpy pillow > /tmp/pip.log 2>&1 || { echo "::error title=pip::$(tail -c 800 /tmp/pip.log | tr '\n' ' ')"; exit 1; }
+          python -m playwright install --with-deps chromium > /tmp/pw.log 2>&1 || { echo "::error title=playwright::$(tail -c 800 /tmp/pw.log | tr '\n' ' ')"; exit 1; }
+          R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git clone -q --depth 1 --branch gh-pages "$R" /tmp/pages
+          set +e
+          python tools/set_rank.py /tmp/pages/data /tmp/out/social-rank --set "Delta Reign" --date 2026-11-11 > /tmp/g.log 2>&1; rc=$?
+          set -e
+          if [ $rc -ne 0 ] || [ ! -f /tmp/out/social-rank/latest.json ]; then echo "::error title=Set ranking preview::$(tail -c 1500 /tmp/g.log | tr '\n' ' ')"; exit 1; fi
+          cd /tmp/out && git init -q -b rank-v1-preview && git config user.name "dys-market-bot" && git config user.email "dys-market-bot@users.noreply.github.com"
+          git add -A && git commit -q -m "Set ranking preview" && git push -q -f "$R" rank-v1-preview
+          echo "::notice title=Set ranking preview::$(tail -n 1 /tmp/g.log)"
