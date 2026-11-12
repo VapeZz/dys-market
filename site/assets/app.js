@@ -947,7 +947,16 @@ async function pageProduct() {
   const gl = Object.fromEntries(meta.games.map((g) => [g.slug, g.label]));
   const setHref = `set.html?id=${set.id}${v.t === "s" ? "&tab=sealed" : ""}`;
   crumbs([["sets.html", "Sets"], [`sets.html?game=${set.k}`, gl[set.k] || set.k], [setHref, set.n], [null, base]], [setHref, set.n]);
+  // Fourth change box: over a year when this item has a year of prices, else over the months the chart covers.
+  const longChange = (x) => {
+    const ds = set.dates || [], ser = x.s || [], i = ser.findIndex((y) => y != null);
+    if (i < 0 || !ser[i] || x.p == null) return { l: "1 year", v: null };
+    const days = Math.round((new Date(ds[ds.length - 1] + "T12:00:00Z") - new Date(ds[i] + "T12:00:00Z")) / 864e5);
+    if (days < 100) return { l: "1 year", v: null };   // the 90-day box already covers a newer item
+    return { l: days >= 350 ? "1 year" : `${Math.round(days / 30.4)} months`, v: Math.round((x.p - ser[i]) / ser[i] * 1000) / 10 };
+  };
   const draw = () => {
+    const long = longChange(v);
     $("#prod").innerHTML = `<div class="prod-img">${imgTag(id, "", 1000, v.im)}${BORROW_NOTE}</div>
       <div><span class="muted">${esc(gl[set.k] || "")} · ${esc(set.n)}${v.no ? " · #" + esc(v.no) : ""}${v.r ? " · " + esc(v.r) : ""}</span>
         <h1 style="font-size:clamp(26px,3.4vw,38px);margin-top:6px">${esc(base)}</h1>
@@ -955,7 +964,7 @@ async function pageProduct() {
         <div class="muted" style="margin-top:14px">Market price</div><div class="price-big">${v.p == null ? `<span class="muted" style="font-size:.6em">No market price yet</span>` : money(v.p)}</div>
         ${v.dys && below(v.dys.p, v.p) ? `<p style="margin:6px 0 0">${BELOW} <span class="muted">Our price ${money(v.dys.p)} is ${Math.round((1 - v.dys.p / v.p) * 100)}% under market</span></p>` : ""}
         ${v.dys ? dysBuyBox(v) : ""}
-        <div class="kpis">${[["7", "7 days"], ["30", "30 days"], ["90", "90 days"], ["a", `Since ${fmtShort(meta.first)}`]].map(([k, l]) => `<div class="kpi"><div class="l">${l}</div>${chg(v.ch?.[k])}</div>`).join("")}</div>
+        <div class="kpis">${[["7", "7 days"], ["30", "30 days"], ["90", "90 days"]].map(([k, l]) => `<div class="kpi"><div class="l">${l}</div>${chg(v.ch?.[k])}</div>`).join("")}<div class="kpi"><div class="l">${long.l}</div>${chg(long.v)}</div></div>
         ${priceBreak(v, base, set.k)}${ebayRow(ebc, v.p)}
         <div class="btns">${v.dys ? ""
           : `<a class="btn primary" href="mailto:customerservice@driveyourstyle.net?subject=${encodeURIComponent("Request: " + v.n)}&body=${encodeURIComponent(`Hi Drive Your Style,\n\nI'm interested in: ${v.n} (${set.n}).\nMarket price today: ${money(v.p)}\nQuantity: 1\n\nPlease let me know if you can get it.\n\nThanks!`)}">Request from Drive Your Style</a>`}
