@@ -26,8 +26,14 @@ def heard(wav):
     global _ear
     try:
         from faster_whisper import WhisperModel
+        import wave
+        import numpy as np
         _ear = _ear or WhisperModel("base.en", compute_type="int8")
-        segs, _ = _ear.transcribe(wav, beam_size=5)
+        with wave.open(wav) as w:   # handed over as samples at 16 kHz, so no audio decoder is needed
+            x = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").astype(np.float32) / 32768
+            rate = w.getframerate()
+        x = np.interp(np.linspace(0, len(x) - 1, int(len(x) * 16000 / rate)), np.arange(len(x)), x).astype(np.float32)
+        segs, _ = _ear.transcribe(x, beam_size=5)
         return " ".join(s.text.strip() for s in segs)
     except Exception as e:
         return f"(no transcript: {e!r})"[:300]

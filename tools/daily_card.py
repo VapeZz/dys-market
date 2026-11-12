@@ -340,7 +340,7 @@ def script(cards, theme, period, game):
             lines.append(f"{v.dollars(c['now'])}.".capitalize())
         else:
             lines.append(f"{'Up' if c['pct'] >= 0 else 'Down'} {abs(c['pct']):.0f} percent{' ' + period if rank == 1 else ''}.")
-    lines.append(f"{'Would you buy the dip' if theme == 'dip' else 'Which one would you buy'}? Follow for daily price moves.")
+    lines.append("Which one would you buy? Follow for daily price moves.")   # the same question the last slide asks
     return lines
 
 
