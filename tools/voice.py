@@ -35,6 +35,7 @@ UA = {"User-Agent": "DriveYourStyleMarket/1.0 (+https://driveyourstyle.net)"}
 
 SAY = {   # lower-case word: sounds (IPA, US English, the symbols espeak uses)
     "pokémon": "pˈoʊkeɪmˌɑːn", "pokemon": "pˈoʊkeɪmˌɑːn",
+    "pikachu": "pˈiːkətʃˌuː", "alakazam": "ˌæləkəzˈæm",
     "ogerpon": "ˈoʊɡɚpˌɑːn", "gengar": "ɡˈɛŋɡɑːɹ", "greninja": "ɡɹɛnˈɪndʒə", "iono": "iːˈoʊnoʊ",
     "latias": "lˈæɾiəs", "latios": "lˈæɾioʊs", "ampharos": "ˈæmfɚɹˌɑːs", "terapagos": "tɛɹˈæpəɡˌoʊs",
     "rayquaza": "ɹeɪkwˈeɪzə", "golurk": "ɡˈoʊlɜːk", "zorua": "zˈɔːɹuːə", "riolu": "ɹiːˈoʊluː",
