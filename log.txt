@@ -1,0 +1,7 @@
+[0;93m2026-11-12 18:24:40.885047512 [W:onnxruntime:Default, device_discovery.cc:95 GetPciBusId] Skipping pci_bus_id for PCI path at "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171" because filename "5620e0c7-8062-4dce-aeb7-520c7ef76171" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+[m
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+make_short: music ambient 80 bpm
+pokemon-heart: voice af_heart, 22.8 s
+make_short: music synthwave 107 bpm
+gundam-heart: voice af_heart, 18.7 s
+voice preview: 2 of 2 videos have the voice-over; pokemon-heart 22.8 s, gundam-heart 18.7 s
