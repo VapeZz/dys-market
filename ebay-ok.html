@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>eBay connected · Drive Your Style</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0d12;--ink:#f2f0eb;--mut:#9a968f;--acc:#8b7bff;--line:rgba(255,255,255,.14)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;display:grid;place-items:center;min-height:100vh;padding:16px;box-sizing:border-box}
+main{max-width:560px;width:100%;border:1px solid var(--line);border-radius:16px;padding:24px}
+h1{margin:0 0 8px;font-size:24px}p{color:var(--mut);margin:8px 0}
+textarea{width:100%;box-sizing:border-box;min-height:90px;background:#141823;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px;font:13px ui-monospace,Menlo,monospace;word-break:break-all}
+.btn{display:inline-block;margin:10px 10px 0 0;padding:10px 16px;border-radius:999px;border:1px solid var(--acc);background:rgba(139,123,255,.16);color:var(--ink);font-weight:700;text-decoration:none;cursor:pointer;font-size:14px}
+ol{color:var(--mut);padding-left:20px}
+</style></head>
+<body><main id="m"><h1>Connecting eBay…</h1></main>
+<script>
+const q = new URLSearchParams(location.search), code = q.get("code"), m = document.getElementById("m");
+if (!code) { m.innerHTML = "<h1>No eBay code</h1><p>Start again from the link Claude sent you.</p>"; }
+else {
+  m.innerHTML = `<h1>eBay approved ✓</h1><p>One last step, within 5 minutes (the code expires):</p>
+  <ol><li>Copy this code.</li><li>Open <b>Connect eBay store</b> on GitHub, click <b>Run workflow</b>, paste it, and click the green <b>Run workflow</b> button.</li></ol>
+  <textarea id="c" readonly></textarea>
+  <button class="btn" id="cp" type="button">Copy code</button><a class="btn" href="https://github.com/VapeZz/dys-market/actions/workflows/ebay-connect.yml" target="_blank" rel="noopener">Open Connect eBay store ↗</a>`;
+  const t = document.getElementById("c"); t.value = code;
+  document.getElementById("cp").onclick = async () => { try { await navigator.clipboard.writeText(code); } catch { t.select(); document.execCommand("copy"); } document.getElementById("cp").textContent = "Copied ✓"; };
+  history.replaceState(null, "", location.pathname);   // don't leave the code in the address bar / history
+}
+</script></body></html>
