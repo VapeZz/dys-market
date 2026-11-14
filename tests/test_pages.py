@@ -147,11 +147,21 @@ class BuildTests(unittest.TestCase):
                     '<url><loc>https://market.driveyourstyle.net/</loc><lastmod>2026-11-12</lastmod></url>'
                     '<url><loc>https://market.driveyourstyle.net/product.html?id=190&amp;set=1</loc><lastmod>2026-11-12</lastmod></url>'
                     '<url><loc>https://market.driveyourstyle.net/product.html?id=777&amp;set=1</loc><lastmod>2026-11-12</lastmod></url></urlset>')
-        self._live = pp.live_pages
+        self._live, self._seed = pp.live_pages, pp.SEED
         pp.live_pages = lambda: (None, "")       # never the network in tests
+        pp.SEED = os.path.join(os.path.dirname(self.reg), "seed.json")   # none, unless a case writes one
 
     def tearDown(self):
-        pp.live_pages = self._live
+        pp.live_pages, pp.SEED = self._live, self._seed
+
+    def last(self):
+        with open(os.path.join(os.path.dirname(self.reg), "last.json"), encoding="utf-8") as f:
+            return json.load(f)["items"]
+
+    def lose_pikachu(self, w):
+        """What the site's data does when a printing loses its market price: the product is listed bare, with no price."""
+        w[1]["items"][0] = {"id": 101, "n": "Pikachu", "t": "c", "p": None, "no": "1/10"}
+        return w
 
     def write(self, w, day=TODAY):
         with open(os.path.join(self.site, "data", "meta.json"), "w") as f:
@@ -285,6 +295,145 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(reg["102|Eevee (Holofoil)"][0], "shared")
         self.assertNotEqual(reg["201|Dark Mage"][0], "shared")
         self.assertEqual(len({r[0] for r in reg.values()}), len(reg))
+
+
+class LastPriceTests(unittest.TestCase):
+    """A page whose printing lost its market price stays up with the last price it showed."""
+    tearDown, write, read, registry, run_pages, last, lose_pikachu = (
+        BuildTests.tearDown, BuildTests.write, BuildTests.read, BuildTests.registry, BuildTests.run_pages, BuildTests.last, BuildTests.lose_pikachu)
+
+    def setUp(self):
+        BuildTests.setUp(self)
+        pp.live_pages = lambda: ({"102|Eevee (Holofoil)": "eevee-base-test"}, "a test")
+        self.run_pages()                                           # night 1: Pikachu (Holofoil) $50.00
+
+    def test_the_page_stays_with_its_last_price_and_day(self):
+        self.assertEqual(self.last()["101|Pikachu (Holofoil)"], [1, "SV01: Base Test", "pokemon", "c", "1/10", "", 5000, TODAY])
+        before = set(os.listdir(os.path.join(self.site, "p")))
+        self.write(self.lose_pikachu(world()), "2026-11-13")
+        self.run_pages()
+        self.assertEqual(set(os.listdir(os.path.join(self.site, "p"))), before)   # nothing taken down
+        h = self.read("p", "pikachu-base-test.html")
+        self.assertIn('<body data-page="static" data-id="101" data-set="1" data-var="Pikachu (Holofoil)">', h)   # the page script leaves it as written
+        self.assertIn("Last market price · November 12, 2026", h)
+        self.assertIn('<div class="price-big">$50.00</div>', h)
+        self.assertIn("No TCGplayer market price right now.", h)
+        self.assertIn("It has no TCGplayer market price as of November 13, 2026. Its last market price was <b>$50.00</b>, recorded November 12, 2026.", h)
+        self.assertNotIn("market price today", h)
+        self.assertNotIn('class="kpis"', h)                        # no change boxes without a price
+        self.assertEqual(h.count('rel="canonical"'), 1)
+        self.assertIn('href="https://market.driveyourstyle.net/p/pikachu-base-test.html"', h)
+        self.assertEqual(json.loads(self.read("data", "pages.json"))["101|Pikachu (Holofoil)"], "pikachu-base-test")
+        self.assertIn("/p/pikachu-base-test.html</loc><lastmod>2026-11-12</lastmod>", self.read("sitemap.xml"))
+        bare = json.loads(self.read("data", "set", "1.json"))["items"][0]
+        self.assertEqual((bare["n"], bare["pg"]), ("Pikachu", "pikachu-base-test"))   # the bare listing links to the page
+        self.assertEqual(self.last()["101|Pikachu (Holofoil)"][6:], [5000, TODAY])     # the remembered price is not touched
+
+    def test_many_nights_without_a_price_keep_the_same_last_price(self):
+        for day in ("2026-11-13", "2026-11-14", "2026-11-15"):
+            self.write(self.lose_pikachu(world()), day)
+            self.run_pages()
+        h = self.read("p", "pikachu-base-test.html")
+        self.assertIn("Last market price · November 12, 2026", h)
+        self.assertIn("as of November 15, 2026", h)
+        self.assertEqual(self.last()["101|Pikachu (Holofoil)"][6:], [5000, TODAY])
+
+    def test_the_full_page_returns_when_the_price_does(self):
+        self.write(self.lose_pikachu(world()), "2026-11-13")
+        self.run_pages()
+        w = world()
+        w[1]["items"][0]["p"] = 6100
+        self.write(w, "2026-11-14")
+        self.run_pages()
+        h = self.read("p", "pikachu-base-test.html")
+        self.assertIn('<body data-page="price" ', h)
+        self.assertIn('<div class="price-big">$61.00</div>', h)
+        self.assertNotIn("Last market price", h)
+        self.assertEqual(self.last()["101|Pikachu (Holofoil)"][6:], [6100, "2026-11-14"])
+
+    def test_a_set_that_left_the_data_still_shows_the_page_without_dead_links(self):
+        w = world()
+        del w[2]
+        os.remove(os.path.join(self.site, "data", "set", "2.json"))
+        self.write(w, "2026-11-13")
+        self.run_pages()
+        h = self.read("p", "dark-mage-duel-test.html")
+        self.assertIn('data-page="static"', h)
+        self.assertIn('<div class="price-big">$90.00</div>', h)
+        self.assertNotIn("set.html?id=2", h)
+        self.assertIn('href="sets.html?game=yugioh"', h)
+
+    def test_a_page_another_printing_of_the_same_card_keeps_its_own_link(self):
+        w = world()
+        w[1]["items"].insert(1, item(101, "Pikachu (Reverse Holofoil)", 7000))
+        self.write(w)
+        self.run_pages()
+        w2 = world()
+        w2[1]["items"][0] = item(101, "Pikachu (Reverse Holofoil)", 7000)   # the Holofoil printing is gone, the other one is priced
+        self.write(w2, "2026-11-13")
+        self.run_pages()
+        other = json.loads(self.read("data", "set", "1.json"))["items"][0]
+        self.assertNotEqual(other["pg"], "pikachu-base-test")
+        self.assertIn('data-page="static"', self.read("p", "pikachu-base-test.html"))
+        self.assertIn('data-page="price"', self.read("p", other["pg"] + ".html"))
+
+    def test_the_seed_covers_pages_that_were_resting_before_the_list_existed(self):
+        reg = self.registry()
+        reg["pages"]["555|Old Card (Holofoil)"] = ["old-card", "", ""]
+        with open(self.reg, "w") as f:
+            json.dump(reg, f)
+        with open(pp.SEED, "w") as f:
+            json.dump({"v": 1, "items": {"555|Old Card (Holofoil)": [1, "SV01: Base Test", "pokemon", "c", "9/10", "Rare", 1234, "2026-11-10"],
+                                         "777|Not Registered": [1, "SV01: Base Test", "pokemon", "c", "", "", 500, "2026-11-10"]}}, f)
+        self.write(world(), "2026-11-13")
+        self.run_pages()
+        h = self.read("p", "old-card.html")
+        self.assertIn("Last market price · November 10, 2026", h)
+        self.assertIn('<div class="price-big">$12.34</div>', h)
+        self.assertNotIn("777|Not Registered", self.last())        # only registered pages are remembered
+        self.assertEqual(len([f for f in os.listdir(os.path.join(self.site, "p")) if "not-registered" in f]), 0)
+
+    def test_a_last_price_list_that_cannot_be_read_never_stops_the_run(self):
+        path = os.path.join(os.path.dirname(self.reg), "last.json")
+        for bad in ("{broken", '{"v": 2, "items": {}}', '{"v": 1, "items": {"101|Pikachu (Holofoil)": [1, "x", "pokemon", "c", "", "", -5, "2026-11-12"]}}'):
+            with open(path, "w") as f:
+                f.write(bad)
+            self.write(self.lose_pikachu(world()), "2026-11-13")
+            self.run_pages()
+            self.assertFalse(os.path.exists(os.path.join(self.site, "p", "pikachu-base-test.html")))   # nothing real to show: rests, as before
+            self.assertIn("101|Pikachu (Holofoil)", self.registry()["pages"])                          # address still reserved
+            self.assertIn("102|Eevee (Holofoil)", self.last())                                         # the list is rebuilt from tonight
+            self.write(world())
+            self.run_pages()                                                                           # back, with a price: remembered again
+
+    def test_an_item_listed_under_two_sets_keeps_the_set_its_address_was_made_from(self):
+        w = world()
+        w[9] = a_set(9, "PR: Promo Test", "pokemon", [item(301, "Mew (Holofoil)", 40)])                 # listed, but far too cheap to get a page here
+        w[12] = a_set(12, "SV02: Second Test", "pokemon", [item(301, "Mew (Holofoil)", 40), item(302, "Filler", 10)])
+        w[12]["items"][0]["p"] = w[9]["items"][0]["p"] = 900
+        w[9]["items"] += [item(400 + n, f"Promo {n}", 5000 + n) for n in range(30)]                       # crowds Mew out of the promo set's top 25
+        self.write(w, "2026-11-13")
+        self.run_pages()
+        slug = self.registry()["pages"]["301|Mew (Holofoil)"][0]
+        self.assertTrue(slug.startswith("mew-second-test"), slug)
+        first = self.read("p", slug + ".html")
+        self.assertIn("Price – Second Test |", first)
+        self.write(w, "2026-11-14")
+        self.run_pages()                                                                                # a later night: same set, not the lower-numbered one
+        self.assertIn("Price – Second Test |", self.read("p", slug + ".html"))
+        self.assertIn('data-set="12"', self.read("p", slug + ".html"))
+        for gid in (9, 12):                                                                             # both listings link to the one page
+            it = [x for x in json.loads(self.read("data", "set", f"{gid}.json"))["items"] if x["id"] == 301][0]
+            self.assertEqual(it["pg"], slug)
+
+    def test_pages_kept_up_count_toward_the_limits(self):
+        pages = {"900|Gone (Holofoil)": ["gone", "", ""]}
+        last = {"900|Gone (Holofoil)": [1, "SV01: Base Test", "pokemon", "c", "", "", 999, "2026-11-10"]}
+        rest = pp.resting(world(), pages, last)
+        self.assertEqual([(i["id"], s, was) for i, _, s, was in rest], [(900, "gone", (999, "2026-11-10"))])
+        picks, _ = pp.plan(world(), pages, TODAY, cap=4, extra=len(rest))
+        self.assertEqual(sum(1 for _, d, _ in picks if d["k"] != "pokemon"), 0)   # 3 Pokémon + 1 kept up = the cap of 4
+
 
 if __name__ == "__main__":
     unittest.main()
