@@ -814,7 +814,11 @@ function pullsHtml(set) {
 function gradedHtml(base, set, v) {
   const setName = set.n.replace(/^[A-Z0-9]+[a-z]?\s*[:\-–]\s*/, "");
   const q = `${({ "one-piece": "One Piece", lorcana: "Lorcana", riftbound: "Riftbound", palworld: "Palworld", gundam: "Gundam Card Game", "union-arena": "Union Arena", yugioh: "Yu-Gi-Oh", "dragon-ball-fusion-world": "Dragon Ball Fusion World" })[set.k] || "Pokemon"} ${base.replace(/ - /, " ")} ${base.includes(v.no || "~") ? "" : ebayNo(v.no, set.k, set.pub)} ${setName}`.replace(/\s+/g, " ").trim();
-  const ebay = (g) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q + " " + g)}&LH_Sold=1&LH_Complete=1&_sop=13`;
+  // eBay sold links. Sword & Shield and later, and the other games: name + number + grade, like Search eBay sold.
+  // Adding the set name hid half or more of the sales, because many sellers leave it out. Older Pokémon sets keep
+  // it: their numbers repeat (Base Set and Base Set Shadowless; reprints such as Celebrations copy the old number).
+  const ebay = (g) => oldPokemonSet(set.k, set.pub) ? `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q + " " + g)}&LH_Sold=1&LH_Complete=1&_sop=13`
+    : ebaySold(v.n, v.no, { game: set.k, pub: set.pub, grade: g });
   const link = (h, t, s) => `<a class="glink" href="${h}" target="_blank" rel="noopener"><b>${t}</b><span>${s}</span></a>`;
   return `<section class="graded"><h2 style="font-size:24px">Graded prices &amp; gem rate</h2>
     <p class="muted gl-note">These links search recent graded sales for this card, and GemRate for its population and gem rate.</p>
@@ -2351,7 +2355,8 @@ const SET_PUB = {};
 const loadSetPubs = () => getJSON("sets.json").then((s) => { for (const x of s) SET_PUB[x.id] = x.pub || ""; }).catch(() => {});
 // Pokémon sets before Sword & Shield print the number without leading zeros (4/102), but TCGplayer pads some of them
 // (004/102): those zeros come off. Newer sets print the zeros and keep them.
-const ebayNo = (no, game, pub) => { const s = String(no || "").trim(); return game === "pokemon" && pub && pub < "2020-02-07" && /^0+\d+\/\d+$/.test(s) ? s.replace(/^0+/, "") : s; };
+const oldPokemonSet = (game, pub) => game === "pokemon" && !!pub && pub < "2020-02-07";
+const ebayNo = (no, game, pub) => { const s = String(no || "").trim(); return oldPokemonSet(game, pub) && /^0+\d+\/\d+$/.test(s) ? s.replace(/^0+/, "") : s; };
 // Adds the card number to a search unless it's already there. A bare "87" from the name gives way to the full 87/146,
 // and TCGplayer's padded copy of a number to the one sellers type.
 function ebayAddNo(q, no, game = "", pub = "") {
