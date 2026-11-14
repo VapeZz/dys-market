@@ -2336,10 +2336,11 @@ const gradeOpts = (cur) => `<option value=""${cur ? "" : " selected"}>Raw</optio
 // copies (unless the card is Japanese), reverse holos searched as reverse holos, and a price floor (40% of market for
 // cards, 60% for sealed) so cheap look-alikes can't push the real listings down.
 function ebayFind(n, no, { p = 0, game = "", grade = "", kind = "c", pub = "" } = {}) {
-  const jp = /-jp$/.test(game || ""), card = kind !== "s", nm = String(n || "");
-  let q = nm.replace(/ \((Holofoil|Normal|Foil|Reverse Holofoil)\)$/, "").replace(/ \(Foil\)/, "").replace(/ - (\S+)$/, " $1").replace(/[()[\]]/g, " ");
+  const jp = /-jp$/.test(game || ""), card = kind !== "s", nm = String(n || ""), op = card && game === "one-piece" ? onePieceArt(nm) : null;
+  let q = ebayPlain((op ? op.name : nm).replace(/ \((Holofoil|Normal|Foil|Reverse Holofoil)\)$/, "").replace(/ \(Foil\)/, ""));
   if (/\(Reverse Holofoil\)$/.test(nm)) q += " reverse holo";
   if (card) q = ebayAddNo(q, no, game, pub);
+  if (op && op.add) q += op.add + op.neg;   // the plain printing needs no extra words here: cheapest-first already puts it on top
   if (jp) q += " japanese";
   if (grade) q += " " + grade;
   else q += card ? " -psa -cgc -bgs -sgc -tag -graded -slab -case -display -proxy -custom -orica -lot -choose -pick -singles" + (/\(Normal\)$/.test(nm) ? " -reverse" : "")
@@ -2371,19 +2372,41 @@ function ebayAddNo(q, no, game = "", pub = "") {
   }
   return w.join(" ");
 }
+// A name's search words, without the marks eBay reads as commands: brackets (its any-of form), quotes (exact phrase)
+// and a hyphen at the start of a word, which means "leave this word out" ("Premium Card Collection -Best Selection
+// Vol. 4-" would hide every listing that says Best).
+const ebayPlain = (s) => String(s).replace(/[()[\]"]/g, " ").replace(/(^|\s)-+/g, "$1").replace(/-+(?=\s|$)/g, "");
+// One Piece: one card code covers every printing (plain, alternate art, manga, SP...), priced far apart, and TCGplayer's
+// labels aren't the words sellers type: "Shanks (Parallel) (Manga) (Alternate Art)" found 11 sold listings on eBay where
+// "Shanks OP01-120 manga" found 89. So the label that names the art becomes the sellers' words, in eBay's any-of form
+// "(a,b)". An alternate art leaves the manga out; the plain printing leaves every art variant out. Other labels
+// (Judge, Winner, Box Topper, Gold...) stay as they are.
+function onePieceArt(nm) {
+  const labels = [...nm.matchAll(/\(([^()]*)\)/g)].map((m) => m[1].trim()), is = (re) => labels.some((l) => re.test(l));
+  const alt = "alt,alternate,parallel,aa";
+  const [add, neg] = is(/^Manga$/i) ? [" manga", ""] : is(/^TR$/) ? [" (TR,treasure)", ""] : is(/^SP$/) ? [" SP", ""]
+    : is(/^Full Art$/i) ? [` (full,${alt})`, " -manga"] : is(/Alternate Art$|^Parallel$/i) ? [` (${alt})`, " -manga"]
+    : labels.every((l) => /^(Foil|Reprint|\d+|[A-Z]+\d*-\d+)$/i.test(l)) ? ["", " -alt -alternate -parallel -aa -manga"] : ["", ""];
+  return { name: nm.replace(/ ?\((?:Foil|Reprint|Manga|TR|SP|Parallel|Full Art|[A-Za-z ]*Alternate Art)\)/gi, ""), add, neg };
+}
 // eBay sold search for one item. A name alone matches every printing of it ("Eevee"), so a card carries its number:
 // "Eevee TG11/TG30". Reverse holos are searched as reverse holos and Japanese cards as Japanese. Sealed products are
-// searched by name.
+// searched by name. One Piece cards also leave out proxies and other-language copies, which carry the same code.
 function ebaySold(n, no, { game = "", pub = "", grade = "", kind = "c" } = {}) {
-  const nm = String(n || "");
-  let q = cleanCard(nm).replace(/ \(Foil\)/, "").replace(/[()[\]]/g, " ").replace(/ - /g, " ");
-  q = ebayAddNo(q, kind === "s" ? "" : no, game, pub);
+  const nm = String(n || ""), op = kind !== "s" && game === "one-piece" ? onePieceArt(nm) : null;
+  let q = ebayAddNo(ebayPlain(cleanCard(op ? op.name : nm).replace(/ \(Foil\)/, "")), kind === "s" ? "" : no, game, pub);
   if (/\(Reverse Holofoil\)$/.test(nm)) q += " reverse holo";
   if (/-jp$/.test(game || "")) q += " japanese";
+  if (op) q += op.add;
   if (grade) q += " " + grade;
+  if (op) q += op.neg + " -proxy -custom -japanese -jp -jpn -chinese -korean -french";
   return "https://www.ebay.com/sch/i.html?" + new URLSearchParams({ _nkw: q.replace(/\s+/g, " ").trim(), LH_Sold: "1", LH_Complete: "1", _sop: "13" });
 }
-const ebayBuy = (n, no, gr, { game = "", pub = "" } = {}) => "https://www.ebay.com/sch/i.html?" + new URLSearchParams({ _nkw: ebayAddNo(cleanCard(String(n || "")).replace(/[()[\]]/g, " "), no, game, pub) + (gr ? " " + gr : ""), LH_BIN: "1", _sop: "15" });
+function ebayBuy(n, no, gr, { game = "", pub = "" } = {}) {
+  const nm = String(n || ""), op = game === "one-piece" ? onePieceArt(nm) : null;
+  const q = ebayAddNo(ebayPlain(cleanCard(op ? op.name : nm)), no, game, pub) + (op ? op.add : "") + (gr ? " " + gr : "") + (op ? op.neg : "");
+  return "https://www.ebay.com/sch/i.html?" + new URLSearchParams({ _nkw: q, LH_BIN: "1", _sop: "15" });
+}
 const cleanCard = (n) => n.replace(/ \((Holofoil|Normal|Foil|Reverse Holofoil)\)$/, "").replace(/ - (\S+)$/, " $1");
 // My Collection: the search list carries no card numbers, so a graded card gets its number from its set file.
 const CARD_INFO = new Map();   // card id → { no, k, pub }
