@@ -813,7 +813,7 @@ function pullsHtml(set) {
 
 function gradedHtml(base, set, v) {
   const setName = set.n.replace(/^[A-Z0-9]+[a-z]?\s*[:\-–]\s*/, "");
-  const q = `${({ "one-piece": "One Piece", lorcana: "Lorcana", riftbound: "Riftbound", palworld: "Palworld", gundam: "Gundam Card Game", "union-arena": "Union Arena", yugioh: "Yu-Gi-Oh", "dragon-ball-fusion-world": "Dragon Ball Fusion World" })[set.k] || "Pokemon"} ${base.replace(/ - /, " ")} ${base.includes(v.no || "~") ? "" : v.no || ""} ${setName}`.replace(/\s+/g, " ").trim();
+  const q = `${({ "one-piece": "One Piece", lorcana: "Lorcana", riftbound: "Riftbound", palworld: "Palworld", gundam: "Gundam Card Game", "union-arena": "Union Arena", yugioh: "Yu-Gi-Oh", "dragon-ball-fusion-world": "Dragon Ball Fusion World" })[set.k] || "Pokemon"} ${base.replace(/ - /, " ")} ${base.includes(v.no || "~") ? "" : ebayNo(v.no, set.k, set.pub)} ${setName}`.replace(/\s+/g, " ").trim();
   const ebay = (g) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q + " " + g)}&LH_Sold=1&LH_Complete=1&_sop=13`;
   const link = (h, t, s) => `<a class="glink" href="${h}" target="_blank" rel="noopener"><b>${t}</b><span>${s}</span></a>`;
   return `<section class="graded"><h2 style="font-size:24px">Graded prices &amp; gem rate</h2>
@@ -932,7 +932,7 @@ function priceBreak(v, base, game = "", pub = "") {
       <div><span class="pb-lab">MID LISTING</span><b>${v.md ? money(v.md) : "—"}</b><span class="muted pb-sm">typical asking</span></div></div>
     ${v.t === "c" ? `<div class="pb-cond">${COND.map(([c, f]) => `<div class="${c === "NM" ? "on" : ""}"><b>${c}</b><span>${v.p * f >= 10000 ? "$" + Math.round(v.p * f / 100).toLocaleString("en-US") : money(Math.round(v.p * f))}</span></div>`).join("")}</div>
     <p class="muted pb-sm" style="margin:6px 0 0">Condition prices are estimates from the Near Mint market price.</p>` : ""}
-    <div class="pb-btns"><a class="btn primary" href="${ebayFind(v.n, v.no, { p: v.p, game, kind: v.t })}" target="_blank" rel="sponsored noopener" data-where="product-buy">Buy on eBay ↗</a>${v.t === "c" ? `<a class="btn" href="${ebayFind(v.n, v.no, { game, grade: "PSA 10" })}" target="_blank" rel="sponsored noopener" data-where="product-buy-psa10">Buy PSA 10 on eBay ↗</a>` : ""}<a class="btn" href="${sold}" target="_blank" rel="noopener">Search eBay sold ↗</a><a class="btn" href="https://www.tcgplayer.com/product/${v.id}" target="_blank" rel="noopener">See on TCGplayer ↗</a></div></div>`;
+    <div class="pb-btns"><a class="btn primary" href="${ebayFind(v.n, v.no, { p: v.p, game, kind: v.t, pub })}" target="_blank" rel="sponsored noopener" data-where="product-buy">Buy on eBay ↗</a>${v.t === "c" ? `<a class="btn" href="${ebayFind(v.n, v.no, { game, grade: "PSA 10", pub })}" target="_blank" rel="sponsored noopener" data-where="product-buy-psa10">Buy PSA 10 on eBay ↗</a>` : ""}<a class="btn" href="${sold}" target="_blank" rel="noopener">Search eBay sold ↗</a><a class="btn" href="https://www.tcgplayer.com/product/${v.id}" target="_blank" rel="noopener">See on TCGplayer ↗</a></div></div>`;
 }
 
 /* "In stock at Drive Your Style" tiles for a list of set items that have i.dys */
@@ -2205,7 +2205,7 @@ const upNote = (co, grade, tier, u) => u.over ? `A ${co} ${grade} here is worth 
 const GCOS = { PSA: "PSA", CGC: "CGC", BGS: "BGS", TAG: "TAG" };
 async function pageGrading() {
   const [meta, gd, graded, fees, ebj] = await Promise.all([getJSON("meta.json"), getJSON("grading.json"), getJSON("graded.json").catch(() => ({ cards: {} })), gradeFees(),
-    getJSON("ebay.json").catch(() => ({ cards: {} }))]);
+    getJSON("ebay.json").catch(() => ({ cards: {} })), loadSetPubs()]);
   const eb = ebj.cards || {};
   const GK = { PSA: ["psa10", "psa9", "10", "9"], CGC: ["cgc10", "cgc9", "10", "9"], BGS: ["bgs9_5", "bgs9", "9.5", "9"], TAG: ["tag10", "tag9", "10", "9"] };
   const KEY = "dys-grading5", today = meta.updated;
@@ -2270,7 +2270,7 @@ async function pageGrading() {
       const v10 = G10 ? G10[0] : E10 ? E10[0] : null;
       const m = gradeMath({ buy, v10, v9: G9 ? G9[0] : p * (st.x9 || 1), low: p * 0.7, o10, o9, fee, ship, pl });
       const up = custom ? null : upTier(gr, ti, v10);
-      list.push({ id, g, n, p, r, no, buy, ...m, mult: m.be10 / p, g10: G10 ? G10[0] : null, g9: G9 ? G9[0] : null, trend: G10 ? G10[3] : "", liq, up,
+      list.push({ id, g, n, p, r, no, game, buy, ...m, mult: m.be10 / p, g10: G10 ? G10[0] : null, g9: G9 ? G9[0] : null, trend: G10 ? G10[3] : "", liq, up,
         e10: E10, er: e?.r || null, eat: e?.at || "" });
     }
     const by = { value: (a, b) => b.p - a.p, deal: (a, b) => (a.buy / a.p) - (b.buy / b.p) || b.p - a.p, liq: (a, b) => (b.liq?.rate ?? -1) - (a.liq?.rate ?? -1) || (b.profit ?? -1e12) - (a.profit ?? -1e12),
@@ -2289,7 +2289,8 @@ async function pageGrading() {
         : ebMode && st.co === "PSA" ? `<b>PSA 10 on eBay</b> = the cheapest PSA 10 Buy It Now listing on eBay, shipping included, checked in the last week. Those are asking prices, not sales: tap <b>PSA 10 sold</b> to see what they really went for. <b>${list.length.toLocaleString()} cards</b> match. `
         : `<b>${list.length.toLocaleString()} cards</b> match. `)
       + `<b>Break-even ${esc(st.co)} ${l10}</b> is what a ${l10} must sell for before grading pays off at your odds${live ? "" : `: check it against recent sales with the <b>${esc(st.co)} ${l10} sold</b> link`}.`;
-    const sold = (n, no, gr) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(`${cleanCard(n)}${no && !cleanCard(n).includes(no.split("/")[0]) ? " " + no : ""} ${gr}`)}&LH_Sold=1&LH_Complete=1&_sop=13`;
+    const where = (x) => ({ game: x.game, pub: SET_PUB[x.g] });
+    const sold = (x, gr) => ebaySold(x.n, x.no, { ...where(x), grade: gr });
     const be = (x) => !isFinite(x.be10) ? "<b>—</b>" : x.be10 < 1 ? `<b class="up">Any grade</b><small class="muted">a 9 or lower still covers your cost</small>` : `<b>${money(Math.round(x.be10))}</b><small class="muted">${x.mult.toFixed(1)}× market</small>`;
     $("#gr-list").innerHTML = list.length ? list.slice(0, 120).map((x) => `<div class="gr-row in-card">
       <a class="gr-img" href="${prodUrl(x.id, x.g)}">${imgTag(x.id, "", 200)}</a>
@@ -2305,7 +2306,7 @@ async function pageGrading() {
           ${x.g10 ? `<div><span class="pb-lab">${esc(st.co)} ${l10} SOLD</span><b>${money(x.g10)}</b><small class="muted">${(x.g10 / x.p).toFixed(1)}× raw · ${esc(x.liq.sub)}${x.trend === "up" ? " · ▲" : x.trend === "down" ? " · ▼" : ""}</small></div>
           <div><span class="pb-lab">EXP. PROFIT</span><b class="${x.profit >= 0 ? "up" : "down"}">${x.profit >= 0 ? "+" : "−"}${money(Math.abs(Math.round(x.profit)))}</b><small class="muted">${x.roi >= 0 ? "+" : ""}${Math.round(x.roi * 100)}% after fees</small></div>` : ""}</div>
         ${x.up ? `<p class="gr-note">${esc(upNote(st.co, l10, tier[0], x.up))}</p>` : ""}
-        <div class="gr-links">${ebMode ? `<a class="gr-buy" href="${esc(x.er ? x.er[2] : ebayBuy(x.n, x.no, ""))}" target="_blank" rel="sponsored noopener">Buy raw on eBay ↗</a>${st.co === "PSA" ? `<a class="gr-buy" href="${esc(x.e10 ? x.e10[2] : ebayBuy(x.n, x.no, "PSA 10"))}" target="_blank" rel="sponsored noopener">${x.e10 ? "Cheapest PSA 10 ↗" : "PSA 10s for sale ↗"}</a>` : ""}` : ""}<a href="${sold(x.n, x.no, st.co + " " + l10)}" target="_blank" rel="noopener">${esc(st.co)} ${l10} sold ↗</a><a href="${sold(x.n, x.no, st.co + " " + l9)}" target="_blank" rel="noopener">${esc(st.co)} ${l9} sold ↗</a><a href="centering.html">Check centering →</a><a href="${prodUrl(x.id, x.g)}#gcalc">Full calculator →</a></div></div></div>`).join("")
+        <div class="gr-links">${ebMode ? `<a class="gr-buy" href="${esc(x.er ? x.er[2] : ebayBuy(x.n, x.no, "", where(x)))}" target="_blank" rel="sponsored noopener">Buy raw on eBay ↗</a>${st.co === "PSA" ? `<a class="gr-buy" href="${esc(x.e10 ? x.e10[2] : ebayBuy(x.n, x.no, "PSA 10", where(x)))}" target="_blank" rel="sponsored noopener">${x.e10 ? "Cheapest PSA 10 ↗" : "PSA 10s for sale ↗"}</a>` : ""}` : ""}<a href="${sold(x, st.co + " " + l10)}" target="_blank" rel="noopener">${esc(st.co)} ${l10} sold ↗</a><a href="${sold(x, st.co + " " + l9)}" target="_blank" rel="noopener">${esc(st.co)} ${l9} sold ↗</a><a href="centering.html">Check centering →</a><a href="${prodUrl(x.id, x.g)}#gcalc">Full calculator →</a></div></div></div>`).join("")
       : `<p class="panel empty-note">No cards match. Widen the price range, switch era, pick another game${st.liq ? ", or show slow sellers" : ""}.</p>`;
   };
   $("#gr-controls").addEventListener("input", (e) => {
@@ -2330,11 +2331,11 @@ const gradeOpts = (cur) => `<option value=""${cur ? "" : " selected"}>Raw</optio
 // singles only (CCG Individual Cards), no slabs / cases / proxies / lots / pick-your-card listings, no other-language
 // copies (unless the card is Japanese), reverse holos searched as reverse holos, and a price floor (40% of market for
 // cards, 60% for sealed) so cheap look-alikes can't push the real listings down.
-function ebayFind(n, no, { p = 0, game = "", grade = "", kind = "c" } = {}) {
+function ebayFind(n, no, { p = 0, game = "", grade = "", kind = "c", pub = "" } = {}) {
   const jp = /-jp$/.test(game || ""), card = kind !== "s", nm = String(n || "");
   let q = nm.replace(/ \((Holofoil|Normal|Foil|Reverse Holofoil)\)$/, "").replace(/ \(Foil\)/, "").replace(/ - (\S+)$/, " $1").replace(/[()[\]]/g, " ");
   if (/\(Reverse Holofoil\)$/.test(nm)) q += " reverse holo";
-  if (card && no && !q.includes(String(no).split("/")[0])) q += " " + no;
+  if (card) q = ebayAddNo(q, no, game, pub);
   if (jp) q += " japanese";
   if (grade) q += " " + grade;
   else q += card ? " -psa -cgc -bgs -sgc -tag -graded -slab -case -display -proxy -custom -orica -lot -choose -pick -singles" + (/\(Normal\)$/.test(nm) ? " -reverse" : "")
@@ -2344,30 +2345,46 @@ function ebayFind(n, no, { p = 0, game = "", grade = "", kind = "c" } = {}) {
   if (!grade && p >= 500) u.set("_udlo", String(Math.floor(p * (card ? 0.4 : 0.6) / 100)));
   return "https://www.ebay.com/sch/i.html?" + u;
 }
+// Every eBay link names the card by its number, the way sellers type it.
+// SET_PUB: each set's release date (set id → "YYYY-MM-DD"). Pages that link cards from many sets load it once.
+const SET_PUB = {};
+const loadSetPubs = () => getJSON("sets.json").then((s) => { for (const x of s) SET_PUB[x.id] = x.pub || ""; }).catch(() => {});
+// Pokémon sets before Sword & Shield print the number without leading zeros (4/102), but TCGplayer pads some of them
+// (004/102): those zeros come off. Newer sets print the zeros and keep them.
+const ebayNo = (no, game, pub) => { const s = String(no || "").trim(); return game === "pokemon" && pub && pub < "2020-02-07" && /^0+\d+\/\d+$/.test(s) ? s.replace(/^0+/, "") : s; };
+// Adds the card number to a search unless it's already there. A bare "87" from the name gives way to the full 87/146,
+// and TCGplayer's padded copy of a number to the one sellers type.
+function ebayAddNo(q, no, game = "", pub = "") {
+  const raw = String(no || "").trim(), num = ebayNo(raw, game, pub);
+  let w = String(q).split(" ").filter(Boolean);
+  if (!num) return w.join(" ");
+  if (num !== raw) w = w.filter((x) => x !== raw);
+  if (!w.some((x) => x.toLowerCase() === num.toLowerCase())) {
+    const short = (num.split("/")[0].match(/\d+$/) || [""])[0].replace(/^0+/, "");   // 87 of 87/146, 3 of OP01-003
+    if (short) w = w.filter((x) => !(/^\d+$/.test(x) && x.replace(/^0+/, "") === short));
+    w.push(num);
+  }
+  return w.join(" ");
+}
 // eBay sold search for one item. A name alone matches every printing of it ("Eevee"), so a card carries its number:
-// "Eevee TG11/TG30". A number already in the name isn't repeated, and a bare "(87)" in the name gives way to the full
-// 87/146. Pokémon sets before Sword & Shield print the number without leading zeros (4/102), which is how sellers
-// type it, but TCGplayer pads some of them (004/102): those zeros come off. Reverse holos are searched as reverse
-// holos and Japanese cards as Japanese. Sealed products are searched by name.
+// "Eevee TG11/TG30". Reverse holos are searched as reverse holos and Japanese cards as Japanese. Sealed products are
+// searched by name.
 function ebaySold(n, no, { game = "", pub = "", grade = "", kind = "c" } = {}) {
   const nm = String(n || "");
-  let q = cleanCard(nm).replace(/ \(Foil\)/, "").replace(/[()[\]]/g, " ").replace(/ - /g, " ").replace(/\s+/g, " ").trim();
-  const raw =kind === "s" ? "" : String(no || "").trim();
-  const num = game === "pokemon" && pub && pub < "2020-02-07" && /^0+\d+\/\d+$/.test(raw) ? raw.replace(/^0+/, "") : raw;
-  if (num !== raw) q = q.split(" ").filter((w) => w !== raw).join(" ");
-  if (num && !q.toLowerCase().split(" ").includes(num.toLowerCase())) {
-    const short = (num.split("/")[0].match(/\d+$/) || [""])[0].replace(/^0+/, "");   // 87 of 87/146, 3 of OP01-003
-    if (short) q = q.split(" ").filter((w) => !(/^\d+$/.test(w) && w.replace(/^0+/, "") === short)).join(" ");
-    q += " " + num;
-  }
+  let q = cleanCard(nm).replace(/ \(Foil\)/, "").replace(/[()[\]]/g, " ").replace(/ - /g, " ");
+  q = ebayAddNo(q, kind === "s" ? "" : no, game, pub);
   if (/\(Reverse Holofoil\)$/.test(nm)) q += " reverse holo";
   if (/-jp$/.test(game || "")) q += " japanese";
   if (grade) q += " " + grade;
   return "https://www.ebay.com/sch/i.html?" + new URLSearchParams({ _nkw: q.replace(/\s+/g, " ").trim(), LH_Sold: "1", LH_Complete: "1", _sop: "13" });
 }
-const ebayBuy = (n, no, gr) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(`${cleanCard(n)}${no && !cleanCard(n).includes(no.split("/")[0]) ? " " + no : ""}${gr ? " " + gr : ""}`)}&LH_BIN=1&_sop=15`;
+const ebayBuy = (n, no, gr, { game = "", pub = "" } = {}) => "https://www.ebay.com/sch/i.html?" + new URLSearchParams({ _nkw: ebayAddNo(cleanCard(String(n || "")).replace(/[()[\]]/g, " "), no, game, pub) + (gr ? " " + gr : ""), LH_BIN: "1", _sop: "15" });
 const cleanCard = (n) => n.replace(/ \((Holofoil|Normal|Foil|Reverse Holofoil)\)$/, "").replace(/ - (\S+)$/, " $1");
-const soldUrl = (name, gr) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(`${cleanCard(name)} ${gr === "Other slab" ? "graded" : gr}`)}&LH_Sold=1&LH_Complete=1&_sop=13`;
+// My Collection: the search list carries no card numbers, so a graded card gets its number from its set file.
+const CARD_INFO = new Map();   // card id → { no, k, pub }
+const learnCards = (items) => Promise.all([...new Set(items.map((i) => i.g).filter(Boolean))].map((g) => getJSON(`set/${g}.json`)
+  .then((s) => { for (const x of s.items) if (!CARD_INFO.has(String(x.id))) CARD_INFO.set(String(x.id), { no: x.no || "", k: s.k, pub: s.pub || "" }); }).catch(() => {})));
+const soldUrl = (c) => { const f = CARD_INFO.get(String(c.id)) || {}; return ebaySold(c.name || c.n, f.no, { game: f.k, pub: f.pub, kind: c.t || "c", grade: c.gr === "Other slab" ? "graded" : c.gr }); };
 const sumOwned = () => { const m = new Map(); for (const x of colGet().items) { const k = `${x.id}|${printCode(subOf(x.n || ""))}`; m.set(k, (m.get(k) || 0) + x.qty); } return m; };
 
 /* full-screen card viewer for binders: swipe/arrow through cards */
@@ -2381,7 +2398,7 @@ function cardView(list, start, opts = {}) {
       <div class="cview-img${c.t === "s" ? " sealed" : ""}">${imgTag(c.id, "", 1000)}${c.gr ? `<span class="slab-badge">${esc(c.gr)}</span>` : ""}</div>
       <div class="cview-meta"><b>${esc(c.name)}</b><span class="muted">${esc(set)}${c.qty > 1 ? ` · ×${c.qty}` : ""}</span>
         <span class="cview-val">${money(c.mkt)}<small class="muted">${c.gr ? (c.est ? " raw price" : " owner's value") : " market"}</small></span>
-        <span class="cview-links"><a href="${prodUrl(c.id, c.g)}">Price history →</a>${c.gr ? `<a href="${esc(soldUrl(c.name, c.gr))}" target="_blank" rel="noopener">eBay sold ${esc(c.gr)} →</a>` : ""}</span>${opts.action ? opts.action.html(c) : ""}</div>
+        <span class="cview-links"><a href="${prodUrl(c.id, c.g)}">Price history →</a>${c.gr ? `<a href="${esc(soldUrl(c))}" target="_blank" rel="noopener">eBay sold ${esc(c.gr)} →</a>` : ""}</span>${opts.action ? opts.action.html(c) : ""}</div>
       ${list.length > 1 ? `<button type="button" class="cview-nav prev" aria-label="Previous">‹</button><button type="button" class="cview-nav next" aria-label="Next">›</button><span class="cview-count">${i + 1} / ${list.length}</span>` : ""}</div>`;
     const ph = opts.photo && opts.photo(c); if (ph) ph.then((u) => { if (u) $(".cview-img img", box).src = u; });
   };
@@ -2471,9 +2488,13 @@ async function pageCollection() {
     el.innerHTML = `<option value="">All cards (${cnt(() => true)})</option>${names.length ? `<option value="__none"${binder === "__none" ? " selected" : ""}>Not in a binder (${cnt((i) => !i.b)})</option>` : ""}
       ${names.map((b) => `<option value="${esc(b)}"${binder === b ? " selected" : ""}>${esc(b)} (${cnt((i) => i.b === b)})</option>`).join("")}<option value="__new">＋ New binder…</option>`;
   };
+  const askedSets = new Set();
   const draw = () => {
     const all = col.items.map((it, ix) => { const r = byKey.get(rawKey(it)); const raw = r?.[4] ?? null;
       return { ...it, ix, name: it.n || r?.[1] || `#${it.id}`, raw, mkt: it.gr && it.gv != null ? it.gv : raw, est: !!it.gr && it.gv == null, ch: it.gr ? null : changes[rawKey(it)], t: r?.[3] }; });
+    // graded cards link to eBay sold by card number: fetch the numbers once (from the set files), then draw again
+    const noNumber = all.filter((i) => i.gr && i.g && !CARD_INFO.has(String(i.id)) && !askedSets.has(i.g));
+    if (noNumber.length) { noNumber.forEach((i) => askedSets.add(i.g)); learnCards(noNumber).then(draw); }
     const inBinder = (i) => shared || !binder || (binder === "__none" ? !i.b : i.b === binder);
     if (!shared) paintBinders(all);
     const items = all.filter(inBinder).sort((a, b) => csort === "name" ? a.name.localeCompare(b.name) : csort === "set" ? setName(a.g).localeCompare(setName(b.g)) || (b.mkt || 0) - (a.mkt || 0)
@@ -2509,7 +2530,7 @@ async function pageCollection() {
           ${shared || !(col.binders || []).length ? "" : `<div class="grade-row"><select class="select grade-sel" data-bnd="${esc(keyOf(i))}" aria-label="Binder for ${esc(i.name)}"><option value="">No binder</option>${col.binders.map((b) => `<option${i.b === b ? " selected" : ""}>${esc(b)}</option>`).join("")}</select></div>`}
           ${shared || i.t === "s" ? "" : `<div class="grade-row"><select class="select grade-sel" data-grade="${esc(keyOf(i))}" aria-label="Raw or graded">${gradeOpts(i.gr || "")}</select>
             ${i.gr ? `<label class="gv">Value each $<input class="field" type="number" min="0" step="0.01" inputmode="decimal" placeholder="${i.raw != null ? (i.raw / 100).toFixed(2) : "0.00"}" value="${i.gv != null ? (i.gv / 100).toFixed(2) : ""}" data-gv="${esc(keyOf(i))}" aria-label="Value of your ${esc(i.gr)}"></label>
-            <a class="sold-link" href="${esc(soldUrl(i.name, i.gr))}" target="_blank" rel="noopener">eBay sold ${esc(i.gr === "Other slab" ? "graded" : i.gr)} →</a>` : ""}</div>`}</td>
+            <a class="sold-link" href="${esc(soldUrl(i))}" target="_blank" rel="noopener">eBay sold ${esc(i.gr === "Other slab" ? "graded" : i.gr)} →</a>` : ""}</div>`}</td>
         <td class="num">${shared ? esc(i.qty) : `<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><input class="field" type="number" min="1" max="9999" value="${i.qty}" data-qty="${esc(keyOf(i))}" aria-label="Quantity" style="width:72px"><input class="field" type="number" min="0" step="0.01" placeholder="paid $" value="${i.paid != null ? (i.paid / 100).toFixed(2) : ""}" data-paid="${esc(keyOf(i))}" aria-label="Paid each" style="width:72px"></div>`}</td>
         <td class="num">${money(i.mkt)}${i.gr ? `<span class="muted mkt-note">${i.est ? "raw price · set value" : "your value"}</span>` : ""}</td>
         <td class="num"><b>${money(i.mkt == null ? null : i.mkt * i.qty)}</b></td>
@@ -2878,10 +2899,10 @@ async function pageSell() {
 }
 
 async function pageBuyer() {
-  const [b, dem] = await Promise.all([getJSON("buyer.json").catch(() => null), getJSON("demand.json").catch(() => null)]);
+  const [b, dem] = await Promise.all([getJSON("buyer.json").catch(() => null), getJSON("demand.json").catch(() => null), loadSetPubs()]);
   if (!b) { $("#bpanel").innerHTML = `<p class="panel empty-note">The buyer data builds with tonight's market update.</p>`; return; }
   const tcg = (id) => `https://www.tcgplayer.com/product/${id}`;
-  const sold = (n) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(n.replace(/ \((Holofoil|Reverse Holofoil|Normal)\)$/, ""))}&LH_Sold=1&LH_Complete=1&_sop=13`;
+  const sold = (r) => ebaySold(r.n, r.no, { game: r.k, pub: SET_PUB[r.g], kind: r.t });
   const line = (r, metric, links) => `<tr><td class="title"><a href="${prodUrl(r.id, r.g)}">${imgTag(r.id, "")}<span>${esc(r.n)}<span class="muted" style="display:block;font-size:12px;font-weight:400">${esc(r.sn || "")}${r.t === "s" ? " · sealed" : ""}</span></span></a><span class="b-links">${links}</span></td>
     <td class="num">${money(r.p)}</td><td class="num">${metric}</td></tr>`;
   const table = (head, rows) => rows.length ? `<div class="table-wrap"><table class="b-table"><thead><tr><th>Item</th><th class="num">Market</th><th class="num">${head}</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>` : `<p class="panel empty-note">Nothing here right now.</p>`;
@@ -2889,9 +2910,9 @@ async function pageBuyer() {
   const want = (dem && dem.items) || [];
   const tabs = {
     under: ["Listed under market", `Lowest TCGplayer listing at least 20% under market (cards $10+, sealed $20+). Check the listing's condition before buying.${b.lows_day ? ` Listings as of ${fmtDate(b.lows_day)}.` : ""}`,
-      () => table("Lowest", b.under.map((r) => line(r, `<b>${money(r.lo)}</b><span class="chg up" style="display:block">−${r.off}%</span><span class="muted" style="display:block;font-size:12px">save ${money(r.save)}</span>`, L(tcg(r.id), "TCGplayer") + L(sold(r.n), "eBay sold"))))],
+      () => table("Lowest", b.under.map((r) => line(r, `<b>${money(r.lo)}</b><span class="chg up" style="display:block">−${r.off}%</span><span class="muted" style="display:block;font-size:12px">save ${money(r.save)}</span>`, L(tcg(r.id), "TCGplayer") + L(sold(r), "eBay sold"))))],
     dips: ["Dips", "Items trading 12%+ under their recent high. Good buys if the drop is just a cooldown, not a reprint.",
-      () => table("Recent high", b.dips.map((r) => line(r, `${money(r.hi)}<span class="chg down" style="display:block">▼ ${r.drop}%</span>`, L(tcg(r.id), "TCGplayer") + L(sold(r.n), "eBay sold"))))],
+      () => table("Recent high", b.dips.map((r) => line(r, `${money(r.hi)}<span class="chg down" style="display:block">▼ ${r.drop}%</span>`, L(tcg(r.id), "TCGplayer") + L(sold(r), "eBay sold"))))],
     want: ["Want lists", `What collectors on the site want, how many, and the most they said they'd pay. Stock these. ${dem ? `${dem.wanters} collector${dem.wanters === 1 ? "" : "s"} with want lists.` : ""}`,
       () => table("Wanted by", want.map((r) => line({ ...r, p: r.m, sn: "" }, `<b>♥ ${r.c}</b>${r.mx ? `<span class="muted" style="display:block;font-size:12px">pays up to ${money(r.mx)}</span>` : ""}${r.st ? `<span class="badge" style="display:block;margin-top:4px">In stock</span>` : ""}`, L(tcg(r.id), "TCGplayer"))))],
     store: ["My store", "Your Shopify price vs today's market. Under market = raise it or it sells too cheap. 15%+ over = it may sit. Rising = items you hold that are climbing.",
@@ -2912,7 +2933,7 @@ async function pageBuyer() {
 
 /* ---------- Daily Scout: ranked buy list (data/scout.json, built nightly by pipeline/scout.py) ---------- */
 async function pageScout() {
-  const d = await getJSON("scout.json").catch(() => null);
+  const [d] = await Promise.all([getJSON("scout.json").catch(() => null), loadSetPubs()]);
   if (!d) { $("#sc-list").innerHTML = `<p class="panel empty-note">The scout list builds with tonight's market update.</p>`; return; }
   const CFG_KEY = "dys-scout-cfg", DAY_KEY = `dys-scout-${d.date}`;
   const load = (k, dflt) => { try { return JSON.parse(localStorage.getItem(k)) || dflt; } catch { return dflt; } };
@@ -2931,7 +2952,7 @@ async function pageScout() {
 
   const PLAN = { flip: ["Flip", "Buy the cheapest listing, resell at market"], ride: ["Momentum", "Steady climb all week"], dip: ["Dip", "Off its usual price and stopped falling"] };
   const tcg = (id) => `https://www.tcgplayer.com/product/${id}?Language=all`;
-  const sold = (n) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(cleanN(n))}&LH_Sold=1&LH_Complete=1&_sop=13`;
+  const sold = (r) => ebaySold(r.n, r.no, { game: r.k, pub: SET_PUB[r.g], kind: r.t });
   const games = [...new Set(d.picks.map((r) => r.k))];
 
   $("#sc-sub").textContent = `${fmtDate(d.date)} prices · ${d.counts.buy} buys, ${d.counts.watch} to watch`;
@@ -2971,7 +2992,7 @@ async function pageScout() {
         <ul class="sc-why">${r.why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>
         ${r.risk.length ? `<ul class="sc-risk">${r.risk.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}
         <div class="sc-acts">
-          <a href="${tcg(r.id)}" target="_blank" rel="noopener">TCGplayer</a><a href="${sold(r.n)}" target="_blank" rel="noopener">eBay sold</a><a href="${prodUrl(r.id, r.g)}">Chart</a>
+          <a href="${tcg(r.id)}" target="_blank" rel="noopener">TCGplayer</a><a href="${sold(r)}" target="_blank" rel="noopener">eBay sold</a><a href="${prodUrl(r.id, r.g)}">Chart</a>
           <span class="sc-mark"><button type="button" data-m="bought" aria-pressed="${mark === "bought"}">✓ Bought</button><button type="button" data-m="skip" aria-pressed="${mark === "skip"}">Skip</button></span>
         </div>
       </div></article>`;

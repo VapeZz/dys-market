@@ -49,6 +49,8 @@ def main():
 
     def row(i, s, **extra):
         r = {"id": i["id"], "n": i["n"], "t": i["t"], "g": s["id"], "sn": s["n"], "k": s["k"], "p": i["p"]}
+        if i.get("no"):
+            r["no"] = i["no"]      # card number, for the page's eBay sold link
         if i.get("dys"):
             r["dys"] = i["dys"]["p"]
         r.update(extra)
