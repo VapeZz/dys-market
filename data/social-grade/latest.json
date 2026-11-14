@@ -1,0 +1,68 @@
+{
+ "date": "2026-11-12",
+ "game": "pokemon",
+ "post": true,
+ "first": "This $8 Pokémon card sells for ??? in a PSA 10 👀 Guess before you swipe",
+ "caption": "This $8 Pokémon card sells for ??? in a PSA 10 👀 Guess before you swipe\n\nGuess the PSA 10 price of all 3 cheap Pokémon cards, then swipe for the answers. How close were you? 👇\n\nAnswers (no peeking 🙈):\n#1 Kingambit 220/198 (Scarlet & Violet Base Set): $8.04 raw → $275 PSA 10 (34×)\n#2 Larvesta 099/086 (Black Bolt): $9.09 raw → $290 PSA 10 (32×)\n#3 Miltank GG24/GG70 (Crown Zenith: Galarian Gallery): $11.77 raw → $232 PSA 10 (20×)\n\nPSA 10 = median eBay sold price over the last 60 days. Raw = TCGplayer market price. Not every card grades a 10, so check centering first (free centering tool at market.driveyourstyle.net).\n\n🛒 eBay links for all 3 (affiliate links): market.driveyourstyle.net/social-grade (link in bio)\n\n#pokemon #pokemoncards #pokemontcg #psa #psagrading #cardgrading #tcg",
+ "caption_tiktok": "Guess the PSA 10 👀 This $8 Pokémon card sells for how much graded? Comment your guess before the reveal 👇 eBay links for all 3 in bio #pokemon #pokemoncards #pokemontcg #psa #psagrading #cardgrading #tcg",
+ "short_title": "Guess the PSA 10 price 👀 This $8 Pokémon card sells for how much? #pokemon",
+ "slides": [
+  "https://market.driveyourstyle.net/social-grade/2026-11-12/slide-1.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-12/slide-2.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-12/slide-3.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-12/slide-4.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-12/slide-5.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-12/slide-6.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-12/slide-7.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-12/slide-8.jpg"
+ ],
+ "slides_tiktok": [
+  "https://market.driveyourstyle.net/social-grade/2026-11-12/tt-1.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-12/tt-2.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-12/tt-3.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-12/tt-4.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-12/tt-5.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-12/tt-6.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-12/tt-7.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-12/tt-8.jpg"
+ ],
+ "slides_reveal": [
+  "https://market.driveyourstyle.net/social-grade/2026-11-12/slide-1.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-12/slide-3.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-12/slide-5.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-12/slide-7.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-12/slide-8.jpg"
+ ],
+ "story": "https://market.driveyourstyle.net/social-grade/2026-11-12/tt-1.jpg",
+ "short": "https://market.driveyourstyle.net/social-grade/2026-11-12/short.mp4",
+ "cards": [
+  {
+   "id": 490078,
+   "name": "Kingambit",
+   "no": "220/198",
+   "raw": 8.04,
+   "p10": 275.0,
+   "sold": "3",
+   "days": 60
+  },
+  {
+   "id": 642552,
+   "name": "Larvesta",
+   "no": "099/086",
+   "raw": 9.09,
+   "p10": 290.0,
+   "sold": "4",
+   "days": 60
+  },
+  {
+   "id": 478043,
+   "name": "Miltank",
+   "no": "GG24/GG70",
+   "raw": 11.77,
+   "p10": 232.5,
+   "sold": "3",
+   "days": 60
+  }
+ ],
+ "page": "https://market.driveyourstyle.net/social-grade/2026-11-12/"
+}

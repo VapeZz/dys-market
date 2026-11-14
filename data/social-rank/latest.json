@@ -1,0 +1,226 @@
+{
+ "date": "2026-11-14",
+ "game": "pokemon",
+ "set": "30th Celebration",
+ "set_id": 24722,
+ "cards": [
+  {
+   "id": 717609,
+   "name": "Mew",
+   "full": "Mew - B/RGB",
+   "no": "B/RGB",
+   "rarity": "RGB Rare",
+   "now": 426360,
+   "pct": 0.0
+  },
+  {
+   "id": 717607,
+   "name": "Mew",
+   "full": "Mew - R/RGB",
+   "no": "R/RGB",
+   "rarity": "RGB Rare",
+   "now": 412949,
+   "pct": -8.1
+  },
+  {
+   "id": 717608,
+   "name": "Mew",
+   "full": "Mew - G/RGB",
+   "no": "G/RGB",
+   "rarity": "RGB Rare",
+   "now": 345693,
+   "pct": 9.2
+  },
+  {
+   "id": 717605,
+   "name": "Mew ex",
+   "full": "Mew ex - 152/128",
+   "no": "152/128",
+   "rarity": "Special Illustration Rare",
+   "now": 5442,
+   "pct": -14.1
+  },
+  {
+   "id": 717610,
+   "name": "Gengar ex",
+   "full": "Gengar ex - 154/128",
+   "no": "154/128",
+   "rarity": "Special Illustration Rare",
+   "now": 4416,
+   "pct": -15.7
+  },
+  {
+   "id": 712954,
+   "name": "Pikachu ex",
+   "full": "Pikachu ex - 150/128",
+   "no": "150/128",
+   "rarity": "Special Illustration Rare",
+   "now": 3508,
+   "pct": -15.3
+  },
+  {
+   "id": 712953,
+   "name": "Pikachu ex",
+   "full": "Pikachu ex - 149/128",
+   "no": "149/128",
+   "rarity": "Special Illustration Rare",
+   "now": 3205,
+   "pct": -12.3
+  },
+  {
+   "id": 717603,
+   "name": "Mewtwo ex",
+   "full": "Mewtwo ex - 151/128",
+   "no": "151/128",
+   "rarity": "Special Illustration Rare",
+   "now": 3120,
+   "pct": -17.9
+  },
+  {
+   "id": 716231,
+   "name": "Sylveon ex",
+   "full": "Sylveon ex - 153/128",
+   "no": "153/128",
+   "rarity": "Special Illustration Rare",
+   "now": 3101,
+   "pct": -10.6
+  },
+  {
+   "id": 716232,
+   "name": "Jirachi ex",
+   "full": "Jirachi ex - 155/128",
+   "no": "155/128",
+   "rarity": "Special Illustration Rare",
+   "now": 2826,
+   "pct": -7.6
+  },
+  {
+   "id": 696688,
+   "name": "Mew ex",
+   "full": "Mew ex - 158/128",
+   "no": "158/128",
+   "rarity": "Futuristic Rare",
+   "now": 2683,
+   "pct": -27.5
+  },
+  {
+   "id": 696687,
+   "name": "Mewtwo ex",
+   "full": "Mewtwo ex - 157/128",
+   "no": "157/128",
+   "rarity": "Futuristic Rare",
+   "now": 2552,
+   "pct": -7.8
+  },
+  {
+   "id": 716230,
+   "name": "Greninja ex",
+   "full": "Greninja ex - 148/128",
+   "no": "148/128",
+   "rarity": "Special Illustration Rare",
+   "now": 1366,
+   "pct": -14.6
+  },
+  {
+   "id": 716233,
+   "name": "Salamence ex",
+   "full": "Salamence ex - 156/128",
+   "no": "156/128",
+   "rarity": "Special Illustration Rare",
+   "now": 965,
+   "pct": -19.4
+  },
+  {
+   "id": 716229,
+   "name": "Fuecoco ex",
+   "full": "Fuecoco ex - 147/128",
+   "no": "147/128",
+   "rarity": "Special Illustration Rare",
+   "now": 954,
+   "pct": -11.3
+  },
+  {
+   "id": 716228,
+   "name": "Maushold",
+   "full": "Maushold - 146/128",
+   "no": "146/128",
+   "rarity": "Illustration Rare",
+   "now": 496,
+   "pct": -31.0
+  },
+  {
+   "id": 714358,
+   "name": "Meowth",
+   "full": "Meowth - 144/128",
+   "no": "144/128",
+   "rarity": "Illustration Rare",
+   "now": 406,
+   "pct": -31.2
+  },
+  {
+   "id": 696683,
+   "name": "Lapras",
+   "full": "Lapras - 131/128",
+   "no": "131/128",
+   "rarity": "Illustration Rare",
+   "now": 356,
+   "pct": -5.1
+  },
+  {
+   "id": 716226,
+   "name": "Galarian Meowth",
+   "full": "Galarian Meowth - 141/128",
+   "no": "141/128",
+   "rarity": "Illustration Rare",
+   "now": 345,
+   "pct": -25.6
+  },
+  {
+   "id": 714360,
+   "name": "Alolan Meowth",
+   "full": "Alolan Meowth - 139/128",
+   "no": "139/128",
+   "rarity": "Illustration Rare",
+   "now": 335,
+   "pct": -28.3
+  }
+ ],
+ "caption": "Top 20 30th Celebration cards ranked by price 💎 #1 is a $4,264 card. Can you guess it?\nPrices: TCGplayer market, Nov 14\n\n20. Alolan Meowth (Illustration Rare): $3.35\n19. Galarian Meowth (Illustration Rare): $3.45\n18. Lapras (Illustration Rare): $3.56\n17. Meowth (Illustration Rare): $4.06\n16. Maushold (Illustration Rare): $4.96\n15. Fuecoco ex (Special Illustration Rare): $9.54\n14. Salamence ex (Special Illustration Rare): $9.65\n13. Greninja ex (Special Illustration Rare): $13.66\n12. Mewtwo ex (Futuristic Rare): $25.52\n11. Mew ex (Futuristic Rare): $26.83\n10. Jirachi ex (Special Illustration Rare): $28.26\n9. Sylveon ex (Special Illustration Rare): $31.01\n8. Mewtwo ex (Special Illustration Rare): $31.20\n7. Pikachu ex (Special Illustration Rare): $32.05\n6. Pikachu ex (Special Illustration Rare): $35.08\n5. Gengar ex (Special Illustration Rare): $44.16\n4. Mew ex (Special Illustration Rare): $54.42\n3. Mew (RGB Rare): $3,456.93\n2. Mew (RGB Rare): $4,129.49\n1. Mew (RGB Rare): $4,263.60\n\nWhich one did you pull? 👇 Check your Pokémon cards free at market.driveyourstyle.net (link in bio)\n\n#pokemon #pokemoncards #pokemontcg #30thcelebration #cardcollecting #tcg",
+ "slides": [
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-1.jpg",
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-2.jpg",
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-3.jpg",
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-4.jpg",
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-5.jpg",
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-6.jpg",
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-7.jpg",
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-8.jpg",
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-9.jpg",
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-10.jpg",
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-11.jpg",
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-12.jpg",
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-13.jpg",
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-14.jpg",
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-15.jpg",
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-16.jpg",
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-17.jpg",
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-18.jpg",
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-19.jpg",
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-20.jpg",
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-21.jpg",
+  "https://market.driveyourstyle.net/social-rank/2026-11-14/slide-22.jpg"
+ ],
+ "caption_link": "Top 20 30th Celebration cards ranked by price 💎 #1 is a $4,264 card. Can you guess it?\nPrices: TCGplayer market, Nov 14\n\n20. Alolan Meowth (Illustration Rare): $3.35\n19. Galarian Meowth (Illustration Rare): $3.45\n18. Lapras (Illustration Rare): $3.56\n17. Meowth (Illustration Rare): $4.06\n16. Maushold (Illustration Rare): $4.96\n15. Fuecoco ex (Special Illustration Rare): $9.54\n14. Salamence ex (Special Illustration Rare): $9.65\n13. Greninja ex (Special Illustration Rare): $13.66\n12. Mewtwo ex (Futuristic Rare): $25.52\n11. Mew ex (Futuristic Rare): $26.83\n10. Jirachi ex (Special Illustration Rare): $28.26\n9. Sylveon ex (Special Illustration Rare): $31.01\n8. Mewtwo ex (Special Illustration Rare): $31.20\n7. Pikachu ex (Special Illustration Rare): $32.05\n6. Pikachu ex (Special Illustration Rare): $35.08\n5. Gengar ex (Special Illustration Rare): $44.16\n4. Mew ex (Special Illustration Rare): $54.42\n3. Mew (RGB Rare): $3,456.93\n2. Mew (RGB Rare): $4,129.49\n1. Mew (RGB Rare): $4,263.60\n\nWhich one did you pull? 👇 Check your Pokémon cards free at https://market.driveyourstyle.net\n\n#pokemon #pokemoncards #pokemontcg #30thcelebration #cardcollecting #tcg",
+ "short": "https://market.driveyourstyle.net/social-rank/2026-11-14/short.mp4",
+ "short_title": "Top 20 30th Celebration cards ranked by price 💎 #1 is $4,264 #pokemon",
+ "title": "Top 20 30th Celebration cards 💎",
+ "yt_tags": [
+  "pokemon",
+  "pokemon cards",
+  "pokemon tcg",
+  "30th celebration",
+  "card prices",
+  "shorts"
+ ],
+ "seconds": 26.5
+}
