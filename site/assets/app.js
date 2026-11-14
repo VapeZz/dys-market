@@ -918,12 +918,12 @@ async function gradeCalc(el, rawCents, id, gr) {
 
 /* DeckTradr-style price breakdown: live lowest listing vs recent-sales market, a blended value, spread and condition estimates */
 const COND = [["NM", 1], ["LP", 0.85], ["MP", 0.7], ["HP", 0.55], ["DMG", 0.4]];
-function priceBreak(v, base, game = "") {
+function priceBreak(v, base, game = "", pub = "") {
   if (v.p == null) return "";
   const parts = [[v.p, 2], [v.lo, 1], [v.md, 1]].filter(([x]) => x);
   const blend = Math.round(parts.reduce((a, [x, w]) => a + x * w, 0) / parts.reduce((a, [, w]) => a + w, 0));
   const spread = v.lo ? (v.lo - v.p) / v.p * 100 : null;
-  const sold = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(cleanCard(v.n))}&LH_Sold=1&LH_Complete=1&_sop=13`;
+  const sold = ebaySold(v.n, v.no, { game, pub, kind: v.t });
   return `<div class="pb panel">
     <div class="pb-top"><div><span class="pb-lab">● LIVE · LOWEST LISTING</span><b class="pb-big">${v.lo ? money(v.lo) : "—"}</b><span class="muted pb-sm">cheapest on TCGplayer now</span></div>
       <div><span class="pb-lab pb-accent">◆ DRIVE YOUR STYLE PRICE</span><b class="pb-big">${money(blend)}</b><span class="muted pb-sm">our blended value</span></div></div>
@@ -1004,7 +1004,7 @@ async function pageProduct() {
         ${v.dys && below(v.dys.p, v.p) ? `<p style="margin:6px 0 0">${BELOW} <span class="muted">Our price ${money(v.dys.p)} is ${Math.round((1 - v.dys.p / v.p) * 100)}% under market</span></p>` : ""}
         ${v.dys ? dysBuyBox(v) : ""}
         <div class="kpis">${[["7", "7 days"], ["30", "30 days"], ["90", "90 days"]].map(([k, l]) => `<div class="kpi"><div class="l">${l}</div>${chg(v.ch?.[k])}</div>`).join("")}<div class="kpi"><div class="l">${long.l}</div>${chg(long.v)}</div></div>
-        ${priceBreak(v, base, set.k)}${ebayRow(ebc, v.p)}
+        ${priceBreak(v, base, set.k, set.pub)}${ebayRow(ebc, v.p)}
         <div class="btns">${v.dys ? ""
           : `<a class="btn primary" href="mailto:customerservice@driveyourstyle.net?subject=${encodeURIComponent("Request: " + v.n)}&body=${encodeURIComponent(`Hi Drive Your Style,\n\nI'm interested in: ${v.n} (${set.n}).\nMarket price today: ${money(v.p)}\nQuantity: 1\n\nPlease let me know if you can get it.\n\nThanks!`)}">Request from Drive Your Style</a>`}
           <button class="btn" id="addcol" type="button"></button>
@@ -2343,6 +2343,27 @@ function ebayFind(n, no, { p = 0, game = "", grade = "", kind = "c" } = {}) {
   const u = new URLSearchParams({ _nkw: q.replace(/\s+/g, " ").trim(), LH_BIN: "1", _sop: "15", _sacat: card ? "183454" : "2536" });
   if (!grade && p >= 500) u.set("_udlo", String(Math.floor(p * (card ? 0.4 : 0.6) / 100)));
   return "https://www.ebay.com/sch/i.html?" + u;
+}
+// eBay sold search for one item. A name alone matches every printing of it ("Eevee"), so a card carries its number:
+// "Eevee TG11/TG30". A number already in the name isn't repeated, and a bare "(87)" in the name gives way to the full
+// 87/146. Pokémon sets before Sword & Shield print the number without leading zeros (4/102), which is how sellers
+// type it, but TCGplayer pads some of them (004/102): those zeros come off. Reverse holos are searched as reverse
+// holos and Japanese cards as Japanese. Sealed products are searched by name.
+function ebaySold(n, no, { game = "", pub = "", grade = "", kind = "c" } = {}) {
+  const nm = String(n || "");
+  let q = cleanCard(nm).replace(/ \(Foil\)/, "").replace(/[()[\]]/g, " ").replace(/ - /g, " ").replace(/\s+/g, " ").trim();
+  const raw =kind === "s" ? "" : String(no || "").trim();
+  const num = game === "pokemon" && pub && pub < "2020-02-07" && /^0+\d+\/\d+$/.test(raw) ? raw.replace(/^0+/, "") : raw;
+  if (num !== raw) q = q.split(" ").filter((w) => w !== raw).join(" ");
+  if (num && !q.toLowerCase().split(" ").includes(num.toLowerCase())) {
+    const short = (num.split("/")[0].match(/\d+$/) || [""])[0].replace(/^0+/, "");   // 87 of 87/146, 3 of OP01-003
+    if (short) q = q.split(" ").filter((w) => !(/^\d+$/.test(w) && w.replace(/^0+/, "") === short)).join(" ");
+    q += " " + num;
+  }
+  if (/\(Reverse Holofoil\)$/.test(nm)) q += " reverse holo";
+  if (/-jp$/.test(game || "")) q += " japanese";
+  if (grade) q += " " + grade;
+  return "https://www.ebay.com/sch/i.html?" + new URLSearchParams({ _nkw: q.replace(/\s+/g, " ").trim(), LH_Sold: "1", LH_Complete: "1", _sop: "13" });
 }
 const ebayBuy = (n, no, gr) => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(`${cleanCard(n)}${no && !cleanCard(n).includes(no.split("/")[0]) ? " " + no : ""}${gr ? " " + gr : ""}`)}&LH_BIN=1&_sop=15`;
 const cleanCard = (n) => n.replace(/ \((Holofoil|Normal|Foil|Reverse Holofoil)\)$/, "").replace(/ - (\S+)$/, " $1");
