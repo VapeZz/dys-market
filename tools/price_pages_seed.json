@@ -1,6 +1,6 @@
 {
 "v": 1,
-"note": "Pages that were resting on 2026-11-13, before last.json existed: the price and day each one last showed on the live site (data day 2026-11-12).",
+"note": "Pages that lost their market price before last.json existed: the price and day each one last showed on the live site (17 from data day 2026-11-12, 15 from data day 2026-11-13).",
 "items": {
 "629187|Carrot (SP) (Foil)": [
 23834,
@@ -171,6 +171,156 @@
 "Super Rare",
 2899,
 "2026-11-12"
+],
+"707247|Cinderella (Regionals 26-27) (Foil)": [
+23739,
+"Union Arena Promotion Cards",
+"union-arena",
+"c",
+"UEPR/NIK-2-015",
+"Precious Super Rare",
+170000,
+"2026-11-13"
+],
+"707235|The Girlfriends Who Really, Really, Really, Really, Really Love Me (Regionals 26-27) (Foil)": [
+23739,
+"Union Arena Promotion Cards",
+"union-arena",
+"c",
+"UE21BT/RLY-1-082",
+"Uncommon",
+160000,
+"2026-11-13"
+],
+"707241|Emilia (Regionals 26-27) (Foil)": [
+23739,
+"Union Arena Promotion Cards",
+"union-arena",
+"c",
+"UEPR/REZ-1-090",
+"Super Rare",
+160000,
+"2026-11-13"
+],
+"84483|Crobat (H5) (Holofoil)": [
+1372,
+"Skyridge",
+"pokemon",
+"c",
+"H05/H32",
+"Holo Rare",
+54999,
+"2026-11-13"
+],
+"570168|Lugia V - 110/098 (Holofoil)": [
+23632,
+"S12: Paradigm Trigger",
+"pokemon-jp",
+"c",
+"110/098",
+"Super Rare",
+51250,
+"2026-11-13"
+],
+"628313|Kirito (104) (SR*) (Foil)": [
+23953,
+"UE07ST: Sword Art Online Starter Deck",
+"union-arena",
+"c",
+"UE07ST/SAO-1-104",
+"Super Rare 1-Star",
+29000,
+"2026-11-13"
+],
+"672991|Evangelion Proto Type-00 (SR**) (Foil)": [
+24507,
+"UE15BT: Evangelion: New Theatrical Edition",
+"union-arena",
+"c",
+"UE15BT/EVA-1-080",
+"Super Rare 2-Star",
+26973,
+"2026-11-13"
+],
+"603387|Pokemon Center Lady - 086/080 (1st Edition Holofoil)": [
+23918,
+"XY2: Wild Blaze",
+"pokemon-jp",
+"c",
+"086/080",
+"Super Rare",
+8599,
+"2026-11-13"
+],
+"569115|Empoleon V - 074/070 (Holofoil)": [
+23622,
+"S5R: Rapid Strike Master",
+"pokemon-jp",
+"c",
+"074/070",
+"Super Rare",
+7693,
+"2026-11-13"
+],
+"613605|Groudon - 027/ADV-P (Holofoil)": [
+24140,
+"ADV-P Promotional cards",
+"pokemon-jp",
+"c",
+"027/ADV-P",
+"None",
+6999,
+"2026-11-13"
+],
+"566050|Altaria ex - 090/066 (Holofoil)": [
+23611,
+"SV4M: Future Flash",
+"pokemon-jp",
+"c",
+"090/066",
+"Special Art Rare",
+6326,
+"2026-11-13"
+],
+"613080|Electabuzz ex (1st Edition Holofoil)": [
+24129,
+"ADV Expansion Pack",
+"pokemon-jp",
+"c",
+"023/055",
+"Holo Rare",
+6000,
+"2026-11-13"
+],
+"612420|Mr. Mime ex - 054/082 (1st Edition Holofoil)": [
+24117,
+"Flight of Legends",
+"pokemon-jp",
+"c",
+"054/082",
+"Holo Rare",
+3999,
+"2026-11-13"
+],
+"727872|Action Point Card (AP04) (Foil)": [
+24787,
+"UEX08BT: BLEACH: Thousand-Year Blood War Vol.3",
+"union-arena",
+"c",
+"UEX08BT/BLC-4-AP04",
+"Action Point",
+13000,
+"2026-11-13"
+],
+"611815|Mew (1st Edition Holofoil)": [
+24102,
+"Mirage's Mew Constructed Starter Deck",
+"pokemon-jp",
+"c",
+"005/016",
+"None",
+8994,
+"2026-11-13"
 ]
 }
 }
