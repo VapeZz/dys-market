@@ -1017,8 +1017,7 @@ async function pageProduct() {
           ${v.t === "s" ? `<a class="btn" href="https://www.amazon.com/s?k=${encodeURIComponent(v.n.replace(/\s*\[.*?\]|\(.*?\)/g, "").trim())}" target="_blank" rel="noopener">Check Amazon ↗</a>` : ""}
           <a class="btn" href="compare.html?a=${id}:${set.id}">Compare ⇄</a>
           <button class="btn" id="watch" type="button"></button></div>
-        <div class="chart-card"><div class="chart-head"><b>Price history</b><div id="range"></div></div><div class="chart" id="chart"></div>
-          <p class="muted" style="font-size:12px;margin:6px 0 4px">Nightly TCGplayer market price. Gaps mean no market price was recorded that day.</p></div>
+        <div class="chart-card" id="tachart"></div>
       </div><div id="ps-stock" class="ps-stock"></div>${v.t === "c" ? gradedHtml(base, set, v) : ""}${v.t === "s" ? pullsHtml(set) : moreHtml(set, id)}`;
     stockRow($("#ps-stock"), set.items.filter((i) => i.dys && i.id !== id), `${v.dys ? "More" : "In stock"} from ${set.n}`, "product-set", "afterbegin");
     const ck = `${id}|${printCode(subOf(v.n))}`;
@@ -1036,10 +1035,7 @@ async function pageProduct() {
     paint();
     getJSON("wanted.json").then((d) => { const w = (d.all || {})[`${id}`]; if (w) $("#watch").insertAdjacentHTML("afterend", `<span class="want-count">♥ ${w} collector${w > 1 ? "s" : ""} want this</span>`); }).catch(() => {});
     if (variants.length > 1) tabs($("#var"), variants.map((x, i) => [String(i), (x.n.match(/\(([^)]+)\)$/) || [, "Normal"])[1]]), String(variants.indexOf(v)), (i) => { v = variants[+i]; draw(); });
-    let range = "365";
-    const plot = () => lineChart($("#chart"), set.dates, v.s || [], range);
-    tabs($("#range"), [["30", "1M"], ["90", "3M"], ["180", "6M"], ["365", "1Y"]], range, (r) => { range = r; plot(); });
-    plot();
+    taChart($("#tachart"), set.dates, v.s || []);
   };
   draw();
 }
@@ -1090,6 +1086,216 @@ function lineChart(el, dates, values, rangeDays) {
   const hit = $(".hit", el);
   hit.addEventListener("mousemove", move); hit.addEventListener("touchmove", move, { passive: true });
   hit.addEventListener("mouseleave", leave); hit.addEventListener("touchend", leave);
+}
+
+/* ---------- price chart for card and price pages: moving averages, 30-day high and low, trend ----------
+   Every number comes from the nightly TCGplayer market prices already in the set file (daily for the last
+   30 days, about weekly before that). It describes what the price did; it is not advice. */
+const DAY_MS = 864e5;
+const dayNum = (d) => Math.round(Date.parse(d + "T00:00:00Z") / DAY_MS);
+const dayIso = (t) => new Date(t * DAY_MS).toISOString().slice(0, 10);
+const TA_RANGES = [["30", "1M", "past month"], ["90", "3M", "past 3 months"], ["180", "6M", "past 6 months"], ["365", "1Y", "past year"]];
+const TA_TREND_BAND = 2;   // percent the 7-day average must sit above or below the 30-day average before we call a trend
+const TA_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+let taAbort = null;        // one price chart per page: drop the old one's listeners when it is drawn again
+
+/* Time-weighted average of the last n days. Each recorded price stands for the days since the record before
+   it: one day on daily prices (so this is the plain n-day average there), about a week on the older weekly
+   points. A value is given only where the whole window is on record and no price in it stands for more than
+   maxSpan days, so a "7-day average" is never drawn from a single weekly price. */
+function movingAvg(pts, n, maxSpan) {
+  return pts.map((p, i) => {
+    let sum = 0, got = 0;
+    for (let j = i; j >= 0 && got < n; j--) {
+      const hi = pts[j].t, lo = j ? pts[j - 1].t : hi - 1;
+      if (hi - lo > maxSpan) return null;
+      const w = Math.min(hi - lo, n - got);
+      sum += pts[j].v * w; got += w;
+    }
+    return got >= n ? sum / n : null;
+  });
+}
+/* round axis steps (1, 2, 2.5 or 5 times a power of ten, in whole cents): the widest step that still leaves `min` marks */
+function niceTicks(lo, hi, min) {
+  const marks = (step) => { const t = []; for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + step * 1e-6; v += step) t.push(v); return t; };
+  for (let k = Math.ceil(Math.log10(Math.max(hi - lo, 1))); k >= 0; k--)
+    for (const m of [5, 2.5, 2, 1]) {
+      const step = m * 10 ** k, t = Number.isInteger(step) ? marks(step) : [];
+      if (t.length >= min) return { step, ticks: t };
+    }
+  return { step: 1, ticks: marks(1) };
+}
+
+function taChart(root, dates, values) {
+  taAbort?.abort();
+  const ac = taAbort = new AbortController(), sig = { signal: ac.signal };
+  const all = dates.map((d, i) => ({ d, t: dayNum(d), v: values[i] })).filter((p) => p.v != null);
+  const a7 = movingAvg(all, 7, 2), a30 = movingAvg(all, 30, 10);
+  all.forEach((p, i) => { p.a7 = a7[i]; p.a30 = a30[i]; });
+  const today = dates.length ? dayNum(dates[dates.length - 1]) : 0, last = all[all.length - 1];
+  const fresh = !!last && today - last.t <= 3;             // the newest price is current enough to describe "now"
+  // the last 30 days' high and low (the most recent day each was reached), from recorded prices only
+  let hi = null, lo = null;
+  const win = fresh ? all.filter((p) => p.t >= today - 30) : [];
+  if (win.length >= 2) for (const p of win) { if (!hi || p.v >= hi.v) hi = p; if (!lo || p.v <= lo.v) lo = p; }
+  const gap = fresh && last.a7 != null && last.a30 ? (last.a7 / last.a30 - 1) * 100 : null;
+  const trend = gap == null ? null : gap > TA_TREND_BAND ? "up" : gap < -TA_TREND_BAND ? "down" : "flat";
+  if (all.length < 2) {
+    root.innerHTML = `<div class="chart-head"><b>Price history</b></div><div class="empty-note">Not enough history yet. Check back in a few days.</div>
+      <p class="muted ta-note">Price: TCGplayer market, recorded nightly.</p>`;
+    return;
+  }
+  let range = "365", show = { 7: true, 30: true };
+  try { const s = localStorage.getItem("dys-ta"); if (s != null) show = { 7: s.includes("7"), 30: s.includes("30") }; } catch (e) {}
+
+  const lv = (l, b, s) => `<div class="kpi"><div class="l">${l}</div><b>${b}</b><span class="muted">${s}</span></div>`;
+  const off = hi ? (1 - last.v / hi.v) * 100 : null;
+  const levels = !hi ? "" : `<div class="ta-levels">
+    ${lv("30-day high", money(hi.v), fmtShort(hi.d))}${lv("30-day low", money(lo.v), fmtShort(lo.d))}
+    ${off < 0.05 ? lv("From 30-day high", "At the high", "Matches the 30-day high") : lv("From 30-day high", `${off.toFixed(1)}% below`, `${money(hi.v - last.v)} under the high`)}
+    ${trend == null ? lv("Trend", "—", "Needs 30 days of prices")
+      : trend === "flat" ? lv("Trend", `<span class="ta-tr">━ Flat</span>`, `7-day avg within ${TA_TREND_BAND}% of the 30-day avg`)
+      : lv("Trend", `<span class="ta-tr ${trend}">${trend === "up" ? "▲ Uptrend" : "▼ Downtrend"}</span>`, `7-day avg ${Math.abs(gap).toFixed(1)}% ${trend === "up" ? "above" : "below"} the 30-day avg`)}</div>`;
+  root.innerHTML = `<div class="chart-head"><b>Price history</b><div class="ta-range"></div></div>
+    <div class="ta-read"><span class="ta-date"></span><span class="ta-move"></span></div>
+    <div class="ta-legend"><span class="ta-key"><i></i>Price <b data-k="v"></b></span>
+      <button type="button" class="ta-key" data-ma="7" aria-pressed="${show[7]}" title="Show or hide the 7-day average"><i class="k7"></i>7D avg <b data-k="a7"></b></button>
+      <button type="button" class="ta-key" data-ma="30" aria-pressed="${show[30]}" title="Show or hide the 30-day average"><i class="k30"></i>30D avg <b data-k="a30"></b></button>
+      ${hi ? `<span class="ta-key"><i class="klv"></i>30D high / low</span>` : ""}</div>
+    <div class="chart ta-chart" id="chart" tabindex="0" aria-label="Price history chart. Use the left and right arrow keys to read each day."></div>
+    ${levels}
+    <details class="ta-table"><summary>Show these prices as a table</summary><div class="table-wrap"></div></details>
+    <p class="muted ta-note">Price: TCGplayer market, recorded nightly. Older prices are weekly, so the 7-day average covers the last few weeks only. Market data, not financial advice.</p>`;
+  const el = $(".ta-chart", root), dateEl = $(".ta-date", root), moveEl = $(".ta-move", root), tbl = $(".ta-table", root);
+  const val = (v) => v == null ? "—" : money(Math.round(v));
+  const read = (p, latest) => {
+    dateEl.textContent = p ? fmtDate(p.d) + (latest ? " · latest" : "") : "";
+    for (const k of ["v", "a7", "a30"]) $(`[data-k="${k}"]`, root).textContent = p ? val(p[k]) : "—";
+  };
+  let pts = [], pick = () => {}, clear = () => {}, cur = -1;
+
+  const table = () => {
+    if (!tbl.open) return;
+    $(".table-wrap", tbl).innerHTML = `<table><thead><tr><th>Date</th><th class="num">Price</th><th class="num">7D avg</th><th class="num">30D avg</th></tr></thead><tbody>${
+      pts.slice().reverse().map((p) => `<tr><td>${fmtDate(p.d)}</td><td class="num">${money(p.v)}</td><td class="num">${val(p.a7)}</td><td class="num">${val(p.a30)}</td></tr>`).join("")}</tbody></table>`;
+  };
+  tbl.addEventListener("toggle", table);
+
+  const plot = () => {
+    const rg = TA_RANGES.find((r) => r[0] === range);
+    pts = all.filter((p) => p.t >= today - Number(range));
+    cur = -1;
+    if (pts.length < 2) {
+      el.innerHTML = `<div class="empty-note">Not enough history yet. Check back in a few days.</div>`;
+      read(last, true); moveEl.innerHTML = ""; pick = clear = () => {}; table();
+      return;
+    }
+    const end = pts[pts.length - 1], first = pts[0];
+    const pct = first.v ? (end.v - first.v) / first.v * 100 : null;
+    moveEl.innerHTML = `${chg(pct)} <span class="muted">${first.t > today - Number(range) + 10 ? `since ${esc(fmtShort(first.d))}` : rg[2]}</span>`;
+
+    const W = el.clientWidth || 600, H = el.clientHeight || 300, T = 10, B = 26, L = 4;
+    let yLo = Infinity, yHi = -Infinity;
+    for (const p of pts) for (const v of [p.v, p.a7, p.a30]) if (v != null) { yLo = Math.min(yLo, v); yHi = Math.max(yHi, v); }
+    const pad = (yHi - yLo) * 0.1 || yHi * 0.05 || 100;
+    yLo = Math.max(0, yLo - pad); yHi += pad;
+    const { step, ticks } = niceTicks(yLo, yHi, H < 280 ? 3 : 4);
+    const tl = (c) => "$" + (step % 100 ? (c / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : Math.round(c / 100).toLocaleString("en-US"));
+    const R = Math.ceil(Math.max(...ticks.map((v) => tl(v).length), money(Math.round(yHi)).length, 5) * 6.7) + 16;
+    const PW = W - L - R, t0 = first.t, t1 = end.t;
+    const x = (t) => L + (t - t0) / (t1 - t0 || 1) * PW;
+    const y = (v) => T + (1 - (v - yLo) / (yHi - yLo)) * (H - T - B);
+    const f1 = (n) => n.toFixed(1);
+
+    // time axis: weekly marks on a month view, month starts on longer views (the year shows on the first mark and each January)
+    let xt = [];
+    if (t1 - t0 <= 45) for (let t = t1, sd = t1 - t0 > 21 ? 7 : t1 - t0 > 9 ? 3 : t1 - t0 > 4 ? 2 : 1; t >= t0; t -= sd) xt.unshift({ t, l: fmtShort(dayIso(t)) });
+    else {
+      const d0 = new Date(t0 * DAY_MS);
+      for (let m = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() + 1, 1)); m.getTime() / DAY_MS <= t1; m = new Date(Date.UTC(m.getUTCFullYear(), m.getUTCMonth() + 1, 1)))
+        xt.push({ t: m.getTime() / DAY_MS, m: m.getUTCMonth(), yr: m.getUTCFullYear() });
+    }
+    const every = Math.ceil(xt.length / Math.max(2, Math.floor(PW / 62)));
+    xt = xt.filter((_, i) => (xt.length - 1 - i) % every === 0);
+    xt.forEach((k, i) => { if (k.l == null) k.l = TA_MONTHS[k.m] + (i === 0 || k.m === 0 ? " ’" + String(k.yr).slice(2) : ""); });
+
+    const path = (key) => { let d = "", pen = false; for (const p of pts) { if (p[key] == null) { pen = false; continue; } d += `${pen ? "L" : "M"}${f1(x(p.t))},${f1(y(p[key]))}`; pen = true; } return d; };
+    const price = path("v"), base = H - B;
+    const endY = y(end.v), tagH = 18;
+    const grid = ticks.map((v) => `<line x1="${L}" x2="${L + PW}" y1="${f1(y(v))}" y2="${f1(y(v))}" class="ta-grid"/>${Math.abs(y(v) - endY) < tagH - 3 ? "" : `<text x="${L + PW + 8}" y="${f1(y(v) + 4)}" class="ta-ax ta-ay" data-y="${f1(y(v))}">${tl(v)}</text>`}`).join("");
+    const xgrid = xt.map((k) => `<line x1="${f1(x(k.t))}" x2="${f1(x(k.t))}" y1="${T}" y2="${base}" class="ta-grid ta-gx"/><text x="${f1(x(k.t))}" y="${H - 8}" text-anchor="${x(k.t) < 24 ? "start" : "middle"}" class="ta-ax ta-at" data-x="${f1(x(k.t))}">${esc(k.l)}</text>`).join("");
+    // the last 30 days' high and low, drawn only across those 30 days
+    const lx = x(Math.max(t0, today - 30));
+    const lvl = !hi ? "" : `<line x1="${f1(lx)}" x2="${L + PW}" y1="${f1(y(hi.v))}" y2="${f1(y(hi.v))}" class="ta-lvl"/>${hi.v === lo.v ? "" : `<line x1="${f1(lx)}" x2="${L + PW}" y1="${f1(y(lo.v))}" y2="${f1(y(lo.v))}" class="ta-lvl"/>`}`;
+    const tag = (cls, yy, txt) => `<g class="${cls}" transform="translate(${L + PW + 3},${f1(Math.min(base - tagH / 2, Math.max(T + tagH / 2, yy)))})"><rect y="${-tagH / 2}" width="${R - 5}" height="${tagH}" rx="4"/><text x="5" y="4">${txt}</text></g>`;
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`Price history: ${money(end.v)} on ${fmtDate(end.d)}${pct == null ? "" : `, ${pct >= 0 ? "up" : "down"} ${Math.abs(pct).toFixed(1)}% ${first.t > today - Number(range) + 10 ? `since ${fmtShort(first.d)}` : `over the ${rg[2]}`}`}`)}">
+      <defs><linearGradient id="tafill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".2"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>
+      ${xgrid}${grid}${lvl}
+      <path d="${price}L${f1(x(t1))},${base}L${f1(x(t0))},${base}Z" fill="url(#tafill)"/>
+      ${show[30] ? `<path d="${path("a30")}" class="ta-ma ta-a30"/>` : ""}${show[7] ? `<path d="${path("a7")}" class="ta-ma ta-a7"/>` : ""}
+      <path d="${price}" class="ta-price"/>
+      <circle cx="${f1(x(t1))}" cy="${f1(endY)}" r="4" class="ta-end"/>${tag("ta-tag", endY, money(end.v))}
+      <g class="ta-x" visibility="hidden"><line class="ta-xv" y1="${T}" y2="${base}"/><line class="ta-xh" x1="${L}" x2="${L + PW}"/>
+        <circle r="3" class="ta-d30"/><circle r="3" class="ta-d7"/><circle r="4.5" class="ta-dv"/>
+        ${tag("ta-tag ta-tagx", 0, "")}<g class="ta-dt"><rect y="${base + 3}" height="${tagH}" rx="4"/><text y="${base + 16}" text-anchor="middle"></text></g></g>
+      <rect x="${L}" y="${T}" width="${PW}" height="${H - T - B}" fill="transparent" class="ta-hit"/></svg>`;
+    const svg = $("svg", el), g = $(".ta-x", el), xv = $(".ta-xv", el), xh = $(".ta-xh", el), tagx = $(".ta-tagx", el), dt = $(".ta-dt", el);
+    const ay = [...el.querySelectorAll(".ta-ay")], atx = [...el.querySelectorAll(".ta-at")];
+    const dot = (c, v, on) => { const n = $(c, el); n.setAttribute("visibility", v != null && on ? "inherit" : "hidden"); if (v != null) { n.setAttribute("cx", f1(x(pts[cur].t))); n.setAttribute("cy", f1(y(v))); } };
+    pick = (i) => {
+      cur = Math.max(0, Math.min(pts.length - 1, i));
+      const p = pts[cur], cx = x(p.t), cy = y(p.v);
+      xv.setAttribute("x1", f1(cx)); xv.setAttribute("x2", f1(cx)); xh.setAttribute("y1", f1(cy)); xh.setAttribute("y2", f1(cy));
+      dot(".ta-dv", p.v, true); dot(".ta-d7", p.a7, show[7]); dot(".ta-d30", p.a30, show[30]);
+      tagx.setAttribute("transform", `translate(${L + PW + 3},${f1(Math.min(base - tagH / 2, Math.max(T + tagH / 2, cy)))})`);
+      $("text", tagx).textContent = money(p.v);
+      for (const a of ay) a.setAttribute("visibility", Math.abs(a.dataset.y - cy) < tagH - 3 ? "hidden" : "visible");
+      const label = fmtDate(p.d), w = label.length * 6.4 + 14, mid = Math.min(W - w / 2, Math.max(w / 2, cx));
+      $("text", dt).textContent = label; $("text", dt).setAttribute("x", f1(mid));
+      $("rect", dt).setAttribute("x", f1(mid - w / 2)); $("rect", dt).setAttribute("width", f1(w));
+      for (const a of atx) a.setAttribute("visibility", Math.abs(a.dataset.x - mid) < w / 2 + 26 ? "hidden" : "visible");
+      g.setAttribute("visibility", "visible");
+      read(p, false);
+    };
+    clear = () => { cur = -1; g.setAttribute("visibility", "hidden"); for (const a of [...ay, ...atx]) a.setAttribute("visibility", "visible"); read(end, end === last); };
+    const at = (ev) => {
+      const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) * (W / r.width);
+      let b = 0;
+      for (let i = 1; i < pts.length; i++) if (Math.abs(x(pts[i].t) - px) < Math.abs(x(pts[b].t) - px)) b = i;
+      return b;
+    };
+    const hit = $(".ta-hit", el);
+    hit.addEventListener("pointerdown", (ev) => pick(at(ev)));
+    hit.addEventListener("pointermove", (ev) => pick(at(ev)));
+    hit.addEventListener("pointerleave", (ev) => { if (ev.pointerType === "mouse") clear(); });   // a touch keeps its reading until a tap elsewhere
+    clear(); table();
+  };
+
+  tabs($(".ta-range", root), TA_RANGES.map((r) => [r[0], r[1]]), range, (r) => { range = r; plot(); });
+  $(".ta-legend", root).addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-ma]"); if (!b) return;
+    const n = b.dataset.ma; show[n] = !show[n]; b.setAttribute("aria-pressed", show[n]);
+    try { localStorage.setItem("dys-ta", [7, 30].filter((k) => show[k]).join(",")); } catch (err) {}
+    const keep = cur; plot(); if (keep >= 0) pick(keep);
+  });
+  el.addEventListener("keydown", (e) => {
+    if (!pts.length) return;
+    const k = e.key, step = k === "ArrowLeft" ? -1 : k === "ArrowRight" ? 1 : 0;
+    if (step) pick(cur < 0 ? pts.length - 1 : cur + step);
+    else if (k === "Home") pick(0);
+    else if (k === "End") pick(pts.length - 1);
+    else if (k === "Escape") clear();
+    else return;
+    e.preventDefault();
+  });
+  el.addEventListener("blur", () => clear());
+  document.addEventListener("pointerdown", (e) => { if (!el.contains(e.target)) clear(); }, sig);
+  if (window.ResizeObserver) {   // redraw when the card changes width (rotation, window resize)
+    let w = el.clientWidth;
+    const ro = new ResizeObserver(() => { if (!el.isConnected) { ro.disconnect(); return; } if (el.clientWidth !== w) { w = el.clientWidth; const keep = cur; plot(); if (keep >= 0) pick(keep); } });
+    ro.observe(el); ac.signal.addEventListener("abort", () => ro.disconnect());
+  }
+  plot();
 }
 
 async function pageTrends() {

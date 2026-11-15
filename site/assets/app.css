@@ -190,6 +190,52 @@ td.title img{width:36px;height:36px;border-radius:6px;object-fit:contain;backgro
 .chart{position:relative;width:100%;height:280px}
 .chart svg{width:100%;height:100%;overflow:visible}
 .chart .tip{position:absolute;pointer-events:none;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:10px;padding:8px 10px;font-size:13px;box-shadow:var(--shadow);transform:translate(-50%,-110%);white-space:nowrap;display:none}
+/* price chart on card and price pages: readout, legend switches, moving averages, 30-day high and low */
+:root{--ma7:#c87e12;--ma30:#1a9db8;--on-accent:#0b0d14}
+:root[data-theme="light"]{--ma7:#c2710c;--ma30:#0b9fc4;--on-accent:#fff}
+.ta-read{display:flex;align-items:baseline;justify-content:space-between;gap:4px 12px;flex-wrap:wrap;margin:2px 0 8px;font-size:13px}
+.ta-date{font-weight:600;color:var(--ink-2)}
+.ta-move .muted{font-size:12.5px}
+.ta-legend{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.ta-key{display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:5px 6px 5px 2px;border:1px solid transparent;border-radius:999px;background:none;color:var(--ink-2);font:500 12.5px/1.2 var(--font);white-space:nowrap}
+.ta-key b{color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}
+.ta-key i{flex:0 0 14px;height:0;border-top:2px solid var(--accent);border-radius:2px}
+.ta-key i.k7{border-color:var(--ma7)}.ta-key i.k30{border-color:var(--ma30)}.ta-key i.klv{border-top:1px dashed var(--ink-2)}
+button.ta-key{cursor:pointer;padding:5px 11px;border-color:var(--line-strong);background:var(--chip)}
+button.ta-key:hover{border-color:var(--ink-3)}
+button.ta-key[aria-pressed="false"]{color:var(--ink-3);background:none;border-color:var(--line)}
+button.ta-key[aria-pressed="false"] i{border-color:var(--ink-3);opacity:.5}
+button.ta-key[aria-pressed="false"] b{display:none}
+.ta-chart{height:300px;touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+.ta-chart:focus{outline:0}
+.ta-chart:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:8px}
+.ta-chart svg{touch-action:pan-y}
+.ta-chart text{font-size:11px;font-variant-numeric:tabular-nums}
+.ta-ax{fill:var(--ink-3)}
+.ta-grid{stroke:var(--line);stroke-width:1}
+.ta-gx{opacity:.55}
+.ta-lvl{stroke:var(--ink-2);stroke-width:1;stroke-dasharray:4 3}
+.ta-price{fill:none;stroke:var(--accent);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.ta-ma{fill:none;stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round}
+.ta-a7{stroke:var(--ma7)}.ta-a30{stroke:var(--ma30)}
+.ta-end,.ta-dv{fill:var(--accent);stroke:var(--surface);stroke-width:2}
+.ta-d7{fill:var(--ma7);stroke:var(--surface);stroke-width:1.5}.ta-d30{fill:var(--ma30);stroke:var(--surface);stroke-width:1.5}
+.ta-tag rect{fill:var(--accent)}.ta-tag text{fill:var(--on-accent);font-weight:700}
+.ta-tagx rect,.ta-dt rect{fill:var(--surface-2);stroke:var(--line-strong);stroke-width:1}
+.ta-tagx text,.ta-dt text{fill:var(--ink);font-weight:600}
+.ta-xv,.ta-xh{stroke:var(--line-strong);stroke-width:1}
+.ta-hit{touch-action:pan-y;cursor:crosshair}
+.ta-levels{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0 4px}
+.ta-levels .kpi{min-width:0;padding:10px 12px;background:var(--surface-2)}
+.ta-levels .kpi b{display:block;margin-top:2px;font-size:15px;line-height:1.3}
+.ta-levels .kpi .muted{display:block;font-size:11.5px;line-height:1.35}
+.ta-tr.up{color:var(--up)}.ta-tr.down{color:var(--down)}
+.ta-table{margin:10px 0 2px}
+.ta-table summary{width:max-content;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--ink-2)}
+.ta-table .table-wrap{max-height:280px;margin-top:8px}
+.ta-table table{font-size:13px}.ta-table th{cursor:default}.ta-table th,.ta-table td{padding:8px 12px}
+.ta-note{font-size:12px;margin:8px 0 4px}
+@media(max-width:700px){.ta-chart{height:260px}.ta-levels{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-top:20px;min-height:36px;font-size:13px;color:var(--ink-3)}
 .crumb-back{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:7px 15px 7px 10px;border:1px solid var(--line-strong);border-radius:999px;background:var(--surface);color:var(--ink);font-weight:600;font-size:13.5px}
 .crumb-back svg{width:16px;height:16px;flex:0 0 16px}
