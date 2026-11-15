@@ -5,7 +5,8 @@ daily_card.py leaves them out because their photos are landscape). Their slide g
 so the photo fills it instead of sitting small between white bars.
 
 Cards listed in tools/rank_special_graded.json also show what a PSA 10 sells for: the median eBay SOLD
-price, checked by hand on eBay's sold listings (owner's rule: graded prices are real eBay sold prices only).
+price, checked by hand on eBay's sold listings (owner's rule: graded prices are real eBay sold prices only);
+the file says per card which sales the number stands for.
 A card with too few clean PSA 10 sales is not in that file and shows no graded price.
 
     python tools/rank_special.py <site/data> <out> --set ID-or-name [--n 10] [--date YYYY-MM-DD]
@@ -22,7 +23,7 @@ from social import money
 WIDE = re.compile(r"\bBREAK\b|\bLEGEND\b", re.I)          # TCGplayer serves these photos in landscape
 dc.SIDEWAYS = re.compile(r"jumbo|oversize", re.I)         # still left out: not standard-size cards
 G = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "rank_special_graded.json")))
-GRADED, DAYS = {str(k): v for k, v in G["cards"].items()}, G["days"]
+GRADED = {str(k): v for k, v in G["cards"].items()}
 GREEN = "#3ee08f"
 _slides, _texts, _timing = sr.slides, sr.texts, sr.timing
 _ranks = {}                                                # rank -> graded entry, set when the slides are made
@@ -53,7 +54,7 @@ def slides(cards, setname, label, day):
                  f'<div style="font-family:\'Barlow Condensed\';font-weight:800;font-size:46px;letter-spacing:.04em;color:#050404;'
                  f'background:{GREEN};border-radius:999px;padding:4px 24px 0">PSA 10</div>'
                  f'<div style="font-family:\'Barlow Condensed\';font-weight:800;font-size:104px;line-height:.92;color:{GREEN}">${g["p10"]:,.0f}</div></div>'
-                 f'<div style="margin-top:6px;font-size:27px;color:#bdb9b2">median of {g["sold"]} eBay sales, last {DAYS} days</div>')
+                 f'<div style="margin-top:6px;font-size:27px;color:#bdb9b2">{g["label"]}</div>')
         assert price in s, f"price line not found on slide {k}"
         s = s.replace(price, price + "\n" + block)
         s = s.replace("font-size:200px;line-height:.92", "font-size:168px;line-height:.92").replace("font-size:180px;line-height:.92", "font-size:156px;line-height:.92")
@@ -78,10 +79,10 @@ def texts(cards, setname, label, tags, day):
         cap = cap.replace(line, f"{line} · PSA 10: ${g['p10']:,.0f} (eBay sold)")
     if graded:
         cap = cap.replace(f"Prices: TCGplayer market, {day}",
-                          f"Prices: TCGplayer market, {day}. PSA 10 = median eBay sold price, last {DAYS} days.")
+                          f"Prices: TCGplayer market, {day}. {G['caption_note']}")
         k, c, g = max(graded, key=lambda x: x[2]["p10"])    # the hook: the biggest PSA 10 price on the list
         first = cap.splitlines()[0]
-        hook = (f"This ${c['now'] / 100:,.0f} {label} card sells for ${g['p10']:,.0f} in a PSA 10 👀 "
+        hook = (f"This ${c['now'] / 100:,.0f} {label} card just sold for ${g['p10']:,.0f} in a PSA 10 👀 "
                 f"Top {len(cards)} {setname} cards ranked by price 💎")
         cap = cap.replace(first, hook, 1)
         yt = f"${c['now'] / 100:,.0f} raw, ${g['p10']:,.0f} in a PSA 10 👀 Top {len(cards)} {setname} cards {tags.split()[0]}"[:100]
