@@ -1,0 +1,10 @@
+{
+  "checked": "2026-11-15",
+  "how": "eBay sold listings, checked by hand in Chrome. PSA 10 slabs of this printing only: raw cards sold as 'PSA 10 potential / contender / candidate', other graders, lots and accepted offers (real price hidden) left out. Median of the last 14 days, because both cards fell week after week.",
+  "days": 14,
+  "cards": {
+    "714386": {"name": "Lugia 149/147", "p10": 450, "sold": 16, "note": "30 days: 22 sales, median $549.50; 7 days: 14 sales, median $440"},
+    "714372": {"name": "Charizard 4/102", "p10": 1100, "sold": 5, "note": "30 days: 6 sales, median $1,162.50; 7 days: 3 sales, median $956.80; latest sale $765"}
+  },
+  "left_out": {"716210": "Magikarp 203/193: only 5 sold listings pass the filter and they disagree ($82, $96, $120, $544, $600); too few clean PSA 10 sales"}
+}

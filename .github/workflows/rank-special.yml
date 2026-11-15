@@ -1,8 +1,7 @@
 name: Special set ranking preview (test branch only)
 # One-off "Top 10 30th Celebration Classic Collection" ranking with real photos, rendered into the
 # rank-special-preview branch. Publishes nothing: no site, no feed, no rotation history is touched.
-#   a/ = the builder as it is on main (landscape cards such as LEGEND halves are left out)
-#   b/ = the same ranking with landscape cards kept, so no card is skipped
+# Built by tools/rank_special.py: landscape cards kept, PSA 10 eBay sold prices from rank_special_graded.json.
 on:
   push:
     branches: [rank-special]
@@ -25,13 +24,10 @@ jobs:
           git clone -q --depth 1 --branch gh-pages "$R" /tmp/pages
           SET=24837; N=10; DAY=2026-11-15
           set +e
-          python tools/set_rank.py /tmp/pages/data /tmp/out/a/social-rank --set "$SET" --n "$N" --date "$DAY" > /tmp/a.log 2>&1; rca=$?
-          python tools/rank_special.py /tmp/pages/data /tmp/out/b/social-rank --set "$SET" --n "$N" --date "$DAY" > /tmp/b.log 2>&1; rcb=$?
+          python tools/rank_special.py /tmp/pages/data /tmp/out/graded/social-rank --set "$SET" --n "$N" --date "$DAY" > /tmp/g.log 2>&1; rc=$?
           set -e
-          cat /tmp/a.log /tmp/b.log
-          if [ $rca -ne 0 ] || [ ! -f /tmp/out/a/social-rank/latest.json ]; then echo "::error title=Special ranking a::$(tail -c 1500 /tmp/a.log | tr '\n' ' ')"; exit 1; fi
-          if [ $rcb -ne 0 ] || [ ! -f /tmp/out/b/social-rank/latest.json ]; then echo "::warning title=Special ranking b::$(tail -c 1500 /tmp/b.log | tr '\n' ' ')"; fi
+          cat /tmp/g.log
+          if [ $rc -ne 0 ] || [ ! -f /tmp/out/graded/social-rank/latest.json ]; then echo "::error title=Special ranking::$(tail -c 1500 /tmp/g.log | tr '\n' ' ')"; exit 1; fi
           cd /tmp/out && git init -q -b rank-special-preview && git config user.name "dys-market-bot" && git config user.email "dys-market-bot@users.noreply.github.com"
           git add -A && git commit -q -m "Special set ranking preview" && git push -q -f "$R" rank-special-preview
-          echo "::notice title=Special ranking a::$(tail -n 1 /tmp/a.log)"
-          echo "::notice title=Special ranking b::$(tail -n 1 /tmp/b.log)"
+          echo "::notice title=Special ranking::$(tail -n 1 /tmp/g.log)"
