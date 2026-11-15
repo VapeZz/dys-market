@@ -1,5 +1,5 @@
 {
- "updated": "2026-11-08",
+ "updated": "2026-11-15",
  "sources": [
   [
    "Sneaker Files",
@@ -7,401 +7,10 @@
   ],
   [
    "Sneaker Files (Jordan)",
-   "https://www.sneakerfiles.com/air-jordan-release-dates/"
-  ],
-  [
-   "Sneaker Files (Nike)",
-   "https://www.sneakerfiles.com/nike-release-dates/"
+   "https://sneakerfiles.com/air-jordan-release-dates"
   ]
  ],
  "releases": [
-  {
-   "d": "2026-10-18",
-   "n": "Instant Skateboards x Nike SB Air Force 1 Low",
-   "cw": null,
-   "c": "IV5289-002",
-   "r": 120,
-   "b": "Nike",
-   "h": 2
-  },
-  {
-   "d": "2026-10-19",
-   "n": "Under Armour Arc 96 \"Rakai\"",
-   "cw": null,
-   "c": "6023886-391",
-   "r": 155,
-   "b": "Other",
-   "h": 1
-  },
-  {
-   "d": "2026-10-20",
-   "n": "Reebok Speedshifter",
-   "cw": null,
-   "c": "100256225",
-   "r": 220,
-   "b": "Reebok",
-   "h": 1
-  },
-  {
-   "d": "2026-10-20",
-   "n": "Reebok Speedshifter",
-   "cw": null,
-   "c": "100263924",
-   "r": 220,
-   "b": "Reebok",
-   "h": 1
-  },
-  {
-   "d": "2026-10-20",
-   "n": "Reese's x Reebok Angel Reese 1",
-   "cw": null,
-   "c": "100290074",
-   "r": 160,
-   "b": "Reebok",
-   "h": 1
-  },
-  {
-   "d": "2026-10-21",
-   "n": "New Balance Kawhi 5 \"Blue Oyster\"",
-   "cw": null,
-   "c": "UKLS9Q8",
-   "r": 160,
-   "b": "New Balance",
-   "h": 1
-  },
-  {
-   "d": "2026-10-21",
-   "n": "New Balance Kawhi 5 \"Oregano\"",
-   "cw": null,
-   "c": "UKLS753",
-   "r": 160,
-   "b": "New Balance",
-   "h": 1
-  },
-  {
-   "d": "2026-10-21",
-   "n": "Nike Air Force 1 Low Pony Hair \"Team Red\"",
-   "cw": "Team Red/Team Red",
-   "c": "IR1940-600",
-   "r": 140,
-   "b": "Nike",
-   "h": 1
-  },
-  {
-   "d": "2026-10-22",
-   "n": "Kiko Kostadinov x ASICS US8-S Gel-SJ33 \"Deep Plum\"",
-   "cw": null,
-   "c": "1203B116-500",
-   "r": 170,
-   "b": "ASICS",
-   "h": 2
-  },
-  {
-   "d": "2026-10-22",
-   "n": "Kiko Kostadinov x ASICS US8-S Gel-SJ33 \"Moonrock\"",
-   "cw": null,
-   "c": "1203B116-250",
-   "r": 170,
-   "b": "ASICS",
-   "h": 2
-  },
-  {
-   "d": "2026-10-22",
-   "n": "JJJJound x New Balance 990v3 Made in USA \"Beige\"",
-   "cw": null,
-   "c": "U9904D8",
-   "r": null,
-   "b": "New Balance",
-   "h": 3
-  },
-  {
-   "d": "2026-10-22",
-   "n": "New Balance 1890A \"Truffle Salt\"",
-   "cw": null,
-   "c": "U18909VF",
-   "r": 200,
-   "b": "New Balance",
-   "h": 1
-  },
-  {
-   "d": "2026-10-22",
-   "n": "Eastside Golf x Nike Air Max 90 Golf",
-   "cw": null,
-   "c": "IO4670-001",
-   "r": 140,
-   "b": "Nike",
-   "h": 2
-  },
-  {
-   "d": "2026-10-22",
-   "n": "Eastside Golf x Nike NEXT% Tour 3",
-   "cw": null,
-   "c": "IO4663-001",
-   "r": 200,
-   "b": "Nike",
-   "h": 1
-  },
-  {
-   "d": "2026-10-22",
-   "n": "NIGO x J-Hope x Nike Air Force 1 '01",
-   "cw": "Burnt Sunrise/Metallic Gold-Taupe",
-   "c": "IO8766-800",
-   "r": 150,
-   "b": "Nike",
-   "h": 3
-  },
-  {
-   "d": "2026-10-22",
-   "n": "Nike Vomero Premium SP \"Skeleton\"",
-   "cw": "Black",
-   "c": "IV7509-001",
-   "r": 230,
-   "b": "Nike",
-   "h": 1
-  },
-  {
-   "d": "2026-10-22",
-   "n": "SZA x Vans VANSZA Collection",
-   "cw": null,
-   "c": null,
-   "r": null,
-   "b": "Vans",
-   "h": 1
-  },
-  {
-   "d": "2026-10-23",
-   "n": "APB x Air Jordan 11 Low \"Made for Locals\"",
-   "cw": "Binary Blue/Rust Pink-Sail-Steel",
-   "c": "IU8266-400",
-   "r": 200,
-   "b": "Jordan",
-   "h": 3
-  },
-  {
-   "d": "2026-10-23",
-   "n": "Cade Cunningham x Nike ST Charge \"Halloween\"",
-   "cw": "Taupe/Light British Tan-Baroque Brown",
-   "c": "IZ2608-200",
-   "r": 145,
-   "b": "Nike",
-   "h": 1
-  },
-  {
-   "d": "2026-10-23",
-   "n": "Nike A'Two \"Potion No. 22\"",
-   "cw": "Light Orewood Brown/Pine Green-Bright Crimson",
-   "c": "IZ2457-100",
-   "r": 155,
-   "b": "Nike",
-   "h": 1
-  },
-  {
-   "d": "2026-10-23",
-   "n": "Nike Air Force 1 '01 \"Nightmare\"",
-   "cw": "Black/Gym Red-Metallic Silver",
-   "c": "IX0104-001",
-   "r": 140,
-   "b": "Nike",
-   "h": 1
-  },
-  {
-   "d": "2026-10-23",
-   "n": "Nike Air Force 1 Low \"NYC Rat\"",
-   "cw": "Baroque Brown/Black-Terra Red",
-   "c": "IV4884-200",
-   "r": 140,
-   "b": "Nike",
-   "h": 1
-  },
-  {
-   "d": "2026-10-23",
-   "n": "Nike Air Griffey Max 1 \"Cincinnati Reds\"",
-   "cw": "White/Varsity Red-Black",
-   "c": "JA1091-100",
-   "r": 180,
-   "b": "Nike",
-   "h": 1
-  },
-  {
-   "d": "2026-10-23",
-   "n": "Nike Air Max Plus \"Spider Web\"",
-   "cw": "Black/Limelight",
-   "c": "DD4004-001",
-   "r": 170,
-   "b": "Nike",
-   "h": 1
-  },
-  {
-   "d": "2026-10-23",
-   "n": "Nike Caitlin 1 \"Halloween\"",
-   "cw": "Black/Ghost Green-Mint Foam-Racer Blue",
-   "c": "JA4290-001",
-   "r": 150,
-   "b": "Nike",
-   "h": 1
-  },
-  {
-   "d": "2026-10-23",
-   "n": "Nike Dunk Low \"Shibuya Halloween\"",
-   "cw": "Bog Green/Black-Luminous Green",
-   "c": "IX5169-300",
-   "r": 130,
-   "b": "Nike",
-   "h": 1
-  },
-  {
-   "d": "2026-10-23",
-   "n": "Nike Giannis Freak 8 \"Trick Question\"",
-   "cw": "Gorge Green/Hyper Grape-Lucky Green",
-   "c": "IO7945-300",
-   "r": 130,
-   "b": "Nike",
-   "h": 1
-  },
-  {
-   "d": "2026-10-23",
-   "n": "Nike Ja 4 \"Halloween\"",
-   "cw": "Oil Green/Bright Crimson-Light Lemon Twist",
-   "c": "IO7939-300",
-   "r": 140,
-   "b": "Nike",
-   "h": 1
-  },
-  {
-   "d": "2026-10-23",
-   "n": "Nike KD 19 \"Halloween\"",
-   "cw": "Bright Crimson/Lime Ice-Stadium Green",
-   "c": "IO8112-600",
-   "r": 165,
-   "b": "Nike",
-   "h": 1
-  },
-  {
-   "d": "2026-10-23",
-   "n": "Nike Sabrina 4 \"Halloween\"",
-   "cw": "Black/Cool Grey-Anthracite-Bright Crimson",
-   "c": "IX7058-001",
-   "r": 145,
-   "b": "Nike",
-   "h": 1
-  },
-  {
-   "d": "2026-10-23",
-   "n": "Victor Wembanyama x Nike GT Cut 4 \"Halloween\"",
-   "cw": "Vapour Green/Steam-Psychic Purple-Metallic Ochre",
-   "c": "IX5395-300",
-   "r": 210,
-   "b": "Nike",
-   "h": 1
-  },
-  {
-   "d": "2026-10-23",
-   "n": "BBC ICECREAM x Reebok Board Flip \"Pumpkin\"",
-   "cw": "Black/Orange-Blue",
-   "c": "100265460",
-   "r": 150,
-   "b": "Reebok",
-   "h": 1
-  },
-  {
-   "d": "2026-10-23",
-   "n": "adidas Anthony Edwards 3 \"Omen\"",
-   "cw": "Red/Silver-Black",
-   "c": "KJ3021",
-   "r": 130,
-   "b": "adidas",
-   "h": 1
-  },
-  {
-   "d": "2026-10-24",
-   "n": "Air Jordan 1 Low \"Halloween\"",
-   "cw": "Black/Scream Green-Dark Smoke Grey",
-   "c": "IQ5494-001",
-   "r": 130,
-   "b": "Jordan",
-   "h": 1
-  },
-  {
-   "d": "2026-10-24",
-   "n": "Air Jordan 1 Mid \"Dia de Los Muertos\"",
-   "cw": "Desert Dust/Particle Beige-Terra Blush",
-   "c": "IZ4718-283",
-   "r": 145,
-   "b": "Jordan",
-   "h": 1
-  },
-  {
-   "d": "2026-10-24",
-   "n": "Air Jordan 12 \"Fireside\"",
-   "cw": "Light Orewood Brown/Cacao Wow-Team Red",
-   "c": "CT8013-105",
-   "r": 220,
-   "b": "Jordan",
-   "h": 2
-  },
-  {
-   "d": "2026-10-24",
-   "n": "Nike Air Diamond Turf 2 \"White Black\"",
-   "cw": "White/Black-Metallic Silver",
-   "c": "HQ2631-100",
-   "r": 170,
-   "b": "Nike",
-   "h": 1
-  },
-  {
-   "d": "2026-10-24",
-   "n": "Nike Air Force 1 Low \"Ghostface Black\"",
-   "cw": "Black/Gym Red-Summit White",
-   "c": "IZ1207-010",
-   "r": 125,
-   "b": "Nike",
-   "h": 1
-  },
-  {
-   "d": "2026-10-24",
-   "n": "Nike Air Force 1 Low \"Ghostface\"",
-   "cw": "Summit White/Metallic Silver-Black-Gym Red",
-   "c": "IV6350-121",
-   "r": 125,
-   "b": "Nike",
-   "h": 1
-  },
-  {
-   "d": "2026-10-24",
-   "n": "Nike Air Max 95 \"Reverse Blue Spark\"",
-   "cw": "Anthracite/Light Graphite-Blue Spark",
-   "c": "JA0980-060",
-   "r": 190,
-   "b": "Nike",
-   "h": 1
-  },
-  {
-   "d": "2026-10-24",
-   "n": "Vans Old Skool 36 Pearlized \"Red\"",
-   "cw": "Red",
-   "c": "VN000E8VIZQ",
-   "r": 130,
-   "b": "Vans",
-   "h": 1
-  },
-  {
-   "d": "2026-10-24",
-   "n": "Pharrell x adidas Adistar Jellyfish \"Red\"",
-   "cw": null,
-   "c": "KK0633",
-   "r": 300,
-   "b": "adidas",
-   "h": 2
-  },
-  {
-   "d": "2026-10-24",
-   "n": "Pharrell x adidas Adistar Jellyfish \"Storm\"",
-   "cw": "Onix/Aurora Onix-Core Black",
-   "c": "KH6728",
-   "r": 300,
-   "b": "adidas",
-   "h": 2
-  },
   {
    "d": "2026-10-25",
    "n": "Air Jordan 41 \"University Red\"",
@@ -410,6 +19,33 @@
    "r": 205,
    "b": "Jordan",
    "h": 1
+  },
+  {
+   "d": "2026-10-26",
+   "n": "Kith x Salomon XT-4 OG \"Maroon\"",
+   "cw": null,
+   "c": "LD0195800",
+   "r": 200,
+   "b": "Other",
+   "h": 2
+  },
+  {
+   "d": "2026-10-26",
+   "n": "Kith x Salomon XT-4K Mid \"Black\"",
+   "cw": null,
+   "c": "L45456800",
+   "r": 220,
+   "b": "Other",
+   "h": 2
+  },
+  {
+   "d": "2026-10-26",
+   "n": "Kith x Salomon XT-VYGR 2 \"Dark Navy\"",
+   "cw": null,
+   "c": "LD0197200",
+   "r": 200,
+   "b": "Other",
+   "h": 2
   },
   {
    "d": "2026-10-26",
@@ -448,30 +84,12 @@
    "h": 1
   },
   {
-   "d": "2026-10-26",
-   "n": "Kith x Salomon XT-4 OG \"Maroon\"",
+   "d": "2026-10-27",
+   "n": "MENACE x adidas Adistar Control 5 \"Heat Signature\"",
    "cw": null,
-   "c": "LD0195800",
-   "r": 200,
-   "b": "Other",
-   "h": 2
-  },
-  {
-   "d": "2026-10-26",
-   "n": "Kith x Salomon XT-4K Mid \"Black\"",
-   "cw": null,
-   "c": "L45456800",
-   "r": 220,
-   "b": "Other",
-   "h": 2
-  },
-  {
-   "d": "2026-10-26",
-   "n": "Kith x Salomon XT-VYGR 2 \"Dark Navy\"",
-   "cw": null,
-   "c": "LD0197200",
-   "r": 200,
-   "b": "Other",
+   "c": "LB0086",
+   "r": 180,
+   "b": "adidas",
    "h": 2
   },
   {
@@ -484,11 +102,20 @@
    "h": 3
   },
   {
-   "d": "2026-10-27",
-   "n": "MENACE x adidas Adistar Control 5 \"Heat Signature\"",
+   "d": "2026-10-28",
+   "n": "Always Do What You Should Do x adidas Climacool 1",
    "cw": null,
-   "c": "LB0086",
-   "r": 180,
+   "c": "KH7541",
+   "r": 200,
+   "b": "adidas",
+   "h": 2
+  },
+  {
+   "d": "2026-10-28",
+   "n": "Always Do What You Should Do x adidas Climacool 1 \"Core Black\"",
+   "cw": null,
+   "c": "KH7535",
+   "r": 190,
    "b": "adidas",
    "h": 2
   },
@@ -509,24 +136,6 @@
    "r": 180,
    "b": "Nike",
    "h": 1
-  },
-  {
-   "d": "2026-10-28",
-   "n": "Always Do What You Should Do x adidas Climacool 1",
-   "cw": null,
-   "c": "KH7541",
-   "r": 200,
-   "b": "adidas",
-   "h": 2
-  },
-  {
-   "d": "2026-10-28",
-   "n": "Always Do What You Should Do x adidas Climacool 1 \"Core Black\"",
-   "cw": null,
-   "c": "KH7535",
-   "r": 190,
-   "b": "adidas",
-   "h": 2
   },
   {
    "d": "2026-10-29",
@@ -867,15 +476,6 @@
    "cw": "Lapis/Off Noir",
    "c": "JA7792-400",
    "r": 225,
-   "b": "Jordan",
-   "h": 1
-  },
-  {
-   "d": "2026-11-05",
-   "n": "Air Jordan 3 \"Lola Bunny\"",
-   "cw": "Light Soft Pink/White-Sunset Pulse",
-   "c": "IZ1694-600",
-   "r": 155,
    "b": "Jordan",
    "h": 1
   },
@@ -1241,6 +841,15 @@
   },
   {
    "d": "2026-11-13",
+   "n": "Nike GT Future \"Volt\"",
+   "cw": "Volt/Black",
+   "c": "FZ5590-701",
+   "r": 210,
+   "b": "Nike",
+   "h": 1
+  },
+  {
+   "d": "2026-11-13",
    "n": "Nike Ja 4 \"Unseen\"",
    "cw": "Volt/Cobalt Bliss-Black",
    "c": "IM4135-700",
@@ -1267,6 +876,15 @@
    "h": 1
   },
   {
+   "d": "2026-11-13",
+   "n": "Union x Nike Dunk Low \"Natural Selection Eclipse\"",
+   "cw": "Off-Noir/University Gold-Dark Ash-Off-Noir",
+   "c": "IF7380-001",
+   "r": 135,
+   "b": "Nike",
+   "h": 3
+  },
+  {
    "d": "2026-11-14",
    "n": "Air Jordan 11 \"Green Screen\"",
    "cw": "Multi-Color/Gym Green-Lucky Green-Orange Peel",
@@ -1283,6 +901,15 @@
    "r": 180,
    "b": "Nike",
    "h": 3
+  },
+  {
+   "d": "2026-11-14",
+   "n": "MEDICOM TOY x Nike Air Force 1 \"BE@RBRICK\"",
+   "cw": "Sail/White-Pale Yellow",
+   "c": "IR1940-101",
+   "r": null,
+   "b": "Nike",
+   "h": 2
   },
   {
    "d": "2026-11-14",
@@ -1403,6 +1030,15 @@
   },
   {
    "d": "2026-11-20",
+   "n": "Nike Air Force 1 Low Pony Hair \"Atomic Violet\"",
+   "cw": "Atomic Violet/Voltage Purple-White",
+   "c": "IR1940-500",
+   "r": 140,
+   "b": "Nike",
+   "h": 1
+  },
+  {
+   "d": "2026-11-20",
    "n": "Nike Book 2 \"Be Legendary\"",
    "cw": "Bright Violet/Black-Wolf Grey",
    "c": "FZ7013-501",
@@ -1417,6 +1053,15 @@
    "c": "KH8545",
    "r": 130,
    "b": "adidas",
+   "h": 1
+  },
+  {
+   "d": "2026-11-21",
+   "n": "Air Jordan 3 \"Lola Bunny\"",
+   "cw": "Light Soft Pink/White-Sunset Pulse",
+   "c": "IZ1694-600",
+   "r": 155,
+   "b": "Jordan",
    "h": 1
   },
   {
@@ -1501,6 +1146,15 @@
    "h": 1
   },
   {
+   "d": "2026-11-22",
+   "n": "Nike Kobe AD Protro \"Ruthless Precision\"",
+   "cw": "Cool Grey/White-Black",
+   "c": "IO8233-001",
+   "r": 155,
+   "b": "Nike",
+   "h": 2
+  },
+  {
    "d": "2026-11-24",
    "n": "Nike Caitlin 1 \"Snow White\"",
    "cw": "White/Racer Blue",
@@ -1519,6 +1173,15 @@
    "h": 1
   },
   {
+   "d": "2026-11-26",
+   "n": "Ducks of a Feather x Nike SB Dunk Low \"The Zoo\"",
+   "cw": "Tomatillo/Gum Medium Brown-Gym Green-Gorge Green",
+   "c": "JJ7565-300",
+   "r": 140,
+   "b": "Nike",
+   "h": 2
+  },
+  {
    "d": "2026-11-27",
    "n": "Air Jordan 4 \"Bred\" 2026",
    "cw": "Black/Cement Grey-Summit White-Fire Red",
@@ -1529,15 +1192,15 @@
   },
   {
    "d": "2026-11-27",
-   "n": "Nike Air Foamposite Pro \"Dr. Doom\"",
-   "cw": "Black/White",
-   "c": "HF0794-003",
-   "r": 240,
-   "b": "Nike",
-   "h": 2
+   "n": "Air Jordan 4 TD \"Bred\"",
+   "cw": "Black/Cement Grey-White-Fire Red",
+   "c": "HQ0207-001",
+   "r": 205,
+   "b": "Jordan",
+   "h": 1
   },
   {
-   "d": "2026-11-28",
+   "d": "2026-11-27",
    "n": "Air Jordan 41 \"Amethyst\"",
    "cw": "Black/Concord",
    "c": "IR1965-002",
@@ -1546,22 +1209,13 @@
    "h": 1
   },
   {
-   "d": "2026-11-28",
-   "n": "Jordan 6 Rings Winterized \"Cobalt Blue\"",
-   "cw": "Cobalt Blue/Anthracite-Vast Grey",
-   "c": "IX8456-479",
-   "r": 200,
-   "b": "Jordan",
-   "h": 1
-  },
-  {
-   "d": "2026-11-28",
-   "n": "Social Status x Air Jordan 1 Low OG",
-   "cw": null,
-   "c": null,
-   "r": null,
-   "b": "Jordan",
-   "h": 3
+   "d": "2026-11-27",
+   "n": "Nike Air Foamposite Pro \"Dr. Doom\"",
+   "cw": "Black/White",
+   "c": "HF0794-003",
+   "r": 240,
+   "b": "Nike",
+   "h": 2
   },
   {
    "d": "2026-11-28",
@@ -1579,6 +1233,15 @@
    "c": "JA7720-001",
    "r": 170,
    "b": "Nike",
+   "h": 1
+  },
+  {
+   "d": "2026-11-28",
+   "n": "Jordan 6 Rings Winterized \"Cobalt Blue\"",
+   "cw": "Cobalt Blue/Anthracite-Vast Grey",
+   "c": "IX8456-479",
+   "r": 200,
+   "b": "Jordan",
    "h": 1
   },
   {
@@ -1625,6 +1288,15 @@
    "r": null,
    "b": "Nike",
    "h": 2
+  },
+  {
+   "d": "2026-11-28",
+   "n": "Social Status x Air Jordan 1 Low OG",
+   "cw": null,
+   "c": null,
+   "r": null,
+   "b": "Jordan",
+   "h": 3
   },
   {
    "d": "2026-11-28",
@@ -1709,15 +1381,6 @@
   },
   {
    "d": "2026-12-05",
-   "n": "SoleFly x Air Jordan 5",
-   "cw": "Black/Aurora Green-Anthracite-Muslin",
-   "c": "IU0734-001",
-   "r": 225,
-   "b": "Jordan",
-   "h": 3
-  },
-  {
-   "d": "2026-12-05",
    "n": "Nike Caitlin 1 PVD \"Warning Code\"",
    "cw": "Yellow Zest/Racer Blue-Soft Yellow",
    "c": "JF3474-700",
@@ -1745,12 +1408,39 @@
   },
   {
    "d": "2026-12-05",
+   "n": "SoleFly x Air Jordan 5",
+   "cw": "Black/Aurora Green-Anthracite-Muslin",
+   "c": "IU0734-001",
+   "r": 225,
+   "b": "Jordan",
+   "h": 3
+  },
+  {
+   "d": "2026-12-05",
+   "n": "Tekken x Nike Air Max 1 Low \"Combo\"",
+   "cw": "Neutral Grey/French Blue-Chile Red",
+   "c": "IW1290-001",
+   "r": 160,
+   "b": "Nike",
+   "h": 2
+  },
+  {
+   "d": "2026-12-05",
    "n": "UNheardof x adidas Adistar Control 5 \"Doggy Runner\"",
    "cw": null,
    "c": null,
    "r": null,
    "b": "adidas",
    "h": 1
+  },
+  {
+   "d": "2026-12-10",
+   "n": "Ducks of a Feather x Nike SB Dunk Low \"Shout\"",
+   "cw": "Flax/Gum Medium Brown-University Gold-Pine Green",
+   "c": "JJ7564-200",
+   "r": 140,
+   "b": "Nike",
+   "h": 2
   },
   {
    "d": "2026-12-11",
@@ -1781,15 +1471,6 @@
   },
   {
    "d": "2026-12-12",
-   "n": "Air Jordan 11 \"Space Jam\" 2026",
-   "cw": "Multi-Color/Varsity Royal-White-Black",
-   "c": "CT8012-900",
-   "r": 235,
-   "b": "Jordan",
-   "h": 3
-  },
-  {
-   "d": "2026-12-12",
    "n": "APB x Nike Dunk Low \"Midnight Navy\"",
    "cw": "Multi-Color/Midnight Navy",
    "c": "IQ8497-900",
@@ -1799,12 +1480,39 @@
   },
   {
    "d": "2026-12-12",
+   "n": "Air Jordan 11 \"Space Jam\" 2026",
+   "cw": "Multi-Color/Varsity Royal-White-Black",
+   "c": "CT8012-900",
+   "r": 235,
+   "b": "Jordan",
+   "h": 3
+  },
+  {
+   "d": "2026-12-12",
    "n": "PaisaBoys x Nike SB P-Rod 1",
    "cw": "Green Apple/Bright Cactus-Varsity Red",
    "c": "IU7852-300",
    "r": 135,
    "b": "Nike",
    "h": 2
+  },
+  {
+   "d": "2026-12-14",
+   "n": "Nike LeBron 24 \"Purple Aura\"",
+   "cw": "Purple Aura/Amarillo-Valor Blue-Black",
+   "c": "IO8201-500",
+   "r": 200,
+   "b": "Nike",
+   "h": 1
+  },
+  {
+   "d": "2026-12-14",
+   "n": "Reebok G-Unit G6 \"White Green\"",
+   "cw": "White/Green",
+   "c": "100301694",
+   "r": 130,
+   "b": "Reebok",
+   "h": 1
   },
   {
    "d": "2026-12-18",
@@ -1831,24 +1539,6 @@
    "c": "HV0823-001",
    "r": 220,
    "b": "Jordan",
-   "h": 2
-  },
-  {
-   "d": "2026-12-19",
-   "n": "Ducks of a Feather x Nike SB Dunk Low \"Shout\"",
-   "cw": "Flax/Gum Medium Brown-University Gold-Pine Green",
-   "c": "JJ7564-200",
-   "r": 140,
-   "b": "Nike",
-   "h": 2
-  },
-  {
-   "d": "2026-12-19",
-   "n": "Ducks of a Feather x Nike SB Dunk Low \"The Zoo\"",
-   "cw": "Tomatillo/Gum Medium Brown-Gym Green-Gorge Green",
-   "c": "JJ7565-300",
-   "r": 140,
-   "b": "Nike",
    "h": 2
   },
   {
@@ -1889,12 +1579,48 @@
   },
   {
    "d": "2026-12-19",
+   "n": "Nike Kobe AD Protro \"Coals\"",
+   "cw": "Black/Purple Venom-Venom Green",
+   "c": "IO8233-002",
+   "r": 155,
+   "b": "Nike",
+   "h": 2
+  },
+  {
+   "d": "2026-12-19",
+   "n": "Nike Kobe Air Force 1 Low \"Coals\"",
+   "cw": "Black/Multi-Color",
+   "c": "IV4920-001",
+   "r": 150,
+   "b": "Nike",
+   "h": 2
+  },
+  {
+   "d": "2026-12-19",
    "n": "Victor Solomon x Nike Air Foamposite One \"Trophies Red\"",
    "cw": "Gym Red/Metallic Gold-Black",
    "c": "IR2077-600",
    "r": 350,
    "b": "Nike",
    "h": 3
+  },
+  {
+   "d": "2026-12-19",
+   "n": "adidas Anthony Edwards 3 \"Ant-Man\"",
+   "cw": "Black/White-Red",
+   "c": "HP4712",
+   "r": 130,
+   "b": "adidas",
+   "h": 1
+  },
+  {
+   "d": "2026-12-19",
+   "n": "adidas Anthony Edwards 3 \"Dr. Doom\"",
+   "cw": "Green/White-Black",
+   "c": "HP4158",
+   "r": 130,
+   "b": "adidas",
+   "h": 1
   },
   {
    "d": "2026-12-21",
@@ -1943,6 +1669,15 @@
   },
   {
    "d": "2026-12-26",
+   "n": "Nike Ja 4 High \"Christmas\"",
+   "cw": "Electric Green/Metallic Silver-Black-Bright Crimson",
+   "c": "IZ2537-300",
+   "r": 180,
+   "b": "Nike",
+   "h": 1
+  },
+  {
+   "d": "2026-12-26",
    "n": "Nike KD 6 \"Christmas\"",
    "cw": "Light Crimson/Metallic Gold-Green Glow",
    "c": "IQ0145-600",
@@ -1987,20 +1722,20 @@
    "h": 1
   },
   {
+   "d": "2027-01-09",
+   "n": "Air Jordan 14 \"Chartreuse\" 2027",
+   "cw": null,
+   "c": "IX0206-001",
+   "r": null,
+   "b": "Jordan",
+   "h": 2
+  },
+  {
    "d": "2027-01-15",
    "n": "Air Jordan 4 \"Spotlight\"",
    "cw": "Black/Metallic Silver-Metallic Silver-Black",
    "c": "HV0823-002",
    "r": 220,
-   "b": "Jordan",
-   "h": 2
-  },
-  {
-   "d": "2027-01-16",
-   "n": "Air Jordan 14 \"Chartreuse\" 2027",
-   "cw": null,
-   "c": "IX0206-001",
-   "r": null,
    "b": "Jordan",
    "h": 2
   },
@@ -2012,6 +1747,15 @@
    "r": 215,
    "b": "Jordan",
    "h": 2
+  },
+  {
+   "d": "2027-01-16",
+   "n": "Air Jordan 3 Golf \"Black Cement\" 2027",
+   "cw": "Black/Varsity Red-Cement Grey-White",
+   "c": "IU3188-001",
+   "r": null,
+   "b": "Jordan",
+   "h": 1
   },
   {
    "d": "2027-01-16",
@@ -2048,6 +1792,15 @@
    "r": null,
    "b": "Jordan",
    "h": 3
+  },
+  {
+   "d": "2027-01-23",
+   "n": "Air Jordan 12 \"Obsidian\" 2027",
+   "cw": "Obsidian/University Blue-French Blue",
+   "c": "CT8013-401",
+   "r": 215,
+   "b": "Jordan",
+   "h": 2
   }
  ],
  "picks": [
@@ -2055,16 +1808,6 @@
    "c": "IO6260-800",
    "v": "cop",
    "why": "Kobe Protros sell out fast and have held above retail for years. If you get it at retail, it's a win to wear or flip."
-  },
-  {
-   "c": "IU8266-400",
-   "v": "cop",
-   "why": "Collab with a small local-first release. Expect it to trade over retail from day one."
-  },
-  {
-   "c": "IO8766-800",
-   "v": "cop",
-   "why": "NIGO collabs move quickly and the J-Hope name adds demand. Worth a shot at retail."
   },
   {
    "c": "IX8180-001",
@@ -2080,16 +1823,6 @@
    "c": "CT8529-105",
    "v": "wear",
    "why": "Classic colorway that always sells, but restocks are common. Grab at retail, skip the markups."
-  },
-  {
-   "c": "CT8013-105",
-   "v": "wait",
-   "why": "Seasonal colorway with plenty of pairs. These often hit outlets and sales, so there's no rush."
-  },
-  {
-   "c": "U9904D8",
-   "v": "cop",
-   "why": "JJJJound's New Balance collabs usually sell out fast and have traded above retail. Price isn't confirmed yet, so check it before you buy."
   },
   {
    "c": "IV7127-002",
@@ -2130,6 +1863,26 @@
    "c": "IZ1800-200",
    "v": "wait",
    "why": "Tan AJ11 tied to a big themed pack with lots of pairs. Likely to sit near retail, so no need to rush."
+  },
+  {
+   "c": "IF4396-001",
+   "v": "wear",
+   "why": "Black and red AJ3 at $215 in a general release. Good to wear, but there should be enough pairs that you don't need to pay over retail."
+  },
+  {
+   "c": "IU0734-001",
+   "v": "cop",
+   "why": "SoleFly collabs are limited and usually trade above retail. Expect a fast sellout at $225."
+  },
+  {
+   "c": "IU5238-500",
+   "v": "cop",
+   "why": "Another CPFM Flea 1 in small numbers. The earlier pair sold out quickly, so this one should hold above retail."
+  },
+  {
+   "c": "IR2077-600",
+   "v": "wait",
+   "why": "At $350 this is a steep entry price for a Foamposite. Resale on pricey Foams often lands near or below retail, so there's no rush."
   }
  ]
 }
