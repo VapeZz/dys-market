@@ -329,7 +329,7 @@ a.row{text-decoration:none;color:inherit}
 
 /* ---------- strategy box on the card sheet (edge-strat.js) ---------- */
 .sg{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 12px 10px;display:flex;flex-direction:column;gap:10px;min-width:0}
-.sg[hidden]{display:none}
+#c-strat[hidden]{display:none}
 /* small text in the box reads at 4.5:1 or better in both themes: the light theme's colors are darkened for text */
 .sg{--sg-up:var(--up);--sg-down:var(--down);--sg-warn:var(--warn);--sg-here:var(--accent-2)}
 :root[data-theme="light"] .sg{--sg-up:color-mix(in srgb,var(--up) 72%,#000);--sg-down:color-mix(in srgb,var(--down) 80%,#000);--sg-warn:color-mix(in srgb,var(--warn) 62%,#000);--sg-here:color-mix(in srgb,var(--accent-2) 70%,#000)}
