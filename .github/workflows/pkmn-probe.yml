@@ -1,0 +1,21 @@
+name: PkmnPrices probe (one-off test)
+# Read-only test on its own branch: can PkmnPrices cover our cards? Changes nothing, stores nothing.
+on:
+  workflow_dispatch:
+  push:
+    branches: [pkmn-probe]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - run: pip install --quiet cryptography
+      - run: curl -fsS -o /tmp/graded.enc https://market.driveyourstyle.net/data/edge/graded.enc || echo "graded file not downloaded"
+      - run: python tools/pkmnprices_probe.py /tmp/graded.enc
+        env:
+          PKMNPRICES_KEY: ${{ secrets.PKMNPRICES_KEY }}
+          PPT_API_KEY: ${{ secrets.PPT_API_KEY }}
+          PPT_API_KEY_NEW: ${{ secrets.PPT_API_KEY_NEW }}
