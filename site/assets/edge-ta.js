@@ -18,6 +18,8 @@
    - MACD: the 12-day EMA minus the 26-day EMA; signal: the 9-day EMA of that; histogram: MACD minus
      signal. Each EMA starts from the plain average of its first window.
    - Bollinger bands: the 20-day average plus and minus 2 standard deviations (population) of those 20 days.
+   - Thin market: fewer than THIN_MOVES price moves in the last 14 days. The numbers are still shown, with a
+     note that they rest on very little (about two cards in three, by the Nov 14, 2026 prices).
    - 52-week high and low: the highest and lowest recorded price of the last 365 days (weekly points
      before the last 120 days, so a spike between two weekly points can be missed).
    It describes what the price did. It is not advice. */
@@ -25,6 +27,7 @@
   const DAY = 864e5, MAX_FILL = 5, VERSION = 1;
   const RSI_N = 14, FAST = 12, SLOW = 26, SIG = 9, BB_N = 20, BB_K = 2;
   const ON_LINE = 1e-6;      // cents: a MACD histogram closer to zero than this is rounding, not a side of the signal line
+  const THIN_MOVES = 3;      // fewer price moves than this in the last 14 days: the card is flagged as a thin market
   const TREND_BAND = 2;      // percent the 7-day average must sit above or below the 30-day average to call a trend (as on the market site)
   const RANGES = [["30", "1M", "past month"], ["90", "3M", "past 3 months"], ["180", "6M", "past 6 months"], ["365", "1Y", "past year"]];
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -208,7 +211,7 @@
     if (!n) return "";
     const tile = (lab, b, s, cls = "") => `<div class="tile"><span class="lab">${lab}</span><b${cls ? ` class="${cls}"` : ""}>${b}</b><small>${s}</small></div>`;
     // fewer than 3 price moves in 14 days: RSI, MACD and the bands rest on almost nothing, so say so above them
-    const thin = n.moves < 3 && n.dailyDays > RSI_N;
+    const thin = n.moves < THIN_MOVES && n.dailyDays > RSI_N;
     const thinNote = thin ? `<p class="ta-thin"><b>Thin market.</b> ${n.moves === 0 ? "No price moves" : n.moves === 1 ? "1 price move" : "2 price moves"} in the last 14 days, so RSI, MACD and the bands rest on very little. Read them loosely.</p>` : "";
     const need = (days) => a.daily ? `Needs ${days} daily prices` : "Needs the daily prices";
     const t = [];
