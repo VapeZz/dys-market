@@ -7,6 +7,14 @@
   const BASE = /\/edge\/(index\.html)?$/.test(location.pathname) ? "../" : "";
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  // the card sheet's technical chart is its own file (edge-ta.js); it takes this file's ?v= so both refresh together.
+  // If it can't load, the sheet draws the simple chart below instead.
+  const TA = new Promise((done) => {
+    const s = document.createElement("script");
+    s.src = `${BASE}assets/edge-ta.js${((document.currentScript?.src || "").match(/\?v=[\w.-]+/) || [""])[0]}`;
+    s.onload = () => done(window.EdgeTA?.v >= 1 ? window.EdgeTA : null); s.onerror = () => done(null);
+    document.head.append(s);
+  });
   /* layout (shared with the market site): big pictures, grid view, 5 tabs; ?v2=0 or Mine > Settings brings back the old one */
   const V2 = (() => {
     try {
@@ -135,6 +143,8 @@
   const setName = (g) => META?.groups?.[g]?.[0] || "";
   const gameOfSet = (g) => META?.groups?.[g]?.[1] || "";
   const marketOf = (x) => { const r = IDX.get(keyOf(x.id, x.n)) || IDX.get(String(x.id)); return r ? r[4] : x.p ?? null; };
+  // a price for every day of the last 120 days, per set (pipeline/edge_daily.py); null when it can't be read (not kept, so the next card tries again)
+  const dailyFile = (g) => getJSON(`edge/daily/${g}.json`).catch(() => { delete cache[`edge/daily/${g}.json`]; return null; });
   async function detail(id, g, n) {
     const s = await getJSON(`set/${g}.json`);
     const its = s.items.filter((x) => x.id === id);
@@ -520,7 +530,7 @@
     sheet.hidden = false; document.body.style.overflow = "hidden";
     const card = $("#sheet-card");
     card.innerHTML = `<div class="grab"><span class="lab">Card details</span><button type="button" class="btn sm close">Close</button></div><p class="muted">Loading…</p>`;
-    const [{ it, set }, eb] = await Promise.all([detail(id, g, n), getJSON("ebay.json").catch(() => ({ cards: {} })), loadGraded()]);
+    const [{ it, set }, eb, , ta, daily] = await Promise.all([detail(id, g, n), getJSON("ebay.json").catch(() => ({ cards: {} })), loadGraded(), TA, dailyFile(g)]);
     if (!it) { card.innerHTML = `<div class="grab"><span class="lab">Card details</span><button type="button" class="btn sm close">Close</button></div><div class="empty"><b>No price for this one yet</b>It may be too new or not sold recently.</div>`; return; }
     const x = { id: it.id, g, n: it.n, t: it.t, sn: set.n };
     S.recent = [x, ...S.recent.filter((y) => !(y.id === x.id && y.n === x.n))].slice(0, 12); save();
@@ -528,6 +538,7 @@
     const e = eb.cards?.[it.id], ebAge = e ? daysAgo(e.at) : null;
     const inInv = S.inv.find((y) => y.k === keyOf(it.id, it.n)), watching = S.watch.find((y) => y.k === keyOf(it.id, it.n));
     const no = (it.n.match(/ - ([\w/-]+)/) || [])[1];
+    const simple = `<section class="sec chart panel"><span class="lab">Price history</span>${chart(it.s, set.dates)}</section>`;
     const platRows = Object.entries(FEES.sell).map(([k, pl]) => `<div><span>${k === "none" ? "Sell in person" : `Sell on ${esc(pl.label)}`}</span><span>${p ? money(net(p, it.t, k)) : "—"}</span></div>`).join("");
     card.innerHTML = `<div class="grab"><span class="lab">${esc(gameOfSet(g) === "pokemon" ? (it.t === "s" ? "Sealed" : "Card") : `${gameLabel(gameOfSet(g))}${it.t === "s" ? " · sealed" : ""}`)}</span><button type="button" class="btn sm close">Close</button></div>
       <div class="hero">${img(it.id, 1000)}<div style="display:flex;flex-direction:column;gap:6px;min-width:0">
@@ -538,7 +549,7 @@
       <div class="prices"><div class="tile"><span class="lab">Lowest listing</span><b>${money(lo)}</b><small class="${lo && p ? cls(p - lo) : ""}">${lo && p ? `${pct((lo - p) / p * 100, 0)} vs market` : "on TCGplayer"}</small></div>
         <div class="tile"><span class="lab">Max buy</span><b>${money(maxBuy(p, it.t))}</b><small>for ${S.set.roi}% profit</small></div>
         <div class="tile"><span class="lab">Flip now</span><b class="${f ? cls(f.pr) : ""}">${f ? signed(f.pr) : "—"}</b><small>${f ? `${f.roi.toFixed(0)}% buying the lowest` : "no listing"}</small></div></div>
-      <section class="sec chart panel"><span class="lab">Price history</span>${chart(it.s, set.dates)}</section>
+      ${ta ? `<section class="sec ta" id="c-ta"></section>` : simple}
       ${it.t === "c" ? `<section class="sec"><span class="lab">By condition</span><div class="cond">${COND.map(([c, m]) => `<div><b>${c}</b>${money(Math.round(p * m), p * m >= 10000)}</div>`).join("")}</div></section>` : ""}
       <section class="sec panel"><span class="lab">What it's worth to you</span><div class="kv">${platRows}
         <div><span>Cash offer at ${S.set.cash}%</span><span>${money(Math.round(p * S.set.cash / 100))}</span></div>
@@ -563,6 +574,8 @@
         <a class="btn sm" href="${soldUrl(it.n, no || "")}" target="_blank" rel="noopener">eBay sold ↗</a>
         ${it.t === "c" ? `<a class="btn sm" href="${soldUrl(it.n, (no || "") + " PSA 10")}" target="_blank" rel="noopener">PSA 10 sold ↗</a><a class="btn sm" href="https://www.pricecharting.com/search-products?q=${encodeURIComponent(cleanN(it.n))}&type=prices" target="_blank" rel="noopener">All grades ↗</a>` : ""}
         <a class="btn sm" href="${BASE}product.html?id=${it.id}&set=${g}" target="_blank" rel="noopener">Full page ↗</a></div></section>`;
+    if (ta) try { ta.mount($("#c-ta"), { dates: set.dates, values: it.s || [], daily: ta.dailyOf(daily, it.id, it.n) }); }
+      catch (err) { console.error(err); $("#c-ta").outerHTML = simple; }
     const form = $("#c-form");
     $("#c-inv").onclick = () => {
       const k = keyOf(it.id, it.n), have = S.inv.find((y) => y.k === k);

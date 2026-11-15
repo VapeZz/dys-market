@@ -417,6 +417,19 @@ def build(groups, products, stock, log=print):
     for gid, data in set_files.items():
         write(f"set/{gid}.json", data)
 
+    # ---- DYS Edge: a price for every day of the last 120 days (its card chart's RSI, MACD and bands) ----
+    # Edge-only files next to the site's data. If this fails the site build carries on and Edge draws its
+    # chart from the set files.
+    try:
+        import edge_daily
+        names = {}
+        for k in tracked:
+            names.setdefault(label(products, k), []).append(k)
+        n_files, n_rows, n_bytes = edge_daily.write(config.OUT_DIR, edge_daily.build(set_files, names, days, latest_day, snapshots.view, latest))
+        log(f"edge daily: {n_rows} price rows for the last {edge_daily.DAYS} days in {n_files} files ({n_bytes / 1e6:.1f} MB)")
+    except Exception as err:  # noqa: BLE001  (never block the site build over Edge's chart data)
+        log(f"::warning title=Edge daily prices::not written ({type(err).__name__}: {err}); Edge's chart uses the set files instead")
+
     # ---- search index ---------------------------------------------------
     search = []
     for k, v in latest.items():
