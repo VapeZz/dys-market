@@ -101,7 +101,7 @@
 
   /* ---------- this device's state ---------- */
   const KEY = "dys-edge-v1";
-  const DEF = { inv: [], watch: [], trade: { give: [], get: [] }, lot: [], lotExtra: 0, recent: [], board: [], sub: [], glog: [],
+  const DEF = { inv: [], watch: [], trade: { give: [], get: [] }, lot: [], lotExtra: 0, recent: [], board: [], sub: [], glog: [], pop: {},
     set: { platform: "ebay", roi: 20, shipCard: 100, shipCard50: 500, shipSealed: 800, shipSealed100: 1500, buyCard: 150, buySealed: 600, cash: 70, trade: 85, game: "pokemon",
       gradeShip: 1500, gco: "PSA", gtier: {}, o10: 40, o9: 45, oddsV: 2, useMyRates: false, useMix: true, boxShip: 4000 } };
   const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -849,15 +849,27 @@
   /* PSA population: the real share of every copy PSA has graded that came back 10 / 9 (PSA grader only).
      Beats the sales mix when there are enough graded copies; small populations lean toward your setting. */
   const POP_MIN = 20;
+  /* Numbers the owner typed in from PSA's pop report (S.pop[id] = [day, total graded, 10s, 9s or null]) come before
+     the ones from PSA's API, so the real gem rate works for a card before PSA approves API access. */
+  const popTyped = (id) => { const m = (S.pop || {})[id]; return m && m[1] >= POP_MIN && m[2] != null && m[2] <= m[1] && (m[3] == null || m[2] + m[3] <= m[1]) ? m : null; };
+  const popIn = (id, k) => { const m = (S.pop || {})[id]; return m && m[k] != null ? m[k] : ""; };
+  function popNote(id) {
+    const m = (S.pop || {})[id];
+    if (!m) return `Type this card's numbers from PSA's pop report or GemRate and the odds use its real gem rate. Blank = the estimate.`;
+    if (m[1] != null && m[2] != null && (m[2] > m[1] || (m[3] != null && m[2] + m[3] > m[1]))) return `<span class="warn">10s and 9s can't add up to more than the total graded.</span>`;
+    if (m[1] == null || m[2] == null) return `Enter both the total graded and the number of PSA 10s.`;
+    if (m[1] < POP_MIN) return `Needs ${POP_MIN} or more graded copies to count; using the estimate until then.`;
+    return `Using your numbers: ${Math.round(m[2] / m[1] * 100)}% of ${m[1].toLocaleString()} graded copies are PSA 10s (entered ${fmtDay(m[0])}).`;
+  }
   function popOf(id) {
     if (grader().co !== "PSA") return null;
-    const c = POP?.c?.[id]; if (!c || c[1] < POP_MIN) return null;
+    const typed = popTyped(id), c = typed || POP?.c?.[id]; if (!c || c[1] < POP_MIN) return null;
     const [, n, n10, n9] = c, b = odds(), w = n / (n + 20), o10 = w * n10 / n + (1 - w) * b.o10;
-    return { o10, o9: Math.min(1 - o10, w * n9 / n + (1 - w) * b.o9), mine: false, src: "pop", n, s10: n10 / n, s9: n9 / n, at: c[0] };
+    return { o10, o9: Math.min(1 - o10, n9 == null ? b.o9 : w * n9 / n + (1 - w) * b.o9), mine: false, src: "pop", n, s10: n10 / n, s9: n9 == null ? null : n9 / n, at: c[0], typed: !!typed };
   }
   const cardOdds = (id) => (S.set.useMix !== false && id != null && (popOf(id) || mixOf(id))) || odds();
   const odTag = (od) => od.src === "pop" ? " (PSA pop)" : od.src === "mix" ? "" : " (your setting)";
-  const oddsText = (od) => `${Math.round(od.o10 * 100)}% ${grader().l10}s, ${Math.round(od.o9 * 100)}% ${grader().l9}s · ${od.src === "pop" ? `PSA population: ${Math.round(od.s10 * 100)}% of ${od.n.toLocaleString()} graded copies are 10s (as of ${fmtDay(od.at)})` : od.src === "mix" ? `from this card's ${od.n} graded sales` : od.src === "mine" ? "your graded results" : S.set.useMix === false ? "your setting (per-card odds are off under Your assumptions)" : "your setting (not enough sales for this card)"}`;
+  const oddsText = (od) => `${Math.round(od.o10 * 100)}% ${grader().l10}s, ${Math.round(od.o9 * 100)}% ${grader().l9}s · ${od.src === "pop" ? `PSA population${od.typed ? " you entered" : ""}: ${Math.round(od.s10 * 100)}% of ${od.n.toLocaleString()} graded copies are 10s (as of ${fmtDay(od.at)})` : od.src === "mix" ? `from this card's ${od.n} graded sales` : od.src === "mine" ? "your graded results" : S.set.useMix === false ? "your setting (per-card odds are off under Your assumptions)" : "your setting (not enough sales for this card)"}`;
   function grader() {
     const co = FEES.graders[S.set.gco] ? S.set.gco : "PSA", gr = FEES.graders[co];
     const ti = Math.min(gr.tiers.length - 1, Math.max(0, +(S.set.gtier[co] ?? 0) || 0));
@@ -1043,6 +1055,10 @@
             <div><span>If ${esc(l10)} / if ${esc(l9)}</span><span><span class="up">${signed(Math.round(e.ten))}</span> / <span class="${cls(e.nine)}">${signed(Math.round(e.nine))}</span></span></div>` : ""}
             <div><span>${esc(l10)} needs to sell for</span><span>${beText(e.be10, raw)}</span></div>
             <div><span>Odds used</span><span class="small">${esc(oddsText(e.od))}</span></div></div>
+          ${grader().co === "PSA" ? `<div class="gc-in gc-pop"><label class="f">PSA total graded<input class="field" type="number" inputmode="numeric" min="0" step="1" data-pop="${i}" data-pk="1" value="${popIn(x.id, 1)}"></label>
+            <label class="f">PSA 10s<input class="field" type="number" inputmode="numeric" min="0" step="1" data-pop="${i}" data-pk="2" value="${popIn(x.id, 2)}"></label>
+            <label class="f">PSA 9s (optional)<input class="field" type="number" inputmode="numeric" min="0" step="1" data-pop="${i}" data-pk="3" value="${popIn(x.id, 3)}"></label></div>
+          <p class="muted small" style="margin:0">${popNote(x.id)}</p>` : ""}
           ${e.up ? `<p class="muted small" style="margin:0">A ${esc(l10)} here is upcharged to ${esc(e.up[0])} (${money(e.up[1])}); counted.</p>` : ""}
           <div class="btns"><button type="button" class="btn sm" data-log="${i}">Log result</button><button type="button" class="btn sm ghost danger" data-rm="${i}">Remove</button></div></div>`).join("")
           : `<div class="empty"><b>Build your grading board</b>Add cards from <b style="display:inline;font-size:inherit">Find</b> or tap Grade it? on any card. Enter what a 10 and a 9 sell for (tap the sold links), and the board ranks them by expected profit after every fee.</div>`}`;
@@ -1054,6 +1070,12 @@
         const t = e.target, i10 = t.dataset.b10, i9 = t.dataset.b9;
         if (i10 != null) { S.board[+i10].p10 = cents(t.value) || null; save(); draw(); }
         if (i9 != null) { S.board[+i9].p9 = cents(t.value) || null; save(); draw(); }
+        if (t.dataset.pop != null) {      // PSA population typed in for this card
+          const id = S.board[+t.dataset.pop].id, m = (S.pop ||= {})[id] || [null, null, null, null], v = t.value.trim() === "" ? null : Math.round(+t.value);
+          m[+t.dataset.pk] = Number.isFinite(v) && v >= 0 ? v : null; m[0] = localDay();
+          if (m[1] == null && m[2] == null && m[3] == null) delete S.pop[id]; else S.pop[id] = m;
+          save(); draw();
+        }
       };
       el.onclick = (e) => {
         const rm = e.target.closest("[data-rm]"), lg = e.target.closest("[data-log]");
