@@ -7,9 +7,10 @@
 
    Backtest: assets/edge-backtest.json holds how each rule did on our own price history (tools/backtest/: every
    7th day since March 2024, this file's own code run on what Edge would have held that day, and the price 30
-   days later against the average card on the same days). The box shows the rule's result. A buy, sell or trim
-   rule that FAILED makes no call: the headline says so and the levels are still shown. Without the file the box
-   says "not backtested".
+   days later against the average card on the same days), across all games and inside each game. A card's
+   verdict is the worse of the all-games result and its own game's result, so a rule has to hold in the card's
+   game too. The box shows both. A buy, sell or trim rule that FAILED makes no call: the headline says so and
+   the levels are still shown. Without the file the box says "not backtested".
 
    Calls: Buy zone, Hold, Trim (sell part into strength), Sell (or stay out), Watch (no call yet).
 
@@ -272,8 +273,9 @@
     const [name, call, tier, act] = SETUPS[id];
     const out = { v: VERSION, id, name, call, label: CALLS[call], mode, tier, act, why: [], ladder: null, risk: null, deal: null, money: null, facts: f, bt: null, verdict: null, demoted: false };
     if (bt && bt.v === 1 && bt.rules) {
-      out.bt = { all: bt, rule: bt.rules[id] || null };
-      out.verdict = out.bt.rule ? out.bt.rule.verdict : null;
+      const v = verdictFor(bt, id, item.k);
+      out.bt = { all: bt, rule: bt.rules[id] || null, game: v.game, gameName: item.game || item.k || "", k: item.k || null, byGame: v.byGame };
+      out.verdict = v.verdict;
       out.demoted = out.verdict === "fail" && call !== "hold" && call !== "watch";     // a buy, sell or trim rule that failed its backtest makes no call
     }
     if (!f) { out.why = WHY.stale(); return out; }
@@ -296,6 +298,15 @@
   }
 
   /* ---------- the backtest result of the card's rule ---------- */
+  /* The verdict for a rule on a card of game k: the all-games verdict, or its own game's when that is worse
+     (the game's result counts only where the rule has enough cases there: its verdict is then not null). */
+  const RANK = { fail: 0, unproven: 1, pass: 2 };
+  function verdictFor(bt, id, k) {
+    const rule = bt.rules[id] || null, G = k && bt.games ? bt.games[k] : null, game = G && G.rules ? G.rules[id] || null : null;
+    if (!rule) return { verdict: null, game: null, byGame: false };
+    const worse = game && game.verdict && RANK[game.verdict] != null && RANK[rule.verdict] != null && RANK[game.verdict] < RANK[rule.verdict];
+    return { verdict: worse ? game.verdict : rule.verdict, game, byGame: !!worse };
+  }
   /* verdict: [word, the label next to "v1 rules", what it means]; `side` is "better" or "worse" than the average card, as the rule expects */
   const VERDICT = {
     pass: ["Passed", "backtest passed", (side) => `After this setup prices did ${side} than the average card, as the rule expects.`],
@@ -306,26 +317,32 @@
   const n0 = (x) => Math.round(x).toLocaleString("en-US");
   const pts = (x) => `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x).toFixed(1)}%`;
   const mon = (d) => `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][+d.slice(5, 7) - 1]} ${d.slice(0, 4)}`;
-  function btLines(r, all) {
-    const out = [`${all.horizon} days later the price was up in ${r.up.toFixed(0)}% of ${n0(r.n)} cases, flat in ${r.flat.toFixed(0)}%, down in ${r.down.toFixed(0)}%`,
-      `Average move ${pts(r.avg)}; the average card on the same days ${pts(r.baseAvg)}`];
-    if (r.claim && r.okMonths != null) out.push(`Went the way the rule expects in ${Math.round(r.okMonths / 100 * r.monthsCounted)} of ${r.monthsCounted} months`);
+  const months = (x) => x.claim && x.okMonths != null ? `; the rule's way in ${Math.round(x.okMonths / 100 * x.monthsCounted)} of ${x.monthsCounted} months` : "";
+  function btLines(r, all, g, gameName) {
+    const out = [`All games, ${all.horizon} days later: price up in ${r.up.toFixed(0)}% of ${n0(r.n)} cases, flat in ${r.flat.toFixed(0)}%, down in ${r.down.toFixed(0)}%`,
+      `All games: average move ${pts(r.avg)} against ${pts(r.baseAvg)} for the average card on the same days${months(r)}`];
+    if (g && gameName) out.push(`${gameName} only (${n0(g.n)} cases): average move ${pts(g.avg)} against ${pts(g.baseAvg)} for the average ${gameName} card${months(g)}`);
     if (r.net) out.push(`Items of ${money(all.netMin).replace(".00", "")} and up, bought at market and sold on eBay ${all.horizon} days later: a profit after fees in ${r.net.win.toFixed(0)}% of cases${all.base && all.base.net ? ` (all items: ${all.base.net.win.toFixed(0)}%)` : ""}`);
     if (r.path) out.push(`In the next ${all.path} days the first sell level came before the cut level in ${r.path.sell.toFixed(0)}% of cases, the cut first in ${r.path.cut.toFixed(0)}%`);
     return out;
   }
   function btHtml(p) {
     if (!p.bt) return "";
-    const { all, rule: r } = p.bt;
+    const { all, rule: r, game: g, gameName, k } = p.bt;
     const span = `every ${all.step}th day, ${mon(all.from)} to ${mon(all.to)}`;
     if (!r) return `<span class="lab">Backtest</span><p class="sg-money">This rule had no cases in the backtest (${span}).</p>`;
-    const v = VERDICT[r.verdict] || VERDICT.none;
+    const vd = p.verdict, v = VERDICT[vd] || VERDICT.none, side = r.claim > 0 ? "better" : "worse";
+    // the sentence: the all-games verdict, or how the card's own game pulled it down
+    const allWord = r.verdict === "pass" ? "passed" : "is not proven";
+    const text = !p.bt.byGame ? v[2](side)
+      : vd === "fail" ? `Across all games this rule ${allWord}, but in ${gameName} prices did ${side === "better" ? "worse" : "better"} than the average ${gameName} card after it, the opposite of what the rule expects.`
+      : `Across all games this rule passed. In ${gameName} it did not clear the same bar: the edge there is too small or too uneven, or prices still ${side === "worse" ? "rose" : "fell"} on average.`;
     const order = [...FAST, ...SLOW].filter((id) => all.rules[id]);
-    const row = (id) => { const x = all.rules[id], vv = VERDICT[x.verdict] || VERDICT.none;
-      return `<li class="${id === p.id ? "sg-me" : ""}"><span><b>${esc(CALLS[SETUPS[id][1]])} · ${esc(SETUPS[id][0])}</b><small>${pts(x.avg)} after ${all.horizon} days, average card ${pts(x.baseAvg)} · ${n0(x.n)} cases</small></span><em class="sg-v-${x.verdict}">${vv[0]}</em></li>`; };
-    return `<span class="lab">Backtest · ${v[0]}</span>
-      <p class="sg-bt sg-v-${r.verdict}"><b>${v[0]}.</b> ${esc(v[2](r.claim > 0 ? "better" : "worse"))}</p>
-      <ul class="sg-list sg-btl">${btLines(r, all).map((w) => `<li>${esc(w)}</li>`).join("")}</ul>
+    const row = (id) => { const x = all.rules[id], f = verdictFor(all, id, k), vv = VERDICT[f.verdict] || VERDICT.none, gx = f.game && f.game.verdict ? f.game : null;
+      return `<li class="${id === p.id ? "sg-me" : ""}"><span><b>${esc(CALLS[SETUPS[id][1]])} · ${esc(SETUPS[id][0])}</b><small>All games ${pts(x.avg)} against ${pts(x.baseAvg)}${gx ? ` · ${esc(gameName)} ${pts(gx.avg)} against ${pts(gx.baseAvg)}` : ""}</small></span><em class="sg-v-${f.verdict}">${vv[0]}</em></li>`; };
+    return `<span class="lab">Backtest · ${v[0]}${p.bt.byGame ? ` in ${esc(gameName)}` : ""}</span>
+      <p class="sg-bt sg-v-${vd}"><b>${v[0]}${p.bt.byGame ? ` in ${esc(gameName)}` : ""}.</b> ${esc(text)}</p>
+      <ul class="sg-list sg-btl">${btLines(r, all, g, gameName).map((w) => `<li>${esc(w)}</li>`).join("")}</ul>
       <button type="button" class="btn sm sg-more" aria-expanded="false">How every rule did</button>
       <ul class="sg-list sg-all" hidden>${order.map(row).join("")}</ul>`;
   }
@@ -344,7 +361,7 @@
       : `−${r.down.toFixed(1)}%`;
     const rung = (r) => `<div class="sg-rung sg-${r.k.replace(/\d$/, "")}" data-k="${r.k}"><span class="sg-tag"><b>${r.tag}</b>${r.what ? `<small>${esc(r.what)}</small>` : ""}</span><span class="sg-px"><b>${money(r.price)}</b><small class="${r.k.startsWith("sell") && r.profit != null ? (r.profit > 0 ? "up" : "down") : ""}">${note(r)}</small></span></div>`;
     const vd = p.verdict && VERDICT[p.verdict] ? p.verdict : null;
-    const act = p.demoted ? `The rule behind this card (${p.name}: ${p.label}) failed its backtest, so Edge makes no call here. The levels below still describe the chart.` : p.act;
+    const act = p.demoted ? `The rule behind this card (${p.name}: ${p.label}) failed its backtest${p.bt.byGame ? ` in ${p.bt.gameName}` : ""}, so Edge makes no call here. The levels below still describe the chart.` : p.act;
     return `<div class="sg-head"><span class="lab">Strategy</span><span class="sg-beta${vd ? ` sg-v-${vd}` : ""}">v1 rules · ${vd ? VERDICT[vd][1] : "not backtested"}</span></div>
       ${p.demoted ? `<div class="sg-call sg-watch"><b>No call</b><span>${esc(p.name)} failed its backtest</span></div>`
         : `<div class="sg-call sg-${p.call}"><b>${esc(p.label)}</b><span>${esc(p.name)}</span></div>`}
@@ -355,7 +372,7 @@
       ${p.why.length ? `<span class="lab">Why</span><ul class="sg-list sg-why">${p.why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}
       ${p.ladder ? `<span class="lab">Price ladder</span><div class="sg-ladder">${p.ladder.rungs.map(rung).join("")}</div>${p.money ? `<p class="sg-money">${esc(p.money)}</p>` : ""}` : ""}
       ${p.risk ? `<span class="lab">Risk · ${p.risk.level} · ${p.risk.score} of 100</span>${p.risk.parts.length ? `<ul class="sg-list sg-rk">${p.risk.parts.map((x) => `<li>${esc(x.text)} <i>+${x.pts}</i></li>`).join("")}</ul>` : `<p class="sg-money">Nothing on the list applies.</p>`}` : ""}
-      <p class="sg-foot">${p.bt ? `Fixed rules on TCGplayer market prices. Backtest: every ${p.bt.all.step}th day from ${mon(p.bt.all.from)} to ${mon(p.bt.all.to)}, the price ${p.bt.all.horizon} days later against the average card on the same days. Past results don't promise future ones.` : "Fixed rules on TCGplayer market prices, not backtested yet."} Market data, not financial advice. Check live listings and sold prices before you act.</p>`;
+      <p class="sg-foot">${p.bt ? `Fixed rules on TCGplayer market prices. Backtest: every ${p.bt.all.step}th day from ${mon(p.bt.all.from)} to ${mon(p.bt.all.to)}, the price ${p.bt.all.horizon} days later against the average card on the same days, across all games and inside each game. Past results don't promise future ones.` : "Fixed rules on TCGplayer market prices, not backtested yet."} Market data, not financial advice. Check live listings and sold prices before you act.</p>`;
   }
   function mount(root, p) {
     root.classList.add("sg");
@@ -366,7 +383,7 @@
     return p;
   }
 
-  const api = { v: VERSION, plan, mount, html, facts, pick, ladder, risk, breakeven, SETUPS, FAST, SLOW, CALLS, TIERS, VERDICT,
+  const api = { v: VERSION, plan, mount, html, facts, pick, ladder, risk, breakeven, verdictFor, SETUPS, FAST, SLOW, CALLS, TIERS, VERDICT,
     K: { MIN_PRICE, MIN_HISTORY, FAST_DAYS, THIN_MOVES, TREND_BAND, RSI_HOT, RSI_COLD, RSI_DIP, RSI_PUSH, BAND_DIP, BAND_TOP, STRETCH, KNIFE, NEAR_HIGH, DEEP_OFF, NEAR_LOW, BASE_LOW, CROSS_DAYS, SLOW_JUMP, BREAKOUT_HISTORY, LEVEL_GAP, LEVEL_MERGE, BUY_REACH, CUT_UNDER, RISK_MED, RISK_HIGH, NEW_SET_DAYS } };
   if (typeof window !== "undefined") window.EdgeStrat = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;

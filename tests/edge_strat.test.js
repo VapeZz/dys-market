@@ -169,7 +169,7 @@ test("a buy rule that failed its backtest makes no call; the levels stay", () =>
   assert.ok(/<b>No call<\/b>/.test(h) && /Dip in an uptrend failed its backtest/.test(h) && !/class="sg-call sg-buy"/.test(h));
   assert.ok(/v1 rules · failed backtest/.test(h) && /Backtest · Failed/.test(h) && /did worse than the average card, the opposite/.test(h));
   assert.ok(/Price ladder/.test(h) && /Risk ·/.test(h) && !/Execution:/.test(h));
-  assert.ok(/up in 41% of 12,345 cases, flat in 20%, down in 39%/.test(h) && /Went the way the rule expects in 13 of 21 months/.test(h));
+  assert.ok(/up in 41% of 12,345 cases, flat in 20%, down in 39%/.test(h) && /the rule&#39;s way in 13 of 21 months/.test(h));
   assert.ok(/Items of \$20 and up.*profit after fees in 4% of cases \(all items: 5%\)/.test(h) && /first sell level came before the cut level in 31%/.test(h));
 });
 test("passed and unproven rules keep their call; a failed hold or watch rule is not demoted", () => {
@@ -181,7 +181,27 @@ test("passed and unproven rules keep their call; a failed hold or watch rule is 
   const flat = ST.plan(card(new Array(120).fill(2500)), {}, ctx, fakeBt({ "s-none": ["fail", 0] }));
   assert.deepStrictEqual([flat.call, flat.demoted], ["hold", false]);
   const none = ST.plan(card(new Array(120).fill(2500)), {}, ctx, fakeBt({ "s-none": ["none", 0] })), hn = ST.html(none);
-  assert.ok(/v1 rules · backtested/.test(hn) && /Backtest · No claim/.test(hn) && !/Went the way/.test(hn));
+  assert.ok(/v1 rules · backtested/.test(hn) && /Backtest · No claim/.test(hn) && !/the rule&#39;s way/.test(hn));
+});
+test("a card's verdict is the worse of all games and its own game; the game can only take a claim away", () => {
+  const withGame = (all, inGame) => { const bt = fakeBt({ dip: [all, 1] }); bt.games = { pokemon: { cases: 9999, rules: { dip: { ...rule(inGame, 1), n: 4321, avg: -0.4, baseAvg: 4.9 } } } }; return bt; };
+  const item = { k: "pokemon", game: "Pokémon" };
+  const down = ST.plan(dipCard(), item, ctx, withGame("pass", "fail")), hd = ST.html(down);
+  assert.deepStrictEqual([down.verdict, down.demoted, down.bt.byGame], ["fail", true, true]);
+  assert.ok(/Backtest · Failed in Pokémon/.test(hd) && /Across all games this rule passed, but in Pokémon prices did worse than the average Pokémon card/.test(hd));
+  assert.ok(/failed its backtest in Pokémon, so Edge makes no call/.test(hd) && /Pokémon only \(4,321 cases\): average move −0.4% against \+4.9% for the average Pokémon card/.test(hd));
+  const soft = ST.plan(dipCard(), item, ctx, withGame("pass", "unproven")), hs = ST.html(soft);
+  assert.deepStrictEqual([soft.verdict, soft.demoted, soft.bt.byGame], ["unproven", false, true]);
+  assert.ok(/Not proven in Pokémon/.test(hs) && /did not clear the same bar/.test(hs) && /class="sg-call sg-buy"/.test(hs));
+  const noUp = ST.plan(dipCard(), item, ctx, withGame("unproven", "pass"));
+  assert.deepStrictEqual([noUp.verdict, noUp.bt.byGame], ["unproven", false]);                 // a good result in one game adds nothing
+  const same = ST.plan(dipCard(), item, ctx, withGame("pass", "pass"));
+  assert.deepStrictEqual([same.verdict, same.bt.byGame], ["pass", false]);
+  const few = ST.plan(dipCard(), item, ctx, withGame("pass", null));                            // too few cases in the game: the all-games verdict stands
+  assert.deepStrictEqual([few.verdict, few.bt.byGame], ["pass", false]);
+  const other = ST.plan(dipCard(), { k: "lorcana", game: "Lorcana" }, ctx, withGame("pass", "fail"));
+  assert.deepStrictEqual([other.verdict, other.bt.game], ["pass", null]);
+  assert.deepStrictEqual(ST.verdictFor(withGame("fail", "pass"), "dip", "pokemon").verdict, "fail");
 });
 test("a rule missing from the backtest file, and a file from another version", () => {
   const p = ST.plan(dipCard(), {}, ctx, fakeBt({ "s-none": ["none", 0] })), h = ST.html(p);
@@ -202,6 +222,14 @@ test("the shipped backtest file fits the rules in this file", () => {
     if (!(bt.claims[id])) assert.strictEqual(r.verdict, "none", id);
   }
   for (const id of [...ST.FAST, ...ST.SLOW]) assert.ok(bt.rules[id], `${id} has a result`);
+  assert.ok(bt.games && bt.games.pokemon && bt.games["pokemon-jp"] && bt.games.yugioh);
+  for (const [k, G] of Object.entries(bt.games)) for (const [id, r] of Object.entries(G.rules)) {
+    assert.ok(ST.SETUPS[id] && (r.verdict === null || ST.VERDICT[r.verdict]), `${k} ${id}`);
+    assert.ok(r.verdict === null || (r.n >= bt.rule.minN && r.months >= bt.rule.minMonths), `${k} ${id}: a game verdict needs enough cases`);
+    const f = ST.verdictFor(bt, id, k).verdict, order = { fail: 0, unproven: 1, pass: 2 };
+    if (order[f] != null) assert.ok(order[f] <= order[bt.rules[id].verdict], `${k} ${id}: never better than all games`);
+  }
+  for (const k of Object.keys(bt.games)) { const hk = ST.html(ST.plan(dipCard(), { pub: day(0), k, game: k }, ctx, bt)); assert.ok(!/undefined|NaN|null|Infinity/.test(hk), `${k}: ${hk.match(/.{30}(undefined|NaN|null|Infinity).{30}/)?.[0]}`); }
   const h = ST.html(ST.plan(dipCard(), { pub: day(0) }, ctx, bt));
   assert.ok(!/undefined|NaN|null|Infinity/.test(h), h.match(/.{30}(undefined|NaN|null|Infinity).{30}/)?.[0]);
   assert.ok(/How every rule did/.test(h));

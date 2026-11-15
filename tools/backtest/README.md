@@ -11,7 +11,9 @@ on it (`edge-ta.js` analyse, `edge-strat.js` facts, pick, ladder, risk) and reco
 90 days later and whether the first sell level or the cut level came first.
 
 A rule is scored on the 30-day move against the average of all items on the same days. The pass rule is written
-at the top of `stats.py` and was fixed before any result was looked at.
+at the top of `stats.py` and was fixed before any result was looked at. The same test is then run inside each game
+(against that game's own average), and a card's verdict in Edge is the worse of the two: the games move
+differently, so a rule has to hold in the card's own game too.
 
 ## Run it (about 45 minutes on 2 cores; needs about 3 GB of disk in `bt-work/`, which is not in git)
 

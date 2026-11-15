@@ -587,7 +587,7 @@
     const box = $("#c-strat");
     if (box) try {
       if (!read) throw new Error("no chart reading");
-      strat.mount(box, strat.plan(read, { pub: set.pub }, { net: (x) => net(x, it.t), shipIn: shipIn(it.t), roi: S.set.roi, maxBuy: (x) => maxBuy(x, it.t), lo }, backtest));
+      strat.mount(box, strat.plan(read, { pub: set.pub, k: set.k, game: gameLabel(set.k) }, { net: (x) => net(x, it.t), shipIn: shipIn(it.t), roi: S.set.roi, maxBuy: (x) => maxBuy(x, it.t), lo }, backtest));
       box.hidden = false;
     } catch (err) { console.error(err); box.remove(); }
     const form = $("#c-form");

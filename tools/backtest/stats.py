@@ -12,6 +12,12 @@ The pass rule was fixed here before any result was looked at:
 The verdict uses decision days with a full year of prices behind them (the table starts 2024-02-08, so from
 2025-02-07 on): that is what Edge holds for a card today. The earlier days (shorter history, so a "52-week" high
 or low that is really "since February 2024") are reported beside it and do not decide anything.
+
+By game: the same test is run inside each game (the rule's cases in that game against that game's all-items average on
+the same days), where the rule has MIN_N cases over MIN_MONTHS months there. A card's verdict in Edge is the WORSE of the
+all-games verdict and its own game's, so slicing by game can only take a claim away, never add one. (Added after the
+all-games results were read, because the games move differently: English Pokemon rose about 5% a month over the period,
+Lorcana fell. The thresholds are the same ones.)
 usage: python3 tools/backtest/stats.py <signals dir> <out json>"""
 import os as _os
 ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
@@ -94,6 +100,18 @@ def net20(m):
     roi = (net(v * (1 + r30[m]), t) - cost) / cost
     return {"n": int(m.sum()), "avg": float(np.clip(roi, -1, 3).mean() * 100), "win": float((roi > 0).mean() * 100), "up20": float((r30[m] >= 0.2).mean() * 100), "down20": float((r30[m] <= -0.2).mean() * 100)}
 
+def verdict_of(claim, n, n_months, avg, edge, ok_months, halves):
+    if not claim:
+        return "none"
+    signed = edge * claim
+    halves_ok = all(x is not None and x * claim > 0 for x in halves[:2]) and min(halves[2:]) >= HALF_N
+    if signed <= 0 or (ok_months is not None and ok_months < BAD_MONTHS * 100):
+        return "fail"
+    if (n >= MIN_N and n_months >= MIN_MONTHS and signed >= EDGE and avg * claim > 0
+            and ok_months is not None and ok_months >= OK_MONTHS * 100 and halves_ok):
+        return "pass"
+    return "unproven"
+
 rules = {}
 r30, rc30, ok30, gone30, have30, b_avg30, b_up30, b_dn30 = stats_for(PRIMARY)
 first_m, last_m = int(month[ok30 & FULL].min()), int(month[ok30 & FULL].max())
@@ -130,21 +148,45 @@ for code, sid in enumerate(setups):
         tt = col["touch"][tm]
         st["path"] = {"n": int(tm.sum()), "sell": float((tt == 1).mean() * 100), "cut": float((tt == 2).mean() * 100), "none": float((tt == 0).mean() * 100),
                       "sellAt": float(np.median(col["sell1"][tm])), "cutAt": float(np.median(col["cut"][tm]))}
-    # the verdict
-    if not claim:
-        verdict = "none"
-    else:
-        signed = st["edge"] * claim
-        halves_ok = all(x is not None and x * claim > 0 for x in st["halves"][:2]) and min(st["halves"][2:]) >= HALF_N
-        if signed <= 0 or (st["okMonths"] is not None and st["okMonths"] < BAD_MONTHS * 100):
-            verdict = "fail"
-        elif (st["n"] >= MIN_N and st["months"] >= MIN_MONTHS and signed >= EDGE and st["avg"] * claim > 0
-              and st["okMonths"] is not None and st["okMonths"] >= OK_MONTHS * 100 and halves_ok):
-            verdict = "pass"
-        else:
-            verdict = "unproven"
+    verdict = verdict_of(claim, st["n"], st["months"], st["avg"], st["edge"], st["okMonths"], st["halves"])
     st["verdict"] = verdict
     rules[sid] = st
+
+# ---- the same test inside each game ----
+game_of = {k: (meta.get(k.split(":", 1)[0]) or ["", "", "", ""])[3] for k in keys}
+gnames = sorted({g for g in game_of.values() if g})
+kgame = np.array([gnames.index(game_of[k]) if game_of[k] else -1 for k in keys], dtype=np.int16)
+g_row = kgame[col["key"]]
+nd = len(days)
+d_all = col["day"].astype(np.int64)
+games = {}
+for gi, gname in enumerate(gnames):
+    gm = (g_row == gi) & ok30 & FULL
+    if gm.sum() < MIN_N:
+        continue
+    cnt = np.bincount(d_all[gm], minlength=nd).astype(np.float64)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        gb = np.bincount(d_all[gm], weights=rc30[gm], minlength=nd) / cnt             # this game's all-items average, per day
+    grules = {}
+    for code, sid in enumerate(setups):
+        m = gm & (col["setup"] == code)
+        n = int(m.sum())
+        if n == 0:
+            continue
+        dd = d_all[m]; ex = rc30[m] - gb[dd]; mm = month[m]
+        months = [(float(ex[mm == k].mean() * 100), int((mm == k).sum())) for k in np.unique(mm)]
+        big = [e for e, c in months if c >= MONTH_N]
+        claim = CLAIM.get(sid, 0)
+        avg, base_avg = float(rc30[m].mean() * 100), float(gb[dd].mean() * 100)
+        ok_m = (sum(1 for e in big if e * claim > 0) / len(big) * 100) if (big and claim) else None
+        h1, h2 = ex[mm < mid_m], ex[mm >= mid_m]
+        halves = [float(h1.mean() * 100) if len(h1) else None, float(h2.mean() * 100) if len(h2) else None, int(len(h1)), int(len(h2))]
+        enough = n >= MIN_N and len(months) >= MIN_MONTHS                              # under that, the game says nothing about this rule
+        grules[sid] = {"n": n, "months": len(months), "monthsCounted": len(big), "avg": avg, "baseAvg": base_avg, "edge": avg - base_avg,
+                       "up": float((r30[m] > 0).mean() * 100), "flat": float((r30[m] == 0).mean() * 100), "down": float((r30[m] < 0).mean() * 100),
+                       "okMonths": ok_m, "halves": halves, "claim": claim,
+                       "verdict": verdict_of(claim, n, len(months), avg, avg - base_avg, ok_m, halves) if enough else None}
+    games[gname] = {"cases": int(gm.sum()), "avg": float(rc30[gm].mean() * 100), "up": float((r30[gm] > 0).mean() * 100), "down": float((r30[gm] < 0).mean() * 100), "rules": grules}
 
 dec = info["decide"]
 okf = ok30 & FULL
@@ -157,7 +199,7 @@ result = {"v": 1, "made": date.today().isoformat(), "from": used[0], "to": used[
           "cases": int(okf.sum()), "items": int(len(np.unique(col["key"][okf]))), "base": base, "early": {"from": early_days[0], "to": early_days[-1], "days": len(early_days), "cases": int((ok30 & ~FULL).sum())} if early_days else None,
           "netMin": NET_MIN, "claims": CLAIM,
           "rule": {"minN": MIN_N, "minMonths": MIN_MONTHS, "edge": EDGE, "okMonths": OK_MONTHS * 100, "badMonths": BAD_MONTHS * 100},
-          "rules": rules}
+          "rules": rules, "games": games}
 def rnd(o):
     if isinstance(o, float): return None if math.isnan(o) else round(o, 2)
     if isinstance(o, dict): return {k: rnd(v) for k, v in o.items()}
@@ -173,3 +215,13 @@ for sid, s in sorted(rules.items(), key=lambda kv: (-abs(kv[1]['claim']), -kv[1]
     print(f"{sid:<10} {s['claim']:>5} {s['n']:>8} {s['months']:>4} {s['avg']:>+7.2f} {s['baseAvg']:>+7.2f} {s['edge']:>+7.2f} {s['up']:>5.1f} {s['flat']:>5.1f} {s['down']:>5.1f} "
           f"{(str(round(s['okMonths'])) if s['okMonths'] is not None else '-'):>6} {s['halves'][0] if s['halves'][0] is None else round(s['halves'][0], 1):>6} {s['halves'][1] if s['halves'][1] is None else round(s['halves'][1], 1):>6} "
           f"{(s['net'] or {}).get('avg', float('nan')):>+6.1f} {(s['net'] or {}).get('win', float('nan')):>5.1f} {p.get('sell', float('nan')):>6.1f} {p.get('cut', float('nan')):>5.1f} {(round(s['early']['edge'], 1) if s['early'] else '-'):>6}  {s['verdict']}")
+
+RANK = {"fail": 0, "unproven": 1, "pass": 2}
+print("\nby game: the same test inside each game; a card's verdict is the worse of all games and its own game")
+for gname, G in games.items():
+    print(f"{gname}: {G['cases']} cases, average 30-day move {G['avg']:+.1f}%")
+    for sid in CLAIM:
+        x = G["rules"].get(sid)
+        if not x: continue
+        allv = rules[sid]["verdict"]; final = allv if x["verdict"] is None else min(allv, x["verdict"], key=lambda v: RANK[v])
+        print(f"   {sid:<10} n {x['n']:>7} avg {x['avg']:>+6.1f} game {x['baseAvg']:>+6.1f} edge {x['edge']:>+6.1f} months {('-' if x['okMonths'] is None else round(x['okMonths'])):>4}  in game: {str(x['verdict']):<9} all games: {allv:<9} -> {final}")

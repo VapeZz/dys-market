@@ -47,4 +47,49 @@ setups.forEach((id, c) => {
   }
   checked++; if (verdict !== want.verdict) { diffs++; console.log("DIFF", id, "verdict", verdict, want.verdict); }
 });
-console.log(`second scoring: ${checked} numbers and verdicts compared, differences ${diffs}`);
+// the same inside each game
+const keys = JSON.parse(fs.readFileSync(BT + "/keys.json", "utf8")), meta = JSON.parse(fs.readFileSync(BT + "/meta.json", "utf8")), key = load("key");
+const gameOfKey = keys.map((k) => (meta[k.slice(0, k.indexOf(":"))] || [])[3] || "");
+const G = new Map();      // game -> { bs, bn, rules: [acc] }
+const slot = (g) => { let x = G.get(g); if (!x) { x = { bs: new Float64Array(nD), bn: new Float64Array(nD), n: 0, acc: setups.map(() => ({ n: 0, sum: 0, base: 0, m: new Map(), h: [0, 0, 0, 0] })) }; G.set(g, x); } return x; };
+for (let s = 0; s < day.length; s++) for (let i = 0; i < day[s].length; i++) {
+  const d = day[s][i], r = r30[s][i], g = gameOfKey[key[s][i]];
+  if (!g || d < 365 || Number.isNaN(r) || r <= -1.5) continue;
+  const x = slot(g); x.bs[d] += clip(r); x.bn[d]++; x.n++;
+}
+for (let s = 0; s < day.length; s++) for (let i = 0; i < day[s].length; i++) {
+  const d = day[s][i], r = r30[s][i], g = gameOfKey[key[s][i]];
+  if (!g || d < 365 || Number.isNaN(r) || r <= -1.5) continue;
+  const x = G.get(g), a = x.acc[setup[s][i]], b = x.bs[d] / x.bn[d], ex = clip(r) - b, mo = monthOf[d];
+  a.n++; a.sum += clip(r); a.base += b;
+  const mm = a.m.get(mo) || [0, 0]; mm[0] += ex; mm[1]++; a.m.set(mo, mm);
+  const k = mo < mid ? 0 : 1; a.h[k] += ex; a.h[k + 2]++;
+}
+let games = 0;
+for (const [g, x] of G) {
+  if (x.n < R.minN) { if (res.games[g]) { diffs++; console.log("DIFF", g, "should not be scored"); } continue; }
+  games++;
+  const want = res.games[g];
+  if (!want) { diffs++; console.log("DIFF", g, "missing in the file"); continue; }
+  near(x.n, want.cases, g + " cases");
+  setups.forEach((id, c) => {
+    const a = x.acc[c], w = want.rules[id];
+    if (!a.n) { if (w) { diffs++; console.log("DIFF", g, id, "missing here"); } return; }
+    const avg = a.sum / a.n * 100, base = a.base / a.n * 100, edge = avg - base, claim = CLAIM[id] || 0;
+    near(a.n, w.n, `${g} ${id} n`); near(avg, w.avg, `${g} ${id} avg`); near(base, w.baseAvg, `${g} ${id} base`); near(edge, w.edge, `${g} ${id} edge`);
+    const big = [...a.m.values()].filter((y) => y[1] >= 30), okM = claim && big.length ? big.filter((y) => y[0] / y[1] * claim > 0).length / big.length * 100 : null;
+    if (okM != null) near(okM, w.okMonths, `${g} ${id} months`);
+    let verdict = null;
+    if (a.n >= R.minN && a.m.size >= R.minMonths) {
+      verdict = "none";
+      if (claim) {
+        const halves = a.h[2] >= 100 && a.h[3] >= 100 && a.h[0] / a.h[2] * claim > 0 && a.h[1] / a.h[3] * claim > 0;
+        if (edge * claim <= 0 || (okM != null && okM < R.badMonths)) verdict = "fail";
+        else if (edge * claim >= R.edge && avg * claim > 0 && okM != null && okM >= R.okMonths && halves) verdict = "pass";
+        else verdict = "unproven";
+      }
+    }
+    checked++; if (verdict !== w.verdict) { diffs++; console.log("DIFF", g, id, "verdict", verdict, w.verdict); }
+  });
+}
+console.log(`second scoring: ${checked} numbers and verdicts compared (all games and ${games} games on their own), differences ${diffs}`);
