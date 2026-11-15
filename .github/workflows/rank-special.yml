@@ -1,0 +1,38 @@
+name: Special set ranking preview (test branch only)
+# One-off "Top 10 30th Celebration Classic Collection" ranking with real photos, rendered into the
+# rank-special-preview branch. Publishes nothing: no site, no feed, no rotation history is touched.
+#   a/ = the builder as it is on main (landscape cards such as LEGEND halves are left out)
+#   b/ = the same ranking with landscape cards kept, so no card is skipped
+on:
+  push:
+    branches: [rank-special]
+permissions:
+  contents: write
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: |
+          set -e
+          pip install -q playwright==1.56.0 imageio-ffmpeg numpy pillow > /tmp/pip.log 2>&1 || { echo "::error title=pip::$(tail -c 800 /tmp/pip.log | tr '\n' ' ')"; exit 1; }
+          python -m playwright install --with-deps chromium > /tmp/pw.log 2>&1 || { echo "::error title=playwright::$(tail -c 800 /tmp/pw.log | tr '\n' ' ')"; exit 1; }
+          R="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git clone -q --depth 1 --branch gh-pages "$R" /tmp/pages
+          SET=24837; N=10; DAY=2026-11-15
+          set +e
+          python tools/set_rank.py /tmp/pages/data /tmp/out/a/social-rank --set "$SET" --n "$N" --date "$DAY" > /tmp/a.log 2>&1; rca=$?
+          PYTHONPATH=tools python -c "import re, sys, daily_card as dc, set_rank; dc.SIDEWAYS = re.compile(r'jumbo|oversize', re.I); set_rank.main(sys.argv[1:])" \
+            /tmp/pages/data /tmp/out/b/social-rank --set "$SET" --n "$N" --date "$DAY" > /tmp/b.log 2>&1; rcb=$?
+          set -e
+          cat /tmp/a.log /tmp/b.log
+          if [ $rca -ne 0 ] || [ ! -f /tmp/out/a/social-rank/latest.json ]; then echo "::error title=Special ranking a::$(tail -c 1500 /tmp/a.log | tr '\n' ' ')"; exit 1; fi
+          if [ $rcb -ne 0 ] || [ ! -f /tmp/out/b/social-rank/latest.json ]; then echo "::warning title=Special ranking b::$(tail -c 1500 /tmp/b.log | tr '\n' ' ')"; fi
+          cd /tmp/out && git init -q -b rank-special-preview && git config user.name "dys-market-bot" && git config user.email "dys-market-bot@users.noreply.github.com"
+          git add -A && git commit -q -m "Special set ranking preview" && git push -q -f "$R" rank-special-preview
+          echo "::notice title=Special ranking a::$(tail -n 1 /tmp/a.log)"
+          echo "::notice title=Special ranking b::$(tail -n 1 /tmp/b.log)"
