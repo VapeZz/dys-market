@@ -104,27 +104,46 @@ def variant_of(name):
 
 
 def days_ago(ts):
+    """Whole days since a sale; sale dates come as a bare day ("2026-11-10") or a full timestamp."""
     try:
-        return (NOW - datetime.fromisoformat(ts.replace("Z", "+00:00"))).days
+        d = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=timezone.utc)
+        return max(0, (NOW - d).days)
     except Exception:
         return None
 
 
-def comps(card_id, **f):
-    """Newest eBay sold comps for a card (one page). (status, rows, more)"""
-    st, body, _ = call(f"/v1/cards/{card_id}/listings/ebay", limit=50, sort="date_desc", **f)
-    if st != 200:
-        return st, [], False
-    return st, body.get("data") or [], bool((body.get("pagination") or {}).get("has_more"))
+def comps(card_id, pages=4, **f):
+    """Newest eBay sold comps for a card, newest first, until they are older than 90 days or `pages` pages are read.
+    (status, rows, more): more = there are further sales inside the 90 days that were not read."""
+    rows, cursor, more = [], None, False
+    for _ in range(pages):
+        st, body, _ = call(f"/v1/cards/{card_id}/listings/ebay", limit=50, sort="date_desc", cursor=cursor, **f)
+        if st != 200:
+            return (st, rows, False) if not rows else (200, rows, True)
+        page = body.get("data") or []
+        rows += page
+        pg = body.get("pagination") or {}
+        cursor, more = pg.get("next_cursor"), bool(pg.get("has_more"))
+        ages = [a for a in (days_ago(r.get("sold_at")) for r in page) if a is not None]
+        if not more or not cursor or (ages and max(ages) > 90):
+            more = False if (ages and max(ages) > 90) else more
+            break
+    return 200, rows, more
 
 
 def digest(rows, more):
-    ages = [a for a in (days_ago(r.get("sold_at") or "") for r in rows) if a is not None]
-    usd = [r["price"] for r in rows if r.get("currency") in (None, "USD", "usd") and days_ago(r.get("sold_at") or "") is not None and days_ago(r["sold_at"]) <= 90]
-    n30, n90 = sum(a <= 30 for a in ages), sum(a <= 90 for a in ages)
-    full = more and ages and max(ages) <= 90
-    return {"n": len(rows), "30d": f"{n30}{'+' if more and ages and max(ages) <= 30 else ''}", "90d": f"{n90}{'+' if full else ''}",
-            "median90": round(statistics.median(usd), 2) if usd else None, "oldest_days": max(ages) if ages else None,
+    """Counts and the median for one card and grade. A "+" means more sales exist inside the window than were read."""
+    aged = [(days_ago(r.get("sold_at")), r) for r in rows]
+    ages = [a for a, _ in aged if a is not None]
+    usd90 = [r["price"] for a, r in aged if a is not None and a <= 90 and str(r.get("currency") or "USD").upper() == "USD"]
+    usd30 = [r["price"] for a, r in aged if a is not None and a <= 30 and str(r.get("currency") or "USD").upper() == "USD"]
+    n7, n30, n90 = sum(a <= 7 for a in ages), sum(a <= 30 for a in ages), sum(a <= 90 for a in ages)
+    newest = min(ages) if ages else None
+    return {"n": len(rows), "7d": n7, "30d": f"{n30}{'+' if more and ages and max(ages) <= 30 else ''}", "90d": f"{n90}{'+' if more else ''}",
+            "median30": round(statistics.median(usd30), 2) if usd30 else None, "median90": round(statistics.median(usd90), 2) if usd90 else None,
+            "newest_days": newest, "oldest_days": max(ages) if ages else None, "no_date": len(rows) - len(ages),
             "exact": sum(r.get("attribution") == "exact" for r in rows), "types": sorted({r.get("sale_type") or "?" for r in rows})}
 
 
@@ -197,8 +216,8 @@ def main():
                 else:
                     row["pop"] = None
         if paid:
-            for label, f in (("psa10", {"graded": "true", "grader": "PSA", "grade": "10"}), ("psa9", {"graded": "true", "grader": "PSA", "grade": "9"}), ("raw", {"graded": "false"})):
-                st, rows, more = comps(c["id"], **f)
+            for label, f, pages in (("psa10", {"graded": "true", "grader": "PSA", "grade": "10"}, 4), ("psa9", {"graded": "true", "grader": "PSA", "grade": "9"}, 2), ("raw", {"graded": "false"}, 4)):
+                st, rows, more = comps(c["id"], pages, **f)
                 row[label] = digest(rows, more) if st == 200 else {"http": st}
                 if label == "psa10" and rows and not any("psa10" in r for r in out):
                     print("COMP SAMPLE:", json.dumps(rows[0])[:700])
@@ -214,26 +233,29 @@ def main():
     for r in out:
         print(json.dumps(r, ensure_ascii=False))
     print("=====PKMNPRICES-PROBE-END=====")
-    # price history: what comes back, how far, and what one row looks like
+    # price history: how far back it goes for one condition and printing, and what a row holds
     if paid:
-        for pid in (610516, 42382, 516663):
-            r = next((x for x in out if x["pid"] == pid and x.get("id")), None)
-            if not r:
-                continue
-            for q in ({"period": "1y", "limit": 400}, {"limit": 400}):
+        r = next((x for x in out if x["pid"] == 610516 and x.get("id")), None)
+        if r:
+            for q in ({"period": "365d", "limit": 365, "condition": "Near Mint", "variant": "Holofoil"}, {"period": "90d", "limit": 365, "condition": "Near Mint", "variant": "Holofoil"}):
                 st, h, head = call(f"/v1/cards/{r['id']}/prices/history", **q)
                 rows = h.get("data") or []
-                print(f"HISTORY {r['name']} {q}: HTTP {st}, rows {len(rows)}, credits {head.get('x-credits-charged') if head else None}, "
-                      f"dates {rows[-1].get('date') if rows else None}..{rows[0].get('date') if rows else None}, sources {sorted({str(x.get('source')) for x in rows})}, "
-                      f"pagination {json.dumps(h.get('pagination'))[:120]}, first {json.dumps(rows[:2])[:500]}" if st == 200 else f"HISTORY {r['name']} {q}: HTTP {st} {json.dumps(h)[:200]}")
-                if st == 200 and rows:
+                if st == 200:
+                    print(f"HISTORY {r['name']} {q}: rows {len(rows)}, credits {head.get('x-credits-charged')}, dates {min((x.get('date') or '') for x in rows) if rows else None}..{max((x.get('date') or '') for x in rows) if rows else None}, "
+                          f"sources {sorted({str(x.get('source')) for x in rows})}, fields {sorted(rows[0].keys()) if rows else None}, pagination {json.dumps(h.get('pagination'))[:120]}")
                     break
-    # sealed and Japanese
-    for pid, name in SEALED:
-        st, s, _ = call("/v1/sealed", name=name, per_page=5)
-        print(f"SEALED '{name}': HTTP {st}", json.dumps([{k: x.get(k) for k in ("id", "tcg_player_id", "name")} for x in (s.get("data") or [])][:5]) if st == 200 else json.dumps(s)[:200])
-    st, j, _ = call("/v1/cards", name="Umbreon ex", language="japanese", per_page=3)
-    print(f"JAPANESE name search: HTTP {st}", json.dumps([{k: x.get(k) for k in ("id", "tcg_player_id", "name", "number")} for x in (j.get("data") or [])][:3]) if st == 200 else json.dumps(j)[:200])
+                print(f"HISTORY {r['name']} {q}: HTTP {st} {json.dumps(h)[:200]}")
+    # sealed: one product by name, its prices and its eBay sales
+    if paid:
+        st, sl, _ = call("/v1/sealed", name="151 Elite Trainer Box", per_page=5)
+        hit = next((x for x in (sl.get("data") or []) if x.get("tcg_player_id") == 503313), None) if st == 200 else None
+        print(f"SEALED search: HTTP {st}, 151 Elite Trainer Box found by its TCGplayer id: {bool(hit)}")
+        if hit:
+            st, one, _ = call(f"/v1/sealed/{hit['id']}")
+            print("SEALED prices:", json.dumps((one.get("prices") or [])[:4])[:500] if st == 200 else f"HTTP {st}")
+            st, sc, _ = call(f"/v1/sealed/{hit['id']}/listings/ebay", limit=50, sort="date_desc")
+            rows = (sc.get("data") or []) if st == 200 else []
+            print("SEALED eBay sales:", json.dumps(digest(rows, bool((sc.get("pagination") or {}).get("has_more")))) if st == 200 else f"HTTP {st} {json.dumps(sc)[:160]}")
     # totals
     n, hit = len(out), [r for r in out if r.get("found")]
     diffs = [abs(r["tcg_diff_pct"]) for r in hit if r.get("tcg_diff_pct") is not None]
@@ -244,6 +266,8 @@ def main():
     if paid:
         has = lambda k: sum(1 for r in hit if isinstance(r.get(k), dict) and r[k].get("n"))
         print(f"with PSA 10 sales {has('psa10')}; with PSA 9 sales {has('psa9')}; with raw sales {has('raw')}; with population {sum(1 for r in hit if r.get('pop'))} (of {len(hit)})")
+        w30 = lambda k: sum(1 for r in hit if isinstance(r.get(k), dict) and int(str(r[k].get("30d", "0")).rstrip("+") or 0) > 0)
+        print(f"with a sale in the last 30 days: PSA 10 {w30('psa10')}, PSA 9 {w30('psa9')}, raw {w30('raw')} (of {len(hit)})")
         print(f"PSA 10 price against Edge's (90-day medians): {S(cmp10)}")
         print(f"PSA 9 price against Edge's (90-day medians): {S(cmp9)}")
         print(f"cards Edge has graded data for: {sum(1 for r in hit if r.get('in_edge'))} of {len(hit)}" if edge is not None else "Edge comparison skipped")
