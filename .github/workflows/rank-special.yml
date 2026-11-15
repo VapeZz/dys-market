@@ -26,8 +26,7 @@ jobs:
           SET=24837; N=10; DAY=2026-11-15
           set +e
           python tools/set_rank.py /tmp/pages/data /tmp/out/a/social-rank --set "$SET" --n "$N" --date "$DAY" > /tmp/a.log 2>&1; rca=$?
-          PYTHONPATH=tools python -c "import re, sys, daily_card as dc, set_rank; dc.SIDEWAYS = re.compile(r'jumbo|oversize', re.I); set_rank.main(sys.argv[1:])" \
-            /tmp/pages/data /tmp/out/b/social-rank --set "$SET" --n "$N" --date "$DAY" > /tmp/b.log 2>&1; rcb=$?
+          python tools/rank_special.py /tmp/pages/data /tmp/out/b/social-rank --set "$SET" --n "$N" --date "$DAY" > /tmp/b.log 2>&1; rcb=$?
           set -e
           cat /tmp/a.log /tmp/b.log
           if [ $rca -ne 0 ] || [ ! -f /tmp/out/a/social-rank/latest.json ]; then echo "::error title=Special ranking a::$(tail -c 1500 /tmp/a.log | tr '\n' ' ')"; exit 1; fi
