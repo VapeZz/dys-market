@@ -817,7 +817,7 @@ function gradedHtml(base, set, v) {
   // eBay sold links. Sword & Shield and later, and the other games: name + number + grade, like Search eBay sold.
   // Adding the set name hid half or more of the sales, because many sellers leave it out. Older Pokémon sets keep
   // it: their numbers repeat (Base Set and Base Set Shadowless; reprints such as Celebrations copy the old number).
-  const ebay = (g) => oldPokemonSet(set.k, set.pub) ? `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q + " " + g)}&LH_Sold=1&LH_Complete=1&_sop=13`
+  const ebay = (g) => oldPokemonSet(set.k, set.pub) ? `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q + " " + g + reprintWords(v.n, v.no, set.k, set.pub)[1])}&LH_Sold=1&LH_Complete=1&_sop=13`
     : ebaySold(v.n, v.no, { game: set.k, pub: set.pub, grade: g });
   const link = (h, t, s) => `<a class="glink" href="${h}" target="_blank" rel="noopener"><b>${t}</b><span>${s}</span></a>`;
   return `<section class="graded"><h2 style="font-size:24px">Graded prices &amp; gem rate</h2>
@@ -2341,6 +2341,7 @@ function ebayFind(n, no, { p = 0, game = "", grade = "", kind = "c", pub = "" } 
   if (/\(Reverse Holofoil\)$/.test(nm)) q += " reverse holo";
   if (card) q = ebayAddNo(q, no, game, pub);
   if (op && op.add) q += op.add + op.neg;   // the plain printing needs no extra words here: cheapest-first already puts it on top
+  if (card) q += reprintWords(nm, no, game, pub).join("");   // an older card with a cheap reprint: cheapest-first would show the reprint
   if (jp) q += " japanese";
   if (grade) q += " " + grade;
   else q += card ? " -psa -cgc -bgs -sgc -tag -graded -slab -case -display -proxy -custom -orica -lot -choose -pick -singles" + (/\(Normal\)$/.test(nm) ? " -reverse" : "")
@@ -2357,20 +2358,36 @@ const loadSetPubs = () => getJSON("sets.json").then((s) => { for (const x of s) 
 // Pokémon sets before Sword & Shield print the number without leading zeros (4/102), but TCGplayer pads some of them
 // (004/102): those zeros come off. Newer sets print the zeros and keep them.
 const oldPokemonSet = (game, pub) => game === "pokemon" && !!pub && pub < "2020-02-07";
-const ebayNo = (no, game, pub) => { const s = String(no || "").trim(); return oldPokemonSet(game, pub) && /^0+\d+\/\d+$/.test(s) ? s.replace(/^0+/, "") : s; };
+const ebayNo = (no, game, pub) => { const s = String(no || "").trim(); return oldPokemonSet(game, pub) && /^\d+\/\d+$/.test(s) ? ebayNorm(s) : s; };
+const ebayNorm = (t) => String(t || "").toLowerCase().replace(/^0+(?=\d)/, "").replace(/\/0+(?=\d)/, "/");   // 016/110 and 16/110 are one number
 // Adds the card number to a search unless it's already there. A bare "87" from the name gives way to the full 87/146,
 // and TCGplayer's padded copy of a number to the one sellers type.
 function ebayAddNo(q, no, game = "", pub = "") {
-  const raw = String(no || "").trim(), num = ebayNo(raw, game, pub);
+  const num = ebayNo(no, game, pub), same = ebayNorm(num);
   let w = String(q).split(" ").filter(Boolean);
   if (!num) return w.join(" ");
-  if (num !== raw) w = w.filter((x) => x !== raw);
-  if (!w.some((x) => x.toLowerCase() === num.toLowerCase())) {
-    const short = (num.split("/")[0].match(/\d+$/) || [""])[0].replace(/^0+/, "");   // 87 of 87/146, 3 of OP01-003
-    if (short) w = w.filter((x) => !(/^\d+$/.test(x) && x.replace(/^0+/, "") === short));
-    w.push(num);
+  const at = w.findIndex((x) => ebayNorm(x) === same);
+  if (at >= 0) {   // the name has it, perhaps padded differently (016/110 for 16/110): once is enough, and an old set gets the unpadded form
+    if (oldPokemonSet(game, pub) && num.length < w[at].length) w[at] = num;
+    return w.filter((x, i) => i === at || ebayNorm(x) !== same).join(" ");
   }
+  const short = (num.split("/")[0].match(/\d+$/) || [""])[0].replace(/^0+/, "");   // 87 of 87/146, 3 of OP01-003
+  if (short) w = w.filter((x) => !(/^\d+$/.test(x) && x.replace(/^0+/, "") === short));
+  w.push(num);
   return w.join(" ");
+}
+// Reprints that keep the old card's number, so name + number finds both printings: Celebrations: Classic Collection
+// (2021) and 30th Celebration Classic Collection (2026). "Charizard 4/102" sold on eBay was mostly those reprints.
+// keys = every card in the two sets as name|number (made Nov 14, 2026 from the sets' card lists: add a set's cards and
+// its release date here if another reprint set like these comes out). An older printing leaves the reprints' words
+// out; a reprint names its own set (keyed by the set's release date).
+const REPRINTS = {
+  "2021-10-08": [" (celebrations,25th)", " -30th"], "2026-09-16": [" 30th", ""], other: ["", " -celebrations -celebration -classic -25th -30th"],
+  keys: new Set("charizard|4/102;umbreon star|17/17;shining magikarp|66/64;m rayquaza ex|76/108;______'s pikachu|24/53;zekrom|114/114;reshiram|113/114;blastoise|2/102;mew ex|88/92;mewtwo ex|54/99;venusaur|15/102;gardevoir ex|93/101;dark gyarados|8/82;xerneas ex|97/146;tapu lele gx|60/145;garchomp c lv.x|145/147;luxray gl lv.x|109/111;rocket's zapdos|15/132;cleffa|20/111;donphan|107/123;team magma's groudon|9/95;here comes team rocket!|15/82;rocket's admin.|86/109;imposter professor oak|73/102;claydol|15/106;lugia|149/147;magikarp|203/193;gengar|94/102;pikachu & zekrom gx|33/181;rayquaza ex|85/124;mew vmax|114/264;shining celebi|106/105;darkrai & cresselia legend|100/102;darkrai & cresselia legend|99/102;pikachu|58/102;n|101/101;m gardevoir ex|106/160;palkia lv.x|106/106;scizor ex|108/115;arceus vstar|123/172;greninja break|41/122;raikou|50/185;dark tyranitar|19/109;erika's jigglypuff|69/132;solgaleo gx|89/149;genesect ex|11/101;zacian v|138/202;misty|18/132;metagross|11/113;crobat g|47/127;sneasel|25/111;uxie|43/146;delcatty|5/109;buzzwole gx|57/111".split(";")),
+};
+const reprintKey = (n, no) => String(n).toLowerCase().replace(/\([^()]*\)/g, " ").replace(/ - \S+/g, " ").replace(/\s+/g, " ").trim() + "|" + ebayNorm(no);
+function reprintWords(n, no, game, pub) {   // [words to add, words to leave out]
+  return game === "pokemon" && no && REPRINTS.keys.has(reprintKey(n, no)) ? REPRINTS[/^\d{4}-/.test(pub || "") ? pub : "other"] || REPRINTS.other : ["", ""];
 }
 // A name's search words, without the marks eBay reads as commands: brackets (its any-of form), quotes (exact phrase)
 // and a hyphen at the start of a word, which means "leave this word out" ("Premium Card Collection -Best Selection
@@ -2397,14 +2414,17 @@ function ebaySold(n, no, { game = "", pub = "", grade = "", kind = "c" } = {}) {
   let q = ebayAddNo(ebayPlain(cleanCard(op ? op.name : nm).replace(/ \(Foil\)/, "")), kind === "s" ? "" : no, game, pub);
   if (/\(Reverse Holofoil\)$/.test(nm)) q += " reverse holo";
   if (/-jp$/.test(game || "")) q += " japanese";
-  if (op) q += op.add;
+  const rp = kind === "s" ? ["", ""] : reprintWords(nm, no, game, pub);
+  q += (op ? op.add : "") + rp[0];
   if (grade) q += " " + grade;
+  q += rp[1];
   if (op) q += op.neg + " -proxy -custom -japanese -jp -jpn -chinese -korean -french";
   return "https://www.ebay.com/sch/i.html?" + new URLSearchParams({ _nkw: q.replace(/\s+/g, " ").trim(), LH_Sold: "1", LH_Complete: "1", _sop: "13" });
 }
 function ebayBuy(n, no, gr, { game = "", pub = "" } = {}) {
   const nm = String(n || ""), op = game === "one-piece" ? onePieceArt(nm) : null;
-  const q = ebayAddNo(ebayPlain(cleanCard(op ? op.name : nm)), no, game, pub) + (op ? op.add : "") + (gr ? " " + gr : "") + (op ? op.neg : "");
+  const rp = reprintWords(nm, no, game, pub);
+  const q = ebayAddNo(ebayPlain(cleanCard(op ? op.name : nm)), no, game, pub) + (op ? op.add : "") + rp[0] + (gr ? " " + gr : "") + (op ? op.neg : "") + rp[1];
   return "https://www.ebay.com/sch/i.html?" + new URLSearchParams({ _nkw: q, LH_BIN: "1", _sop: "15" });
 }
 const cleanCard = (n) => n.replace(/ \((Holofoil|Normal|Foil|Reverse Holofoil)\)$/, "").replace(/ - (\S+)$/, " $1");
