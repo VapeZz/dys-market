@@ -9,12 +9,16 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   // the card sheet's technical chart is its own file (edge-ta.js); it takes this file's ?v= so both refresh together.
   // If it can't load, the sheet draws the simple chart below instead.
-  const TA = new Promise((done) => {
+  const VER = ((document.currentScript?.src || "").match(/\?v=[\w.-]+/) || [""])[0];
+  const part = (file, name) => new Promise((done) => {
     const s = document.createElement("script");
-    s.src = `${BASE}assets/edge-ta.js${((document.currentScript?.src || "").match(/\?v=[\w.-]+/) || [""])[0]}`;
-    s.onload = () => done(window.EdgeTA?.v >= 1 ? window.EdgeTA : null); s.onerror = () => done(null);
+    s.src = `${BASE}assets/${file}${VER}`;
+    s.onload = () => done(window[name]?.v >= 1 ? window[name] : null); s.onerror = () => done(null);
     document.head.append(s);
   });
+  const TA = part("edge-ta.js", "EdgeTA");
+  // the strategy box under the price tiles (edge-strat.js) reads the chart's numbers; without the chart or the file there is no box
+  const STRAT = part("edge-strat.js", "EdgeStrat");
   /* layout (shared with the market site): big pictures, grid view, 5 tabs; ?v2=0 or Mine > Settings brings back the old one */
   const V2 = (() => {
     try {
@@ -530,7 +534,7 @@
     sheet.hidden = false; document.body.style.overflow = "hidden";
     const card = $("#sheet-card");
     card.innerHTML = `<div class="grab"><span class="lab">Card details</span><button type="button" class="btn sm close">Close</button></div><p class="muted">Loading…</p>`;
-    const [{ it, set }, eb, , ta, daily] = await Promise.all([detail(id, g, n), getJSON("ebay.json").catch(() => ({ cards: {} })), loadGraded(), TA, dailyFile(g)]);
+    const [{ it, set }, eb, , ta, daily, strat] = await Promise.all([detail(id, g, n), getJSON("ebay.json").catch(() => ({ cards: {} })), loadGraded(), TA, dailyFile(g), STRAT]);
     if (!it) { card.innerHTML = `<div class="grab"><span class="lab">Card details</span><button type="button" class="btn sm close">Close</button></div><div class="empty"><b>No price for this one yet</b>It may be too new or not sold recently.</div>`; return; }
     const x = { id: it.id, g, n: it.n, t: it.t, sn: set.n };
     S.recent = [x, ...S.recent.filter((y) => !(y.id === x.id && y.n === x.n))].slice(0, 12); save();
@@ -549,6 +553,7 @@
       <div class="prices"><div class="tile"><span class="lab">Lowest listing</span><b>${money(lo)}</b><small class="${lo && p ? cls(p - lo) : ""}">${lo && p ? `${pct((lo - p) / p * 100, 0)} vs market` : "on TCGplayer"}</small></div>
         <div class="tile"><span class="lab">Max buy</span><b>${money(maxBuy(p, it.t))}</b><small>for ${S.set.roi}% profit</small></div>
         <div class="tile"><span class="lab">Flip now</span><b class="${f ? cls(f.pr) : ""}">${f ? signed(f.pr) : "—"}</b><small>${f ? `${f.roi.toFixed(0)}% buying the lowest` : "no listing"}</small></div></div>
+      ${ta && strat ? `<section class="sec" id="c-strat" hidden></section>` : ""}
       ${ta ? `<section class="sec ta" id="c-ta"></section>` : simple}
       ${it.t === "c" ? `<section class="sec"><span class="lab">By condition</span><div class="cond">${COND.map(([c, m]) => `<div><b>${c}</b>${money(Math.round(p * m), p * m >= 10000)}</div>`).join("")}</div></section>` : ""}
       <section class="sec panel"><span class="lab">What it's worth to you</span><div class="kv">${platRows}
@@ -574,8 +579,15 @@
         <a class="btn sm" href="${soldUrl(it.n, no || "")}" target="_blank" rel="noopener">eBay sold ↗</a>
         ${it.t === "c" ? `<a class="btn sm" href="${soldUrl(it.n, (no || "") + " PSA 10")}" target="_blank" rel="noopener">PSA 10 sold ↗</a><a class="btn sm" href="https://www.pricecharting.com/search-products?q=${encodeURIComponent(cleanN(it.n))}&type=prices" target="_blank" rel="noopener">All grades ↗</a>` : ""}
         <a class="btn sm" href="${BASE}product.html?id=${it.id}&set=${g}" target="_blank" rel="noopener">Full page ↗</a></div></section>`;
-    if (ta) try { ta.mount($("#c-ta"), { dates: set.dates, values: it.s || [], daily: ta.dailyOf(daily, it.id, it.n) }); }
+    let read = null;
+    if (ta) try { read = ta.mount($("#c-ta"), { dates: set.dates, values: it.s || [], daily: ta.dailyOf(daily, it.id, it.n) }); }
       catch (err) { console.error(err); $("#c-ta").outerHTML = simple; }
+    const box = $("#c-strat");
+    if (box) try {
+      if (!read) throw new Error("no chart reading");
+      strat.mount(box, strat.plan(read, { pub: set.pub }, { net: (x) => net(x, it.t), shipIn: shipIn(it.t), roi: S.set.roi, maxBuy: (x) => maxBuy(x, it.t), lo }));
+      box.hidden = false;
+    } catch (err) { console.error(err); box.remove(); }
     const form = $("#c-form");
     $("#c-inv").onclick = () => {
       const k = keyOf(it.id, it.n), have = S.inv.find((y) => y.k === k);

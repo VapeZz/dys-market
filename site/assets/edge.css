@@ -326,3 +326,51 @@ a.row{text-decoration:none;color:inherit}
 .ta-thin b{color:var(--warn)}
 .ta-note{margin:0}
 :root[data-theme="light"] .ta-plot .ta-tag text{fill:#fff}
+
+/* ---------- strategy box on the card sheet (edge-strat.js) ---------- */
+.sg{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 12px 10px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.sg[hidden]{display:none}
+/* small text in the box reads at 4.5:1 or better in both themes: the light theme's colors are darkened for text */
+.sg{--sg-up:var(--up);--sg-down:var(--down);--sg-warn:var(--warn);--sg-here:var(--accent-2)}
+:root[data-theme="light"] .sg{--sg-up:color-mix(in srgb,var(--up) 72%,#000);--sg-down:color-mix(in srgb,var(--down) 80%,#000);--sg-warn:color-mix(in srgb,var(--warn) 62%,#000);--sg-here:color-mix(in srgb,var(--accent-2) 70%,#000)}
+.sg .lab{color:var(--ink-2)}
+.sg-head{display:flex;align-items:center;gap:10px;min-height:22px}
+.sg-beta{margin-left:auto;font:600 10.5px/1 var(--font);padding:5px 8px;border-radius:999px;color:var(--sg-warn);background:color-mix(in srgb,var(--warn) 14%,transparent);white-space:nowrap}
+.sg-call{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;padding:12px;border-radius:12px;border:1px solid var(--line-strong);background:var(--surface-2)}
+.sg-call b{font:700 24px/1.1 var(--display);letter-spacing:-.01em}
+.sg-call span{font-size:14px;font-weight:600;color:var(--ink-2)}
+.sg-call.sg-buy{border-color:color-mix(in srgb,var(--up) 55%,transparent);background:color-mix(in srgb,var(--up) 10%,var(--surface))}
+.sg-call.sg-buy b{color:var(--up)}
+.sg-call.sg-sell{border-color:color-mix(in srgb,var(--down) 55%,transparent);background:color-mix(in srgb,var(--down) 9%,var(--surface))}
+.sg-call.sg-sell b{color:var(--down)}
+.sg-call.sg-trim{border-color:color-mix(in srgb,var(--warn) 55%,transparent);background:color-mix(in srgb,var(--warn) 9%,var(--surface))}
+.sg-call.sg-trim b{color:var(--warn)}
+.sg-call.sg-watch b{color:var(--ink-2)}
+.sg .chip.sg-risk-low{background:color-mix(in srgb,var(--up) 16%,transparent);color:var(--sg-up)}
+.sg .chip.sg-risk-medium{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--sg-warn)}
+.sg .chip.sg-risk-high{background:color-mix(in srgb,var(--down) 15%,transparent);color:var(--sg-down)}
+.sg-act{margin:0;font-size:14px;line-height:1.45;color:var(--ink)}
+.sg-tier{color:var(--ink-2)}
+.sg-deal{margin:0;font-size:13px;line-height:1.4;color:var(--ink-2);padding:9px 11px;border-radius:10px;border:1px solid color-mix(in srgb,var(--up) 45%,transparent);background:color-mix(in srgb,var(--up) 9%,transparent)}
+.sg-deal b{color:var(--sg-up)}
+.sg-list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column}
+.sg-list li{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;line-height:1.4;padding:7px 0;border-top:1px solid var(--line);color:var(--ink-2)}
+.sg-list li:first-child{border-top:0;padding-top:0}
+.sg-list li:last-child{padding-bottom:0}
+.sg-list i{font-style:normal;flex:none;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.sg-ladder{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.sg-rung{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 10px 8px 9px;border-top:1px solid var(--line);border-left:3px solid transparent;min-width:0}
+.sg-rung:first-child{border-top:0}
+.sg-tag,.sg-px{display:flex;flex-direction:column;gap:2px;min-width:0}
+.sg-px{flex:none;align-items:flex-end;text-align:right}
+.sg-rung b{font-size:14px;font-weight:700;color:var(--ink)}
+.sg-px b{font-variant-numeric:tabular-nums}
+.sg-rung small{font-size:11.5px;line-height:1.3;color:var(--ink-2)}
+.sg-rung small.up{color:var(--sg-up)}.sg-rung small.down{color:var(--sg-down)}
+.sg-rung.sg-sell{border-left-color:var(--warn)}
+.sg-rung.sg-buy{border-left-color:var(--up)}
+.sg-rung.sg-cut{border-left-color:var(--down)}
+.sg-rung.sg-now{background:var(--surface-2);border-left-color:var(--accent-2)}
+.sg-rung.sg-now .sg-px small{color:var(--sg-here);font-weight:600}
+.sg-money{margin:0;font-size:13px;line-height:1.4;color:var(--ink-2)}
+.sg-foot{margin:0;font-size:11.5px;line-height:1.4;color:var(--ink-2)}
