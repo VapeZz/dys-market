@@ -374,3 +374,24 @@ a.row{text-decoration:none;color:inherit}
 .sg-rung.sg-now .sg-px small{color:var(--sg-here);font-weight:600}
 .sg-money{margin:0;font-size:13px;line-height:1.4;color:var(--ink-2)}
 .sg-foot{margin:0;font-size:11.5px;line-height:1.4;color:var(--ink-2)}
+/* the backtest result inside the strategy box */
+.sg-beta.sg-v-pass{color:var(--sg-up);background:color-mix(in srgb,var(--up) 16%,transparent)}
+.sg-beta.sg-v-fail{color:var(--sg-down);background:color-mix(in srgb,var(--down) 15%,transparent)}
+.sg-beta.sg-v-none{color:var(--ink-2);background:var(--chip)}
+.sg-bt{margin:0;font-size:13px;line-height:1.4;color:var(--ink-2);padding:9px 11px;border-radius:10px;border:1px solid var(--line-strong);background:var(--surface-2)}
+.sg-bt b{color:var(--ink)}
+.sg-bt.sg-v-pass{border-color:color-mix(in srgb,var(--up) 45%,transparent);background:color-mix(in srgb,var(--up) 9%,transparent)}
+.sg-bt.sg-v-pass b{color:var(--sg-up)}
+.sg-bt.sg-v-unproven{border-color:color-mix(in srgb,var(--warn) 45%,transparent);background:color-mix(in srgb,var(--warn) 9%,transparent)}
+.sg-bt.sg-v-unproven b{color:var(--sg-warn)}
+.sg-bt.sg-v-fail{border-color:color-mix(in srgb,var(--down) 45%,transparent);background:color-mix(in srgb,var(--down) 9%,transparent)}
+.sg-bt.sg-v-fail b{color:var(--sg-down)}
+.sg-more{align-self:flex-start}
+.sg-all[hidden]{display:none}
+.sg-all li{align-items:center}
+.sg-all li span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.sg-all li b{font-size:13.5px;font-weight:600;color:var(--ink)}
+.sg-all li small{font-size:11.5px;line-height:1.3;color:var(--ink-2)}
+.sg-all li em{font-style:normal;flex:none;font-size:11.5px;font-weight:700;color:var(--ink-2)}
+.sg-all li em.sg-v-pass{color:var(--sg-up)}.sg-all li em.sg-v-unproven{color:var(--sg-warn)}.sg-all li em.sg-v-fail{color:var(--sg-down)}
+.sg-all li.sg-me{background:var(--surface-2);margin:0 -6px;padding-left:6px;padding-right:6px;border-radius:8px}

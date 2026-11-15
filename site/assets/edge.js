@@ -19,6 +19,8 @@
   const TA = part("edge-ta.js", "EdgeTA");
   // the strategy box under the price tiles (edge-strat.js) reads the chart's numbers; without the chart or the file there is no box
   const STRAT = part("edge-strat.js", "EdgeStrat");
+  // how each strategy rule did in the backtest (a fixed file, rebuilt when the rules change); without it the box says "not backtested"
+  const BACKTEST = fetch(`${BASE}assets/edge-backtest.json${VER}`).then((r) => r.ok ? r.json() : null).then((j) => j && j.v === 1 && j.rules ? j : null).catch(() => null);
   /* layout (shared with the market site): big pictures, grid view, 5 tabs; ?v2=0 or Mine > Settings brings back the old one */
   const V2 = (() => {
     try {
@@ -534,7 +536,7 @@
     sheet.hidden = false; document.body.style.overflow = "hidden";
     const card = $("#sheet-card");
     card.innerHTML = `<div class="grab"><span class="lab">Card details</span><button type="button" class="btn sm close">Close</button></div><p class="muted">Loading…</p>`;
-    const [{ it, set }, eb, , ta, daily, strat] = await Promise.all([detail(id, g, n), getJSON("ebay.json").catch(() => ({ cards: {} })), loadGraded(), TA, dailyFile(g), STRAT]);
+    const [{ it, set }, eb, , ta, daily, strat, backtest] = await Promise.all([detail(id, g, n), getJSON("ebay.json").catch(() => ({ cards: {} })), loadGraded(), TA, dailyFile(g), STRAT, BACKTEST]);
     if (!it) { card.innerHTML = `<div class="grab"><span class="lab">Card details</span><button type="button" class="btn sm close">Close</button></div><div class="empty"><b>No price for this one yet</b>It may be too new or not sold recently.</div>`; return; }
     const x = { id: it.id, g, n: it.n, t: it.t, sn: set.n };
     S.recent = [x, ...S.recent.filter((y) => !(y.id === x.id && y.n === x.n))].slice(0, 12); save();
@@ -585,7 +587,7 @@
     const box = $("#c-strat");
     if (box) try {
       if (!read) throw new Error("no chart reading");
-      strat.mount(box, strat.plan(read, { pub: set.pub }, { net: (x) => net(x, it.t), shipIn: shipIn(it.t), roi: S.set.roi, maxBuy: (x) => maxBuy(x, it.t), lo }));
+      strat.mount(box, strat.plan(read, { pub: set.pub }, { net: (x) => net(x, it.t), shipIn: shipIn(it.t), roi: S.set.roi, maxBuy: (x) => maxBuy(x, it.t), lo }, backtest));
       box.hidden = false;
     } catch (err) { console.error(err); box.remove(); }
     const form = $("#c-form");

@@ -152,4 +152,58 @@ test("the box never prints a missing number", () => {
     assert.ok(/not backtested/.test(h) && /not financial advice/.test(h));
   }
 });
+/* the backtest result in the box */
+const rule = (verdict, claim) => ({ n: 12345, days: 88, avg: 1.2, med: 0, up: 41.2, flat: 20.1, down: 38.7, baseAvg: 2.8, baseUp: 46, baseDown: 35, gone: 0.1, edge: -1.6, months: 21, monthsCounted: 21, claim,
+  okMonths: claim ? 62 : null, net: { n: 900, avg: -20, win: 4.4, up20: 5, down20: 3 }, path: { n: 1000, sell: 31, cut: 44, none: 25, sellAt: 5, cutAt: 4 }, verdict });
+const fakeBt = (verdicts) => ({ v: 1, step: 7, from: "2025-02-08", to: "2026-10-10", horizon: 30, path: 60, netMin: 2000, base: { net: { win: 5.1 } },
+  rules: Object.fromEntries(Object.entries(verdicts).map(([id, [verdict, claim]]) => [id, rule(verdict, claim)])) });
+const dipCard = () => { const up = Array.from({ length: 120 }, (_, i) => Math.round(2000 * 1.006 ** i + (i % 2 ? 12 : -12))); for (let i = 112; i < 120; i++) up[i] = Math.round(up[111] * (1 - 0.01 * (i - 111))); return card(up); };
+test("without a backtest file the box says not backtested", () => {
+  const p = ST.plan(dipCard(), {}, ctx), h = ST.html(p);
+  assert.deepStrictEqual([p.verdict, p.demoted, p.bt], [null, false, null]);
+  assert.ok(/v1 rules · not backtested/.test(h) && !/Backtest ·/.test(h) && /Buy zone/.test(h));
+});
+test("a buy rule that failed its backtest makes no call; the levels stay", () => {
+  const p = ST.plan(dipCard(), {}, ctx, fakeBt({ dip: ["fail", 1], "s-none": ["none", 0] })), h = ST.html(p);
+  assert.deepStrictEqual([p.id, p.call, p.verdict, p.demoted], ["dip", "buy", "fail", true]);
+  assert.ok(/<b>No call<\/b>/.test(h) && /Dip in an uptrend failed its backtest/.test(h) && !/class="sg-call sg-buy"/.test(h));
+  assert.ok(/v1 rules · failed backtest/.test(h) && /Backtest · Failed/.test(h) && /did worse than the average card, the opposite/.test(h));
+  assert.ok(/Price ladder/.test(h) && /Risk ·/.test(h) && !/Execution:/.test(h));
+  assert.ok(/up in 41% of 12,345 cases, flat in 20%, down in 39%/.test(h) && /Went the way the rule expects in 13 of 21 months/.test(h));
+  assert.ok(/Items of \$20 and up.*profit after fees in 4% of cases \(all items: 5%\)/.test(h) && /first sell level came before the cut level in 31%/.test(h));
+});
+test("passed and unproven rules keep their call; a failed hold or watch rule is not demoted", () => {
+  const pass = ST.plan(dipCard(), {}, ctx, fakeBt({ dip: ["pass", 1] }));
+  assert.deepStrictEqual([pass.verdict, pass.demoted], ["pass", false]);
+  assert.ok(/v1 rules · backtest passed/.test(ST.html(pass)) && /did better than the average card, as the rule expects/.test(ST.html(pass)) && /class="sg-call sg-buy"/.test(ST.html(pass)));
+  const unp = ST.plan(dipCard(), {}, ctx, fakeBt({ dip: ["unproven", 1] }));
+  assert.ok(!unp.demoted && /v1 rules · not proven/.test(ST.html(unp)) && /Execution: Average/.test(ST.html(unp)));
+  const flat = ST.plan(card(new Array(120).fill(2500)), {}, ctx, fakeBt({ "s-none": ["fail", 0] }));
+  assert.deepStrictEqual([flat.call, flat.demoted], ["hold", false]);
+  const none = ST.plan(card(new Array(120).fill(2500)), {}, ctx, fakeBt({ "s-none": ["none", 0] })), hn = ST.html(none);
+  assert.ok(/v1 rules · backtested/.test(hn) && /Backtest · No claim/.test(hn) && !/Went the way/.test(hn));
+});
+test("a rule missing from the backtest file, and a file from another version", () => {
+  const p = ST.plan(dipCard(), {}, ctx, fakeBt({ "s-none": ["none", 0] })), h = ST.html(p);
+  assert.deepStrictEqual([p.verdict, p.demoted], [null, false]);
+  assert.ok(/had no cases in the backtest/.test(h) && /v1 rules · not backtested/.test(h));
+  const old = ST.plan(dipCard(), {}, ctx, { v: 2, rules: {} });
+  assert.strictEqual(old.bt, null);
+});
+test("the shipped backtest file fits the rules in this file", () => {
+  const bt = require(path.join(__dirname, "../site/assets/edge-backtest.json"));
+  assert.strictEqual(bt.v, 1);
+  for (const [id, r] of Object.entries(bt.rules)) {
+    assert.ok(ST.SETUPS[id], id);
+    assert.ok(ST.VERDICT[r.verdict], id);
+    assert.ok(r.n > 0 && Math.abs(r.up + r.flat + r.down - 100) < 0.1, id);
+    const call = ST.SETUPS[id][1];
+    assert.strictEqual(bt.claims[id] || 0, call === "buy" ? 1 : call === "sell" || call === "trim" ? -1 : (id === "knife" || id === "weak") ? -1 : 0, id);   // every buy, sell and trim rule is scored
+    if (!(bt.claims[id])) assert.strictEqual(r.verdict, "none", id);
+  }
+  for (const id of [...ST.FAST, ...ST.SLOW]) assert.ok(bt.rules[id], `${id} has a result`);
+  const h = ST.html(ST.plan(dipCard(), { pub: day(0) }, ctx, bt));
+  assert.ok(!/undefined|NaN|null|Infinity/.test(h), h.match(/.{30}(undefined|NaN|null|Infinity).{30}/)?.[0]);
+  assert.ok(/How every rule did/.test(h));
+});
 if (!process.exitCode) console.log(`${n} tests passed`);
