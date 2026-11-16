@@ -1,27 +1,46 @@
-"""Pack the weekly off-GitHub backup of the market site's data (kept in "DYS Backup" on Keo's computer).
+"""Weekly off-GitHub backup of the market site's data (kept in "DYS Backup" on Keo's computer).
 
-    python3 -I tools/backup_pack.py --out /path/out [--state /path/backup-state.json]
+Three steps, run by the weekly task around its copy to the computer (the task prompt is in tools/BACKUP-TASK.md):
 
-Reads GitHub only (a mirror clone plus public release files): no GitHub writes, no keys. Locked (.enc)
-files are copied as they are and stay locked. It makes, inside --out:
+    python3 -I tools/backup_pack.py pack    --out OUT --state backup-state.json [--state-history DIR] --dest-listing before.json
+    python3 -I tools/backup_pack.py verify  --out OUT --dest-listing after.json --staged staged.json [--attempt 2]
+    python3 -I tools/backup_pack.py confirm --out OUT --dest-listing final.json --staged staged-commit.json
 
-    files/...            the files to copy into the backup folder, at the same relative paths
-    backup-state.json    the new state file; copy it into the backup folder LAST, after the files check out
-    plan.json            verdict, what to copy (dest, bytes, sha256), warnings
+pack    reads GitHub only (a mirror clone plus public release files; no writes, no keys; locked .enc files stay
+        locked) and writes OUT/plan.json: the files to copy ("transfer"), files already in the backup folder to
+        read back and check ("verify_existing") and how to read them back ("stage_batches"). It records nothing.
+verify  checks every copied file AS IT IS ON THE COMPUTER (read back into this session): size, SHA-256, and that
+        each zip / tar / git bundle opens and holds what it should (split files are joined first). Only when all
+        of it checks out does it write the new state into OUT/commit/. Anything wrong: no state, nothing recorded.
+confirm checks the state files themselves landed intact.
 
-The backup keeps two weekly slots (weekly-1, weekly-2) and writes the older one each run, so the copy
-from the week before always survives. A run whose data is much smaller than the last good run is a
-"hold": nothing is packed, so a wiped or damaged data branch can never replace a good copy.
+The state ("backup-state.json") is the only record of what the backup holds. It is version 2, carries its own
+SHA-256 ("integrity"), and every committed run also writes a never-overwritten copy into state-history\\ before
+backup-state.json. Either intact copy records the run; the next run uses the newest intact one, so a torn or
+half-written backup-state.json is recognised by its checksum and the history copy is used instead.
+
+Rules the code enforces:
+- The two weekly slots take turns. A run only ever writes into the slot that is NOT the newest verified one, so
+  the last good weekly copy is never touched; an interrupted run is simply redone into the same slot.
+- Monthly copies (monthly\\saved-data-YYYY-MM.zip) and monthly price archives (price-archives-monthly\\) are
+  never overwritten: a file that already exists keeps its name and a new copy gets a new name.
+- A month is recorded only with the files, sizes and checksums verified at the destination.
+- A month an old (version 1) state lists but whose file is missing is NOT rebuilt automatically: it is reported
+  every run until `pack --recover-month YYYY-MM` is run with Keo's approval (only possible during that month,
+  because a later copy would not be that month's data). The recovered file is named ...-recovered-DATE.zip.
+- A run whose data is much smaller than the last good run is a "hold": nothing is packed.
 """
 import argparse
 import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import urllib.error
 import urllib.request
 import zipfile
@@ -31,9 +50,22 @@ REPO = "VapeZz/dys-market"
 UA = "dys-backup (market.driveyourstyle.net)"
 MAX_FILE = 380_000_000          # the copy tool takes files up to 400 MB; bigger ones are split into parts
 PART = 350_000_000
+STAGE_BATCH = 450_000_000       # reading files back from the computer: at most 500 MB and 50 files per call
+STAGE_FILES = 50
 KEEP_RUNS = 60
 # hold when the saved prices shrink to under 70% of the last good run, or everything to under 50%
 MIN_PRICES, MIN_TOTAL = 0.70, 0.50
+STATE_VERSION = 2
+SLOTS = ("weekly-1", "weekly-2")
+HISTORY = "state-history"
+LEGACY_SUFFIX = "-legacy-v1.json"       # the version-1 state, saved once as it was before the first new run
+DEST_ROOT = "C:\\Users\\chris\\Documents\\DYS Backup"
+WIN_MAX_PATH = 259
+_WIN_RESERVED = {"CON", "PRN", "AUX", "NUL"} | {f"COM{i}" for i in range(1, 10)} | {f"LPT{i}" for i in range(1, 10)}
+
+
+class Blocked(Exception):
+    """A case the backup refuses to handle on its own; a person has to look."""
 
 
 def run(cmd, cwd=None):
@@ -56,6 +88,163 @@ def today_pt(override=None):
         return datetime.now(ZoneInfo("America/Los_Angeles")).date()
     except Exception:  # noqa: BLE001  (no timezone data: Pacific standard time is close enough)
         return (datetime.now(timezone.utc) - timedelta(hours=8)).date()
+
+
+def atomic_write(path, data):
+    """Write bytes so the file is either the old one or the complete new one, never half of each."""
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".tmp-", dir=os.path.dirname(path) or ".")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def write_json(path, obj):
+    atomic_write(path, (json.dumps(obj, indent=1, ensure_ascii=False) + "\n").encode("utf-8"))
+
+
+def read_json(path):
+    with open(path, encoding="utf-8-sig") as f:
+        return json.load(f)
+
+
+# ---------- the state file ----------
+
+def _canonical(state):
+    body = {k: v for k, v in state.items() if k != "integrity"}
+    return json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def seal(state):
+    state = dict(state)
+    state["integrity"] = hashlib.sha256(_canonical(state)).hexdigest()
+    return state
+
+
+def intact(state):
+    return isinstance(state, dict) and state.get("integrity") == hashlib.sha256(_canonical(state)).hexdigest()
+
+
+_MONTH = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+
+
+def migrate_v1(old):
+    """Version 1 state (Nov 12-15, 2026). Its months were recorded before anything was checked at the
+    destination, so they are all 'legacy-unverified' until a run finds and checks the file."""
+    months = old.get("months") or []
+    slot = old.get("newest_slot")
+    archives = old.get("archives") or {}
+    if (not isinstance(months, list) or not all(isinstance(m, str) and _MONTH.match(m) for m in months)
+            or slot not in (None,) + SLOTS or not isinstance(archives, dict)
+            or not isinstance(old.get("runs") or [], list) or not isinstance(old.get("last_good") or {}, dict)):
+        raise Blocked("backup-state.json is an old (version 1) state in a shape this script doesn't know; a person has to look")
+    new = {
+        "version": STATE_VERSION, "seq": 0, "txn": None, "migrated_from": 1,
+        "newest_slot": slot,
+        "slots": {s: {"status": "legacy"} for s in SLOTS if s == slot},
+        "monthly": {m: {"status": "legacy-unverified"} for m in months},
+        "archives": {t: dict(v, status="legacy") for t, v in archives.items() if isinstance(v, dict)},
+        "last_good": old.get("last_good") or {},
+        "runs": old.get("runs") or [],
+    }
+    if old.get("tcgcsv_days"):
+        new["tcgcsv_days"] = old["tcgcsv_days"]
+    return new
+
+
+def load_state(primary, history_paths=()):
+    """(state, notes). The newest intact version-2 state among backup-state.json and the state-history copies;
+    else the version-1 backup-state.json, migrated. Anything else is Blocked."""
+    good, notes, legacy = [], [], None
+    for path in [primary] + list(history_paths):
+        if not path or not os.path.exists(path):
+            continue
+        name = os.path.basename(path)
+        try:
+            s = read_json(path)
+        except (OSError, ValueError) as e:
+            notes.append(f"{name} can't be read ({type(e).__name__}); not used")
+            continue
+        if not isinstance(s, dict):
+            notes.append(f"{name} is not a state file; not used")
+        elif s.get("version") == STATE_VERSION:
+            if intact(s) and isinstance(s.get("seq"), int):
+                good.append(s)
+            else:
+                notes.append(f"{name}: its checksum doesn't match (a torn or edited write); not used")
+        elif (path == primary or name.lower().endswith(LEGACY_SUFFIX)) and (
+                s.get("version") == 1 or ("version" not in s and ("months" in s or "runs" in s))):
+            legacy = legacy if (legacy is not None and path != primary) else s
+        else:
+            notes.append(f"{name}: state version {s.get('version')!r} is not supported; not used")
+    if good:
+        best = max(good, key=lambda s: s["seq"])
+        return best, notes
+    if legacy is not None:
+        return migrate_v1(legacy), notes + ["old (version 1) state found and upgraded; months it lists are checked before they count"]
+    if not os.path.exists(primary) and not any(os.path.exists(p) for p in history_paths):
+        raise Blocked("backup-state.json is missing (a new one is never made on its own)")
+    raise Blocked("no usable backup state: " + "; ".join(notes))
+
+
+# ---------- the backup folder as the computer lists it ----------
+
+def key(dest):
+    """Windows paths compare without regard to case or the kind of slash."""
+    return dest.replace("/", "\\").strip("\\").lower()
+
+
+def load_listing(path):
+    """{key: (dest, bytes)} from device_list_dir's JSON (its {"entries": [...]} or the bare list)."""
+    raw = read_json(path)
+    entries = raw.get("entries") if isinstance(raw, dict) else raw
+    if not isinstance(entries, list):
+        raise Blocked(f"{os.path.basename(path)} is not a folder listing")
+    if isinstance(raw, dict) and (raw.get("truncated") or raw.get("skeleton")):
+        raise Blocked("the backup folder listing is incomplete, so files that already exist can't be protected")
+    if any(isinstance(e, dict) and e.get("depthCapped") for e in entries):
+        raise Blocked("the backup folder listing stopped at its depth limit, so files that already exist can't be protected")
+    out = {}
+    for e in entries:
+        if not isinstance(e, dict) or "name" not in e or e.get("type", "file") != "file":
+            continue
+        dest = e["name"].replace("/", "\\").strip("\\")
+        out[key(dest)] = (dest, int(e.get("size") or 0))
+    return out
+
+
+def win_name_ok(dest):
+    full = DEST_ROOT + "\\" + dest
+    if len(full) > WIN_MAX_PATH:
+        return False
+    for part in dest.split("\\"):
+        if (not part or part != part.rstrip(" .") or re.search(r'[<>:"/|?*\x00-\x1f]', part)
+                or part.split(".")[0].upper() in _WIN_RESERVED):
+            return False
+    return True
+
+
+def free_name(dest, listing, taken):
+    """dest if nothing is there yet, else dest with -2, -3... before the extension (never an existing file)."""
+    stem, ext = re.match(r"^(.*?)((?:\.[A-Za-z0-9]+)?)$", dest).groups()
+    n, cand = 1, dest
+
+    def used(c):
+        k = key(c)
+        return k in taken or any(x == k or x.startswith(k + ".part") for x in listing)
+    while used(cand):
+        n += 1
+        cand = f"{stem}-{n}{ext}"
+    return cand
 
 
 # ---------- the data branch ----------
@@ -96,9 +285,9 @@ def guard(stats, last, today):
     if stats["files"] == 0 or stats["price_days"] == 0:
         hold.append("the data branch holds no saved prices")
     if last:
-        for key, floor, label in (("price_days", MIN_PRICES, "saved price days"), ("price_bytes", MIN_PRICES, "saved price data"),
-                                  ("bytes", MIN_TOTAL, "saved data in total"), ("files", MIN_TOTAL, "saved files")):
-            was, now = last.get(key) or 0, stats[key]
+        for k, floor, label in (("price_days", MIN_PRICES, "saved price days"), ("price_bytes", MIN_PRICES, "saved price data"),
+                                ("bytes", MIN_TOTAL, "saved data in total"), ("files", MIN_TOTAL, "saved files")):
+            was, now = last.get(k) or 0, stats[k]
             if was and now < was * floor:
                 hold.append(f"{label} fell from {was:,} to {now:,}")
     if stats.get("newest_day"):
@@ -172,7 +361,7 @@ def pack_archive(repo, tag, work, dest):
     folder = os.path.join(work, tag)
     os.makedirs(folder, exist_ok=True)
     for name, size, url in assets:
-        if "/" in name or name.startswith("."):
+        if "/" in name or "\\" in name or name.startswith("."):
             return None
         path = os.path.join(folder, name)
         for _try in range(3):
@@ -196,7 +385,42 @@ def pack_archive(repo, tag, work, dest):
     return len(assets)
 
 
-# ---------- packing ----------
+# ---------- checking a file ----------
+
+def check_file(path, kind, expect):
+    """None when the file opens and holds what it should, else what's wrong. kind: zip, tar, bundle, other."""
+    try:
+        if kind == "zip":
+            with zipfile.ZipFile(path) as z:
+                bad = z.testzip()               # reads every member and checks its CRC
+                n = sum(1 for i in z.infolist() if not i.is_dir())
+            if bad:
+                return f"zip member {bad} is damaged"
+            if expect is not None and n != expect:
+                return f"zip holds {n} files, expected {expect}"
+        elif kind == "tar":
+            with tarfile.open(path) as t:
+                members = t.getmembers()
+                for m in members:                # read every member to the end
+                    if m.isfile():
+                        f = t.extractfile(m)
+                        while f.read(1 << 20):
+                            pass
+            if expect is not None and len(members) != expect:
+                return f"tar holds {len(members)} files, expected {expect}"
+        elif kind == "bundle":
+            with tempfile.TemporaryDirectory() as d:
+                run(["git", "init", "-q", "--bare", d])
+                run(["git", "-C", d, "bundle", "verify", "-q", path])
+    except (zipfile.BadZipFile, tarfile.TarError, EOFError, OSError, subprocess.CalledProcessError, ValueError) as e:
+        return f"{kind} doesn't open ({type(e).__name__})"
+    return None
+
+
+def kind_of(dest):
+    d = re.sub(r"\.part\d+$", "", dest.lower())
+    return "zip" if d.endswith(".zip") else "tar" if d.endswith(".tar") else "bundle" if d.endswith(".bundle") else "other"
+
 
 def split_if_big(path):
     """Files over the copy limit are cut into .part01, .part02... (join them back in order to restore)."""
@@ -218,39 +442,83 @@ def split_if_big(path):
     return parts
 
 
-def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--state", default="")
-    ap.add_argument("--repo", default=REPO)
-    ap.add_argument("--today", default="")
-    ap.add_argument("--mirror", default="", help="use this existing mirror clone instead of cloning (tests)")
-    args = ap.parse_args(argv)
+# ---------- step 1: pack ----------
 
+def _monthly_files_at(listing, prefix):
+    """Files in the backup folder under monthly\\ whose name starts with prefix (zip or its parts)."""
+    p = key("monthly\\" + prefix)
+    return sorted(v[0] for k, v in listing.items() if k.startswith(p))
+
+
+def _group_parts(dests):
+    """{whole dest: [part dests in order]} for a list of destination names (unsplit files map to themselves)."""
+    out = {}
+    for d in sorted(dests):
+        out.setdefault(re.sub(r"\.part\d+$", "", d), []).append(d)
+    return out
+
+
+def pack(args):
     out = os.path.abspath(args.out)
     files_dir, work = os.path.join(out, "files"), os.path.join(out, "_work")
     shutil.rmtree(out, ignore_errors=True)
     os.makedirs(files_dir)
     os.makedirs(work)
     today = today_pt(args.today)
+    month = today.strftime("%Y-%m")
+    txn = f"{today:%Y%m%d}-{secrets.token_hex(3)}"
 
-    state = {}
-    if args.state and os.path.exists(args.state):
+    history = []
+    if args.state_history and os.path.isdir(args.state_history):
+        history = [os.path.join(args.state_history, n) for n in sorted(os.listdir(args.state_history)) if n.lower().endswith(".json")]
+    state, notes = load_state(args.state, history)
+    legacy_raw = None
+    if state.get("migrated_from") == 1 and state.get("seq") == 0:
         with open(args.state, encoding="utf-8-sig") as f:
-            state = json.load(f)
+            legacy_raw = f.read()
+    listing = load_listing(args.dest_listing)
     last = state.get("last_good") or {}
+    warn = []
+
+    newest = state.get("newest_slot")
+    slot = "weekly-2" if newest == "weekly-1" else "weekly-1"
+    assert slot != newest
+    old = ((state.get("slots") or {}).get(slot) or {}).get("files") or {}
+    for whole, rec in old.items():
+        for part in rec.get("parts") or [whole]:
+            if key(part) not in listing:
+                notes.append(f"{slot} no longer matches its last record (an unfinished run rewrote it); "
+                             f"{newest or 'the other slot'} is the copy to restore from until this run commits")
+                break
+        else:
+            continue
+        break
+
+    if args.recover_month:
+        rm = args.recover_month
+        entry = (state.get("monthly") or {}).get(rm) or {}
+        if rm != month:
+            raise Blocked(f"--recover-month {rm}: a recovered copy can only be made during {rm} (today is {today}); "
+                          "a copy made now would not hold that month's data")
+        if entry.get("status") not in ("needs-recovery", "legacy-unverified"):
+            raise Blocked(f"--recover-month {rm}: that month isn't waiting for recovery (status {entry.get('status')!r})")
 
     git_dir = os.path.abspath(args.mirror) if args.mirror else os.path.join(work, "repo.git")
     if not args.mirror:
         run(["git", "clone", "-q", "--mirror", f"https://github.com/{args.repo}.git", git_dir])
 
     stats = data_stats(git_dir)
-    hold, warn = guard(stats, last, today)
-    notes, made = [], []
-    slot = "weekly-2" if state.get("newest_slot") == "weekly-1" else "weekly-1"
-    months = list(state.get("months") or [])
-    archives = dict(state.get("archives") or {})
-    month = today.strftime("%Y-%m")
+    hold, w = guard(stats, last, today)
+    warn += w
+    items, verify_existing, taken = [], [], set()
+    monthly_plan, archive_plan = {}, {}
+
+    def add(local, dest, kind, expect=None, role=None, extra=None):
+        dest = dest.replace("/", "\\")
+        if not win_name_ok(dest):
+            raise Blocked(f"{dest} is not a safe Windows file name")
+        taken.add(key(dest))
+        items.append({"local": local, "dest": dest, "kind": kind, "expect": expect, "role": role, **(extra or {})})
 
     if not hold:
         slot_dir = os.path.join(files_dir, slot)
@@ -258,13 +526,13 @@ def main(argv=None):
         # 1) saved data, as a zip anyone can open
         zip_path = os.path.join(slot_dir, "saved-data.zip")
         run(["git", "-C", git_dir, "archive", "--format=zip", "-o", zip_path, "refs/heads/data"])
-        with zipfile.ZipFile(zip_path) as z:
-            bad = z.testzip()
-            n_files = sum(1 for i in z.infolist() if not i.is_dir())
-        if bad or n_files != stats["files"]:
-            hold.append(f"the saved-data zip didn't check out ({n_files} of {stats['files']} files)")
+        bad = check_file(zip_path, "zip", stats["files"])
+        if bad:
+            hold.append(f"the saved-data zip didn't check out here ({bad})")
         # 2) the live site (it also holds the videos earlier posts point to), and 3) everything else in the repo
         refs = run(["git", "-C", git_dir, "for-each-ref", "--format=%(refname)"]).split()
+        if "refs/heads/main" not in refs:
+            hold.append("the main branch is missing on GitHub")
         rest = [r for r in refs if r not in ("refs/heads/data", "refs/heads/gh-pages")]
         bundles = [("repo-code.bundle", rest)]
         if "refs/heads/gh-pages" in refs:
@@ -273,27 +541,60 @@ def main(argv=None):
             path = os.path.join(slot_dir, name)
             run(["git", "-C", git_dir, "bundle", "create", "-q", path] + which)
             run(["git", "-C", git_dir, "bundle", "verify", "-q", path])
-        if "refs/heads/main" not in refs:
-            hold.append("the main branch is missing on GitHub")
 
     if not hold:
-        made = [os.path.join(slot_dir, n) for n in sorted(os.listdir(slot_dir))]
-        # 4) one dated copy of the saved data per month, kept for good
-        if month not in months:
+        add(zip_path, f"{slot}\\saved-data.zip", "zip", stats["files"], "weekly")
+        for name, _w in bundles:
+            add(os.path.join(slot_dir, name), f"{slot}\\{name}", "bundle", None, "weekly")
+
+        # 4) one dated copy of the saved data per month, kept for good and never overwritten
+        monthly = state.get("monthly") or {}
+        entry = monthly.get(month) or {}
+        status = entry.get("status")
+        here = _monthly_files_at(listing, f"saved-data-{month}")
+        make_fresh, label = False, None
+        if status == "verified":
+            missing = [d for d, f in (entry.get("files") or {}).items() if listing.get(key(d), (None, -1))[1] != f["bytes"]]
+            if missing:
+                warn.append(f"monthly copy {month} was verified before but is now missing or changed on the computer: "
+                            f"{', '.join(missing)}; it is not remade on its own")
+        elif status in ("legacy-unverified", "needs-recovery"):
+            if args.recover_month == month:
+                make_fresh, label = True, f"saved-data-{month}-recovered-{today.isoformat()}.zip"
+            elif here and status == "legacy-unverified":
+                for d in here:
+                    verify_existing.append({"dest": d, "kind": kind_of(d), "month": month, "bytes": listing[key(d)][1]})
+                notes.append(f"monthly copy {month}: recorded by the old script, found on the computer; reading it back to check it")
+            else:
+                why = entry.get("why") or ("recorded by the old script but not on the computer" if not here else "")
+                monthly_plan[month] = {"status": "needs-recovery", "why": why}
+                warn.append(f"monthly copy {month} is listed in the backup record but {why or 'did not check out'}; "
+                            f"it is NOT rebuilt automatically (a later copy is not the same data). "
+                            f"With Keo's OK, run once with --recover-month {month} before the month ends")
+        else:
+            make_fresh, label = True, f"saved-data-{month}.zip"
+            for d in here:   # left by an earlier run that never committed: check it, keep it, never overwrite it
+                verify_existing.append({"dest": d, "kind": kind_of(d), "month": month, "bytes": listing[key(d)][1]})
+        if make_fresh:
             mdir = os.path.join(files_dir, "monthly")
-            os.makedirs(mdir)
-            mpath = os.path.join(mdir, f"saved-data-{month}.zip")
+            os.makedirs(mdir, exist_ok=True)
+            dest = free_name(f"monthly\\{label}", listing, taken)
+            mpath = os.path.join(mdir, dest.split("\\")[-1])
             shutil.copyfile(zip_path, mpath)
-            made.append(mpath)
-            months.append(month)
-        # 5) the monthly price archive releases: this month and, until it's final, last month
+            add(mpath, dest, "zip", stats["files"], "monthly", {"month": month, "recovered": args.recover_month == month})
         prev = (today.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+        if (monthly.get(prev) or {}).get("status") != "verified" and prev not in monthly_plan:
+            notes.append(f"no verified monthly copy for {prev}")
+
+        # 5) the monthly price archive releases: this month and, until it's final, last month (new name each time)
+        archives = state.get("archives") or {}
         for m in (prev, month):
             tag = f"archive-{m}"
             if (archives.get(tag) or {}).get("final"):
                 continue
-            dest = os.path.join(files_dir, "price-archives-monthly", f"{tag}.tar")
-            n = pack_archive(args.repo, tag, work, dest)
+            dest = free_name(f"price-archives-monthly\\{tag}.asof-{today.isoformat()}.tar", listing, taken)
+            local = os.path.join(files_dir, "price-archives-monthly", dest.split("\\")[-1])
+            n = pack_archive(args.repo, tag, work, local)
             had = (archives.get(tag) or {}).get("files") or 0
             if n is None:
                 warn.append(f"{tag}: couldn't read the release files, kept the earlier copy")
@@ -301,10 +602,10 @@ def main(argv=None):
                 notes.append(f"{tag}: no such release yet")
             elif n < had:
                 warn.append(f"{tag}: GitHub has {n} files, the backup has {had}; kept the backup's copy")
-                os.remove(dest)
+                os.remove(local)
             else:
-                made.append(dest)
-                archives[tag] = {"files": n, "final": m < month}
+                add(local, dest, "tar", n, "archive", {"tag": tag, "final": m < month})
+                archive_plan[tag] = {"files": n, "final": m < month}
         # 6) the raw tcgcsv days never change; say so if GitHub ever holds more than the backup
         counts = release_counts(args.repo)
         if counts is not None:
@@ -312,65 +613,350 @@ def main(argv=None):
             if state.get("tcgcsv_days") and raw != state["tcgcsv_days"]:
                 warn.append(f"GitHub holds {raw} raw price days, the backup holds {state['tcgcsv_days']}: the backup needs a top-up")
 
-    # split anything over the copy limit, then list what to copy
-    plan_files = []
-    for path in made:
-        for p in split_if_big(path):
-            plan_files.append({"local": p, "dest": os.path.relpath(p, files_dir).replace("/", "\\"),
-                               "bytes": os.path.getsize(p), "sha256": sha256(p)})
-    if plan_files:
-        lines = ["DRIVE YOUR STYLE - DATA BACKUP: THIS WEEK'S COPY",
-                 f"Made {today.isoformat()} from GitHub repo {args.repo}.",
-                 f"Saved data: {stats['files']:,} files, {stats['bytes']:,} bytes, {stats['price_days']} price days "
-                 f"(newest {stats['newest_day']}), data commit {stats['commit']}.",
-                 "Columns: SHA-256 checksum, size in bytes, file.", ""]
-        lines += [f"{f['sha256']}  {f['bytes']:12d}  {f['dest']}" for f in plan_files]
-        if any(".part" in f["dest"] for f in plan_files):
-            lines += ["", "Files ending in .part01, .part02... are one file cut into pieces: join them in order to restore."]
-        listing = os.path.join(files_dir, slot, "FILE-LIST.txt")
-        with open(listing, "w", newline="") as f:
-            f.write("\r\n".join(lines) + "\r\n")
-        plan_files.append({"local": listing, "dest": f"{slot}\\FILE-LIST.txt", "bytes": os.path.getsize(listing), "sha256": sha256(listing)})
+    # split anything over the copy limit; every piece gets its own size and checksum, the whole file too
+    transfer, wholes = [], {}
+    for it in items:
+        whole_sha, whole_bytes = sha256(it["local"]), os.path.getsize(it["local"])
+        pieces = split_if_big(it["local"])
+        wholes[it["dest"]] = {"sha256": whole_sha, "bytes": whole_bytes, "kind": it["kind"], "expect": it["expect"],
+                              "role": it["role"], "parts": [], **{k: it[k] for k in ("month", "recovered", "tag", "final") if k in it}}
+        for p in pieces:
+            d = it["dest"] + p[len(it["local"]):]          # same name, plus .partNN when split
+            if not win_name_ok(d):
+                raise Blocked(f"{d} is not a safe Windows file name")
+            transfer.append({"local": p, "dest": d, "bytes": os.path.getsize(p), "sha256": sha256(p), "whole": it["dest"]})
+            wholes[it["dest"]]["parts"].append(d)
+
+    # never overwrite anything outside the slot this run owns
+    for t in transfer:
+        k = key(t["dest"])
+        if k in listing and not k.startswith(key(slot) + "\\"):
+            raise Blocked(f"{t['dest']} already exists on the computer; this run would overwrite it")
+    planned = {key(t["dest"]) for t in transfer} | {key(f"{slot}\\FILE-LIST.txt")}
+    stale = sorted(v[0] for k, v in listing.items() if k.startswith(key(slot) + "\\") and k not in planned)
+    if stale and not hold:
+        notes.append(f"{len(stale)} older file(s) in {slot} are not part of this copy (FILE-LIST.txt says what is): " + ", ".join(stale))
+
+    # reading back from the computer: batches under the staging limits
+    to_read = [(t["dest"], t["bytes"]) for t in transfer] + [(v["dest"], v["bytes"]) for v in verify_existing]
+    batches, cur, size = [], [], 0
+    for d, b in to_read:
+        if cur and (size + b > STAGE_BATCH or len(cur) >= STAGE_FILES):
+            batches.append(cur)
+            cur, size = [], 0
+        cur.append(d)
+        size += b
+    if cur:
+        batches.append(cur)
 
     verdict = "hold" if hold else "ok"
-    entry = {"date": today.isoformat(), "verdict": verdict}
-    if hold:
-        entry["why"] = hold
-    else:
-        entry.update({"slot": slot, "data_commit": stats["commit"], "files": stats["files"], "bytes": stats["bytes"],
-                      "price_days": stats["price_days"], "copied_bytes": sum(f["bytes"] for f in plan_files)})
-    if warn:
-        entry["warnings"] = warn
-    new_state = dict(state)
-    new_state["version"] = 1
-    new_state["runs"] = ((state.get("runs") or []) + [entry])[-KEEP_RUNS:]
-    if not hold:
-        new_state.update({"newest_slot": slot, "months": months, "archives": archives,
-                          "last_good": {"date": today.isoformat(), **stats}})
-    state_path = os.path.join(out, "backup-state.json")
-    with open(state_path, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(new_state, f, indent=1)
-
-    shutil.rmtree(work, ignore_errors=True)
-    total = sum(f["bytes"] for f in plan_files)
+    total = sum(t["bytes"] for t in transfer)
     if hold:
         summary = "HOLD, nothing copied: " + "; ".join(hold)
     else:
-        summary = (f"OK: {len(plan_files)} files, {total / 1e6:.0f} MB into {slot}; saved data {stats['files']:,} files, "
+        summary = (f"OK: {len(transfer)} files, {total / 1e6:.0f} MB into {slot}; saved data {stats['files']:,} files, "
                    f"{stats['price_days']} price days (newest {stats['newest_day']})")
-    plan = {"verdict": verdict, "summary": summary, "hold": hold, "warnings": warn, "notes": notes, "slot": slot if not hold else None,
-            "files": plan_files, "state_file": state_path, "state_dest": "backup-state.json"}
-    with open(os.path.join(out, "plan.json"), "w", encoding="utf-8") as f:
-        json.dump(plan, f, indent=1)
+    plan = {
+        "plan_version": 2, "txn": txn, "date": today.isoformat(), "verdict": verdict, "summary": summary,
+        "hold": hold, "warnings": warn, "notes": notes, "slot": None if hold else slot, "dest_root": DEST_ROOT,
+        "transfer": [dict({k: t[k] for k in ("local", "dest", "bytes", "sha256")}, device_path=DEST_ROOT + "\\" + t["dest"])
+                     for t in transfer],
+        "wholes": wholes, "verify_existing": verify_existing, "stage_batches": batches,
+        "stage_paths": [[DEST_ROOT + "\\" + d for d in b] for b in batches],
+        "stats": stats, "base_state": state, "monthly_plan": monthly_plan, "archive_plan": archive_plan,
+        "legacy_raw": legacy_raw,
+    }
+    write_json(os.path.join(out, "plan.json"), plan)
+    shutil.rmtree(work, ignore_errors=True)
     print(summary)
-    for w in warn:
-        print("WARNING: " + w)
-    for n in notes:
-        print("note: " + n)
-    for f in plan_files:
-        print(f"  {f['bytes']:>12,}  {f['dest']}")
+    for x in warn:
+        print("WARNING: " + x)
+    for x in notes:
+        print("note: " + x)
+    for t in transfer:
+        print(f"  {t['bytes']:>12,}  {t['dest']}")
     print("plan: " + os.path.join(out, "plan.json"))
     return 0
+
+
+# ---------- step 2: verify what landed ----------
+
+def load_staged(path, root=DEST_ROOT):
+    """{key(dest): staged path} from a list of {dest, stagedPath} or device_stage_files' own entries."""
+    raw = read_json(path)
+    batches = raw if isinstance(raw, list) else [raw]
+    entries = []
+    for b in batches:          # one device_stage_files result, several of them, or a plain list of entries
+        if isinstance(b, dict) and isinstance(b.get("staged"), list):
+            entries += b["staged"]
+        elif isinstance(b, dict):
+            entries.append(b)
+    out, rk = {}, key(root)
+    for e in entries:
+        if not isinstance(e, dict) or not e.get("stagedPath") or e.get("ok") is False:
+            continue
+        dest = e.get("dest")
+        if not dest and e.get("devicePath"):
+            dp = key(e["devicePath"])
+            if not dp.startswith(rk + "\\"):
+                continue
+            dest = e["devicePath"].replace("/", "\\")[len(root) + 1:]
+        if dest:
+            out[key(dest)] = e["stagedPath"]
+    return out
+
+
+def _join(paths, into):
+    with open(into, "wb") as o:
+        for p in paths:
+            with open(p, "rb") as f:
+                shutil.copyfileobj(f, o, 1 << 20)
+
+
+def _check_landed(dest, want_bytes, want_sha, listing, staged):
+    k = key(dest)
+    if k not in listing:
+        return "not on the computer"
+    if listing[k][1] != want_bytes:
+        return f"size on the computer is {listing[k][1]:,}, expected {want_bytes:,}"
+    if k not in staged or not os.path.exists(staged[k]):
+        return "not read back from the computer"
+    if os.path.getsize(staged[k]) != want_bytes:
+        return "read-back copy has the wrong size"
+    if want_sha and sha256(staged[k]) != want_sha:
+        return "SHA-256 on the computer doesn't match"
+    return None
+
+
+def verify(args):
+    out = os.path.abspath(args.out)
+    plan = read_json(os.path.join(out, "plan.json"))
+    if plan.get("plan_version") != 2:
+        raise Blocked("plan.json is not from this script version")
+    listing = load_listing(args.dest_listing)
+    staged = load_staged(args.staged) if args.staged else {}
+    problems, resend = [], set()
+
+    for t in plan["transfer"]:
+        bad = _check_landed(t["dest"], t["bytes"], t["sha256"], listing, staged)
+        if bad:
+            problems.append(f"{t['dest']}: {bad}")
+            resend.add(t["dest"])
+
+    landed = {}
+    with tempfile.TemporaryDirectory() as tmp:
+        for whole, w in plan["wholes"].items():
+            if any(p in resend for p in w["parts"]):
+                continue
+            paths = [staged[key(p)] for p in w["parts"]]
+            path = paths[0]
+            if len(paths) > 1:                        # a split file: join the pieces exactly as a restore would
+                path = os.path.join(tmp, "joined")
+                _join(paths, path)
+            if sha256(path) != w["sha256"] or os.path.getsize(path) != w["bytes"]:
+                problems.append(f"{whole}: the joined file doesn't match its checksum")
+                resend.update(w["parts"])
+                continue
+            bad = check_file(path, w["kind"], w["expect"])
+            if bad:
+                problems.append(f"{whole}: {bad}")        # every piece matched, so the packed file itself is bad
+                landed[whole] = "broken-at-source"
+                continue
+            landed[whole] = {"bytes": w["bytes"], "sha256": w["sha256"], "parts": w["parts"]}
+            if len(paths) > 1:
+                os.remove(path)
+
+        adopted, kept, why_not = {}, [], {}
+        for v in plan["verify_existing"]:
+            k = key(v["dest"])
+            if k not in listing or k not in staged:
+                kept.append(f"{v['dest']} (not read back)")
+                continue
+            groups = _group_parts([v["dest"]])
+            whole = next(iter(groups))
+            if whole != v["dest"]:
+                bad = "split copies from older runs are only kept, not adopted"
+            elif os.path.getsize(staged[k]) != listing[k][1]:
+                bad = "read-back copy has the wrong size"
+            else:
+                bad = check_file(staged[k], v["kind"], None)
+            if bad:
+                kept.append(f"{v['dest']} ({bad})")
+                why_not.setdefault(v["month"], f"its file on the computer didn't check out ({bad})")
+            else:
+                adopted.setdefault(v["month"], {})[v["dest"]] = {"bytes": listing[k][1], "sha256": sha256(staged[k])}
+
+    attempt = args.attempt
+    if problems:
+        source_broken = any(v == "broken-at-source" for v in landed.values())
+        verdict = "failed" if (attempt >= 2 or source_broken or not resend) else "retry"
+        res = {"verdict": verdict, "problems": problems, "resend": sorted(resend), "attempt": attempt}
+        write_json(os.path.join(out, "verify.json"), res)
+        print(("RETRY: " if verdict == "retry" else "FAILED: ") + "; ".join(problems))
+        if verdict == "retry":
+            print("resend: " + ", ".join(sorted(resend)))
+        return 4
+
+    # everything checked out at the destination: build the new state
+    base = plan["base_state"]
+    today, txn, slot, stats = plan["date"], plan["txn"], plan["slot"], plan["stats"]
+    state = json.loads(json.dumps(base))
+    state["version"], state["txn"] = STATE_VERSION, txn
+    state["seq"] = int(base.get("seq") or 0) + 1
+    state["committed_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    state.pop("integrity", None)
+    monthly, archives = state.setdefault("monthly", {}), state.setdefault("archives", {})
+    entry = {"date": today, "txn": txn, "verdict": plan["verdict"]}
+    if plan["verdict"] == "hold":
+        entry["why"] = plan["hold"]
+    else:
+        files = {}
+        for whole, rec in landed.items():
+            w = plan["wholes"][whole]
+            if w["role"] == "weekly":
+                files[whole] = rec
+            elif w["role"] == "monthly":
+                m = w["month"]
+                monthly[m] = {"status": "verified", "made": today, "txn": txn, "data_commit": stats["commit"],
+                              "files": {whole: rec}, **({"recovered": True} if w.get("recovered") else {})}
+            elif w["role"] == "archive":
+                archives[w["tag"]] = {"files": w["expect"], "final": w["final"], "status": "verified",
+                                      "dest": whole, "bytes": rec["bytes"], "sha256": rec["sha256"], "made": today}
+        for m, found in adopted.items():
+            if (monthly.get(m) or {}).get("status") != "verified":
+                monthly[m] = {"status": "verified", "made": "before " + today, "txn": txn, "adopted": True, "files": found}
+        for m, mp in (plan.get("monthly_plan") or {}).items():
+            if (monthly.get(m) or {}).get("status") != "verified":
+                monthly[m] = {"status": mp["status"], "why": mp["why"]}
+        for v in plan["verify_existing"]:
+            m = v["month"]
+            if (monthly.get(m) or {}).get("status") == "legacy-unverified":   # it was there but didn't check out
+                monthly[m] = {"status": "needs-recovery", "why": why_not.get(m) or "its file on the computer wasn't read back"}
+        state.setdefault("slots", {})[slot] = {"status": "verified", "txn": txn, "date": today,
+                                               "data_commit": stats["commit"], "files": files}
+        state["newest_slot"] = slot
+        state["last_good"] = {"date": today, **stats}
+        entry.update({"slot": slot, "data_commit": stats["commit"], "files": stats["files"], "bytes": stats["bytes"],
+                      "price_days": stats["price_days"], "copied_bytes": sum(t["bytes"] for t in plan["transfer"])})
+        if kept:
+            entry["kept_unverified"] = kept
+    if plan["warnings"]:
+        entry["warnings"] = plan["warnings"]
+    state["runs"] = (list(state.get("runs") or []) + [entry])[-KEEP_RUNS:]
+    state = seal(state)
+
+    cdir = os.path.join(out, "commit")
+    shutil.rmtree(cdir, ignore_errors=True)
+    commit = []
+    body = (json.dumps(state, indent=1, ensure_ascii=False) + "\n").encode("utf-8")
+    legacy_dest = f"{HISTORY}\\backup-state-000000{LEGACY_SUFFIX}"
+    if plan.get("legacy_raw") and key(legacy_dest) not in listing:
+        lp = os.path.join(cdir, "legacy-v1.json")
+        atomic_write(lp, plan["legacy_raw"].encode("utf-8"))
+        commit.append({"local": lp, "dest": legacy_dest})          # the old record, kept as it was
+    if plan["verdict"] == "ok":       # the slot's own list, written after its files checked out
+        st = plan["stats"]
+        lines = ["DRIVE YOUR STYLE - DATA BACKUP: THIS WEEK'S COPY",
+                 f"Made {today} from GitHub repo {REPO}, run {txn}. Every file below was read back from this computer and matched.",
+                 f"Saved data: {st['files']:,} files, {st['bytes']:,} bytes, {st['price_days']} price days "
+                 f"(newest {st['newest_day']}), data commit {st['commit']}.",
+                 "Columns: SHA-256 checksum, size in bytes, file.", ""]
+        lines += [f"{t['sha256']}  {t['bytes']:12d}  {t['dest']}" for t in plan["transfer"]]
+        if any(len(w["parts"]) > 1 for w in plan["wholes"].values()):
+            lines += ["", "Files ending in .part01, .part02... are one file cut into pieces: join them in order to restore.",
+                      "Whole-file checksums: " + "; ".join(f"{d} {w['sha256']}" for d, w in plan["wholes"].items() if len(w["parts"]) > 1)]
+        lines += ["", "Only this list and backup-state.json say what this folder holds; anything else here is left from an earlier run."]
+        fl = os.path.join(cdir, "FILE-LIST.txt")
+        atomic_write(fl, ("\r\n".join(lines) + "\r\n").encode("utf-8"))
+        commit.append({"local": fl, "dest": f"{slot}\\FILE-LIST.txt"})
+    hist_dest = f"{HISTORY}\\backup-state-{state['seq']:06d}-{txn}.json"
+    if key(hist_dest) in listing:
+        raise Blocked(f"{hist_dest} already exists on the computer")
+    hp = os.path.join(cdir, "history.json")
+    atomic_write(hp, body)
+    commit.append({"local": hp, "dest": hist_dest})                 # the commit point
+    sp = os.path.join(cdir, "backup-state.json")
+    atomic_write(sp, body)
+    commit.append({"local": sp, "dest": "backup-state.json"})       # pointer to it, always last
+    for c in commit:
+        c.update({"bytes": os.path.getsize(c["local"]), "sha256": sha256(c["local"])})
+    write_json(os.path.join(out, "commit.json"), {"txn": txn, "seq": state["seq"], "files": commit})
+    write_json(os.path.join(out, "verify.json"), {"verdict": "ready", "attempt": attempt, "kept_unverified": kept,
+                                                   "adopted": adopted})
+    print(f"READY: every file matched on the computer; write the {len(commit)} files in commit.json in order")
+    for c in commit:
+        print(f"  {c['bytes']:>12,}  {c['dest']}")
+    return 0
+
+
+# ---------- step 3: confirm the state landed ----------
+
+def confirm(args):
+    out = os.path.abspath(args.out)
+    plan = read_json(os.path.join(out, "plan.json"))
+    commit = read_json(os.path.join(out, "commit.json"))
+    listing = load_listing(args.dest_listing)
+    staged = load_staged(args.staged) if args.staged else {}
+    problems, landed = [], set()
+    for c in commit["files"]:
+        bad = _check_landed(c["dest"], c["bytes"], c["sha256"], listing, staged)
+        if bad:
+            problems.append(f"{c['dest']}: {bad}")
+        else:
+            landed.add(c["dest"])
+    state_copies = [c["dest"] for c in commit["files"]
+                    if c["dest"] == "backup-state.json" or (c["dest"].startswith(HISTORY) and not c["dest"].endswith(LEGACY_SUFFIX))]
+    if not any(d in landed for d in state_copies):
+        # neither copy of the new state is intact: this run is not recorded (the earlier state still stands)
+        write_json(os.path.join(out, "confirm.json"), {"verdict": "failed", "problems": problems, "committed": False})
+        print("DYS backup FAILED: the backup record didn't save (" + "; ".join(problems) + "); "
+              "the files were copied and checked, but the next run will treat them as not done")
+        return 5
+    warnings = list(plan["warnings"]) + [f"{p} (the run is still recorded: the other state copy is intact)" for p in problems]
+    write_json(os.path.join(out, "confirm.json"), {"verdict": "ok", "committed": True, "problems": problems})
+    print(("DYS backup OK: " if plan["verdict"] == "ok" else "DYS backup HELD: ") + plan["summary"]
+          + ("" if not warnings else " | WARNINGS: " + "; ".join(warnings)))
+    return 0
+
+
+# ---------- command line ----------
+
+def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if not argv or argv[0] not in ("pack", "verify", "confirm"):
+        print("FAILED: backup_pack.py now runs in three steps (pack, verify, confirm) and records nothing until the copy "
+              "is checked on the computer. The task needs the prompt in tools/BACKUP-TASK.md; nothing was done.")
+        return 2
+    ap = argparse.ArgumentParser(prog="backup_pack.py")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    p = sub.add_parser("pack")
+    p.add_argument("--out", required=True)
+    p.add_argument("--state", required=True)
+    p.add_argument("--state-history", default="")
+    p.add_argument("--dest-listing", required=True)
+    p.add_argument("--repo", default=REPO)
+    p.add_argument("--today", default="")
+    p.add_argument("--mirror", default="", help="use this existing mirror clone instead of cloning (tests)")
+    p.add_argument("--recover-month", default="", help="with Keo's OK only: remake a recorded-but-missing monthly copy")
+    for name in ("verify", "confirm"):
+        q = sub.add_parser(name)
+        q.add_argument("--out", required=True)
+        q.add_argument("--dest-listing", required=True)
+        q.add_argument("--staged", default="")
+        q.add_argument("--attempt", type=int, default=1)
+    args = ap.parse_args(argv)
+    try:
+        return {"pack": pack, "verify": verify, "confirm": confirm}[args.cmd](args)
+    except Blocked as e:
+        print("BLOCKED: " + str(e))
+        try:
+            write_json(os.path.join(os.path.abspath(args.out), f"{args.cmd}-blocked.json"), {"verdict": "blocked", "why": str(e)})
+        except OSError:
+            pass
+        return 3
+    except OSError as e:
+        print(f"FAILED: {args.cmd} stopped on a file error ({e.strerror or e}); nothing was recorded")
+        return 1
 
 
 if __name__ == "__main__":
