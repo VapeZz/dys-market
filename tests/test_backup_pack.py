@@ -7,6 +7,8 @@ fail half way). No network, no real data, no real backup folder.
     python -m unittest tests/test_backup_pack.py
 """
 import contextlib, errno, gzip, hashlib, io, json, os, shutil, subprocess, sys, tempfile, unittest
+import time
+from datetime import timedelta
 from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
@@ -69,6 +71,11 @@ class Computer:
         self.stage_dir = os.path.join(base, "uploads")
         os.makedirs(self.dir)
         self.writes = []
+        self.clock = int(time.time() * 1000)     # milliseconds; each write moves it forward like a real clock
+
+    def _touch(self, p):
+        self.clock += 1000
+        os.utime(p, ns=(self.clock * 1_000_000, self.clock * 1_000_000))
 
     def _real(self, dest):
         """Windows: an existing file is found whatever the case of the name."""
@@ -83,6 +90,7 @@ class Computer:
         os.makedirs(os.path.dirname(p), exist_ok=True)
         with open(p, "wb") as f:
             f.write(data)
+        self._touch(p)
 
     def get(self, dest):
         with open(self._real(dest), "rb") as f:
@@ -96,7 +104,8 @@ class Computer:
         for r, _d, fs in os.walk(self.dir):
             for f in fs:
                 rel = os.path.relpath(os.path.join(r, f), self.dir).replace(os.sep, sep)
-                out.append({"name": rel, "type": "file", "size": os.path.getsize(os.path.join(r, f))})
+                st = os.stat(os.path.join(r, f))
+                out.append({"name": rel, "type": "file", "size": st.st_size, "mtimeMs": st.st_mtime_ns // 1_000_000})
         return {"entries": out}
 
     def commit(self, dest, src, fault=None):
@@ -112,6 +121,7 @@ class Computer:
         if fault in ("truncate", "enospc", "interrupt"):
             with open(p, "wb") as f:
                 f.write(data[: len(data) // 2])
+            self._touch(p)
             if fault == "enospc":
                 raise OSError(errno.ENOSPC, "There is not enough space on the disk")
             if fault == "interrupt":
@@ -119,6 +129,7 @@ class Computer:
             return
         with open(p, "wb") as f:
             f.write(data)
+        self._touch(p)
 
     def stage(self, dests):
         out = []
@@ -167,76 +178,146 @@ def jdump(path, obj):
         json.dump(obj, f)
 
 
-def run_task(pc, mirror, today, work, faults=None, recover="", always=(), sep="/"):
-    """What the weekly task does, step by step (tools/BACKUP-TASK.md). faults: {dest: kind} applied on the
-    first write of that file; dests in `always` fail every time. Returns (result line, out dir)."""
-    faults = dict(faults or {})
-    os.makedirs(work, exist_ok=True)
-    out = os.path.join(work, "out")
-    # 2-3: list the folder; read back the state and the newest history copies
-    jdump(os.path.join(work, "before.json"), pc.listing(sep))
-    if not pc.exists("backup-state.json"):
-        return "FAILED: backup folder or backup-state.json missing", out
-    hist = sorted(e["name"] for e in pc.listing("\\")["entries"] if e["name"].lower().startswith("state-history\\"))[-3:]
-    staged = pc.stage(["backup-state.json"] + hist)
-    hdir = os.path.join(work, "hist")
-    shutil.rmtree(hdir, ignore_errors=True)
-    os.makedirs(hdir)
-    for s in staged[1:]:
-        shutil.copyfile(s["stagedPath"], os.path.join(hdir, os.path.basename(s["stagedPath"])))
-    state = os.path.join(work, "backup-state.json")
-    shutil.copyfile(staged[0]["stagedPath"], state)
-    # 4: pack
-    args = ["pack", "--out", out, "--state", state, "--state-history", hdir, "--dest-listing",
-            os.path.join(work, "before.json"), "--mirror", mirror, "--today", today]
-    if recover:
-        args += ["--recover-month", recover]
-    code, text = call(*args)
-    if code != 0:
-        return text.strip().splitlines()[-1], out
-    plan = jload(os.path.join(out, "plan.json"))
+class Run:
+    """One run of the weekly task, step by step as tools/BACKUP-TASK.md says, so tests can interleave two runs.
+    faults: {dest: kind} for the first write of that file; dests in `always` fail every time."""
 
-    def write(dest, local):
-        f = "corrupt" if dest in always and faults.get(dest) == "corrupt" else faults.pop(dest, None)
-        if dest in always:
+    def __init__(self, pc, mirror, today, work, faults=None, recover="", always=(), sep="/", break_lock=""):
+        self.pc, self.mirror, self.today, self.work = pc, mirror, today, work
+        self.faults, self.always, self.recover, self.sep, self.break_lock = dict(faults or {}), set(always), recover, sep, break_lock
+        self.out = os.path.join(work, "out")
+        self.locked = False
+        os.makedirs(work, exist_ok=True)
+
+    def write(self, dest, local):
+        f = "corrupt" if dest in self.always and self.faults.get(dest) == "corrupt" else self.faults.pop(dest, None)
+        if dest in self.always:
             f = f or "missing"
         try:
-            pc.commit(dest, local, f)
+            self.pc.commit(dest, local, f)
         except (OSError, ConnectionError):
             pass                                  # the tool call failed; verification decides
-    # 6: copy the data files
-    for t in plan["transfer"]:
-        write(t["dest"], t["local"])
-    # 7: list again, read everything back, verify
-    jdump(os.path.join(work, "after.json"), pc.listing(sep))
-    staged = []
-    for b in plan["stage_batches"]:
-        staged += pc.stage(b)
-    jdump(os.path.join(work, "staged.json"), staged)
-    code, text = call("verify", "--out", out, "--dest-listing", os.path.join(work, "after.json"), "--staged", os.path.join(work, "staged.json"))
-    if code != 0:
-        v = jload(os.path.join(out, "verify.json"))
-        if v["verdict"] != "retry":
-            return text.strip().splitlines()[0], out
-        local = {t["dest"]: t["local"] for t in plan["transfer"]}
-        for d in v["resend"]:
-            write(d, local[d])
-        jdump(os.path.join(work, "after.json"), pc.listing(sep))
-        staged = [s for s in staged if s.get("devicePath", "").split(ROOT + "\\")[-1] not in v["resend"]] + pc.stage(v["resend"])
-        jdump(os.path.join(work, "staged.json"), staged)
-        code, text = call("verify", "--out", out, "--dest-listing", os.path.join(work, "after.json"),
-                          "--staged", os.path.join(work, "staged.json"), "--attempt", "2")
+
+    def listing(self, name):
+        path = os.path.join(self.work, name)
+        jdump(path, self.pc.listing(self.sep))
+        return path
+
+    def stage_to(self, name, dests):
+        path = os.path.join(self.work, name)
+        jdump(path, self.pc.stage([rel(d) for d in dests]))
+        return path
+
+    def fail(self, line):
+        if self.locked:                           # step 9: release the lock only if it is still ours
+            g = self.listing("guard.json")
+            st = self.stage_to("staged-guard.json", self.plan["guard_paths"])
+            code, _ = call("guard", "--out", self.out, "--dest-listing", g, "--staged", st, "--phase", "release")
+            if code == 0:
+                self.write(bp.LOCK, self.plan["lock"]["release"])
+        return line
+
+    def pack(self, cmd="pack", extra=()):
+        before = self.listing("before.json")
+        if not self.pc.exists("backup-state.json"):
+            return "FAILED: backup folder or backup-state.json missing"
+        names = [e["name"] for e in self.pc.listing("\\")["entries"]]
+        hist = sorted(n for n in names if n.lower().startswith("state-history\\"))[-3:]
+        want = ["backup-state.json"] + (["backup.lock"] if "backup.lock" in names else []) + hist
+        staged = {s["devicePath"].split(ROOT + "\\")[-1]: s["stagedPath"] for s in self.pc.stage(want)}
+        hdir = os.path.join(self.work, "hist")
+        shutil.rmtree(hdir, ignore_errors=True)
+        os.makedirs(hdir)
+        for h in hist:
+            shutil.copyfile(staged[h], os.path.join(hdir, os.path.basename(staged[h])))
+        state = os.path.join(self.work, "backup-state.json")
+        shutil.copyfile(staged["backup-state.json"], state)
+        lock = os.path.join(self.work, "backup.lock")
+        if "backup.lock" in staged:
+            shutil.copyfile(staged["backup.lock"], lock)
+        args = [cmd, "--out", self.out, "--state", state, "--state-history", hdir, "--dest-listing", before,
+                "--lock", lock, "--today", self.today] + list(extra)
+        if cmd == "pack":
+            args += ["--mirror", self.mirror]
+            if self.recover:
+                args += ["--recover-month", self.recover]
+        if self.break_lock:
+            args += ["--break-lock", self.break_lock]
+        code, text = call(*args)
         if code != 0:
-            return text.strip().splitlines()[0], out
-    # 9: write the state files in order, read them back, confirm
-    commit = jload(os.path.join(out, "commit.json"))
-    for c in commit["files"]:
-        write(c["dest"], c["local"])
-    jdump(os.path.join(work, "final.json"), pc.listing(sep))
-    jdump(os.path.join(work, "staged-commit.json"), pc.stage([c["dest"] for c in commit["files"]]))
-    code, text = call("confirm", "--out", out, "--dest-listing", os.path.join(work, "final.json"),
-                      "--staged", os.path.join(work, "staged-commit.json"))
-    return text.strip().splitlines()[-1], out
+            return "FAILED: " + text.strip().splitlines()[-1]
+        self.plan = jload(os.path.join(self.out, "plan.json"))
+        return None
+
+    def take_lock(self):
+        self.write(self.plan["lock"]["dest"], self.plan["lock"]["acquire"])
+        return None
+
+    def guard(self, phase):
+        g = self.listing("guard.json")
+        st = self.stage_to("staged-guard.json", self.plan["guard_paths"])
+        code, text = call("guard", "--out", self.out, "--dest-listing", g, "--staged", st, "--phase", phase)
+        if code != 0:
+            return "FAILED: " + text.strip().splitlines()[-1]
+        if phase == "start":
+            self.locked = True
+        return None
+
+    def transfer(self):
+        for t in self.plan["transfer"]:
+            self.write(t["dest"], t["local"])
+
+    def verify(self):
+        after = self.listing("after.json")
+        staged = [{"staged": self.pc.stage([rel(d) for d in b])} for b in self.plan["stage_paths"]]
+        jdump(os.path.join(self.work, "staged.json"), staged)
+        code, text = call("verify", "--out", self.out, "--dest-listing", after, "--staged", os.path.join(self.work, "staged.json"))
+        if code != 0:
+            v = jload(os.path.join(self.out, "verify.json"))
+            if v["verdict"] != "retry":
+                return self.fail("FAILED: " + text.strip().splitlines()[0].split(": ", 1)[-1])
+            local = {t["dest"]: t["local"] for t in self.plan["transfer"]}
+            for d in v["resend"]:
+                self.write(d, local[d])
+            after = self.listing("after.json")
+            staged.append({"staged": self.pc.stage(v["resend"])})
+            jdump(os.path.join(self.work, "staged.json"), staged)
+            code, text = call("verify", "--out", self.out, "--dest-listing", after,
+                              "--staged", os.path.join(self.work, "staged.json"), "--attempt", "2")
+            if code != 0:
+                return self.fail("FAILED: " + text.strip().splitlines()[0].split(": ", 1)[-1])
+        return None
+
+    def record(self):
+        bad = self.guard("commit")
+        if bad:
+            return self.fail(bad)
+        commit = jload(os.path.join(self.out, "commit.json"))
+        for c in commit["files"]:
+            self.write(c["dest"], c["local"])
+        final = self.listing("final.json")
+        sc = self.stage_to("staged-commit.json", [ROOT + "\\" + c["dest"] for c in commit["files"]])
+        code, text = call("confirm", "--out", self.out, "--dest-listing", final, "--staged", sc)
+        return text.strip().splitlines()[-1]
+
+    def all(self, cmd="pack", extra=()):
+        for step in (lambda: self.pack(cmd, extra), self.take_lock, lambda: self.guard("start")):
+            r = step()
+            if r:
+                return (self.fail(r) if self.locked else r), self.out
+        self.transfer()
+        r = self.verify()
+        if r:
+            return r, self.out
+        return self.record(), self.out
+
+
+def rel(device_path):
+    return device_path.split(ROOT + "\\")[-1] if device_path.startswith(ROOT + "\\") else device_path
+
+
+def run_task(pc, mirror, today, work, **kw):
+    return Run(pc, mirror, today, work, **kw).all()
 
 
 def legacy_state():
@@ -559,13 +640,13 @@ class Recovery(Base):
         self.seed_legacy()
         self.task("2026-11-22")
         line, _ = self.task("2026-12-06", recover="2026-11")
-        self.assertTrue(line.startswith("BLOCKED:"), line)
+        self.assertIn("BLOCKED:", line)
 
     def test_recovery_of_a_good_month_is_blocked(self):
         self.seed_legacy()
         self.task("2026-12-06")
         line, _ = self.task("2026-12-13", recover="2026-12")
-        self.assertTrue(line.startswith("BLOCKED:"), line)
+        self.assertIn("BLOCKED:", line)
 
 
 class StateFile(Base):
@@ -578,7 +659,7 @@ class StateFile(Base):
                 self.pc.put("backup-state.json", content.encode())
                 before = self.pc.snapshot()
                 line, _ = self.task("2026-12-06")
-                self.assertTrue(line.startswith("BLOCKED:"), line)
+                self.assertIn("BLOCKED:", line)
                 self.assertEqual(self.pc.snapshot(), before)
 
     def test_missing_state_is_never_made_up(self):
@@ -612,6 +693,18 @@ class StateFile(Base):
         self.assertIn("FAILED", text)
         self.assertFalse(os.path.exists(os.path.join(out, "plan.json")))
 
+    def test_half_a_bundle_is_caught(self):
+        d = tempfile.mkdtemp(dir=self.tmp)
+        full = os.path.join(d, "full.bundle")
+        data = other_bundle(self.mirror, full)
+        self.assertIsNone(bp.check_file(full, "bundle", None))
+        half = os.path.join(d, "half.bundle")
+        wtext(half, data[: len(data) // 2], "wb")
+        self.assertIsNotNone(bp.check_file(half, "bundle", None))      # "git bundle verify" alone says okay
+        hdr = os.path.join(d, "hdr.bundle")
+        wtext(hdr, b"# v2 git bundle\n", "wb")
+        self.assertIsNotNone(bp.check_file(hdr, "bundle", None))
+
     def test_atomic_write_keeps_the_old_file_when_interrupted(self):
         d = tempfile.mkdtemp(dir=self.tmp)
         p = os.path.join(d, "s.json")
@@ -622,6 +715,201 @@ class StateFile(Base):
         with open(p, "rb") as f:
             self.assertEqual(f.read(), b"old")
         self.assertEqual(os.listdir(d), ["s.json"])
+
+
+def other_bundle(mirror, path):
+    """A valid git bundle with different bytes (only main): stands in for a copy another run wrote."""
+    subprocess.run(["git", "-C", mirror, "bundle", "create", "-q", path, "refs/heads/main", "refs/heads/gh-pages"],
+                   check=True, capture_output=True)
+    with open(path, "rb") as f:
+        return f.read()
+
+
+class OneRunAtATime(Base):
+    def setUp(self):
+        super().setUp()
+        self.seed_legacy()
+
+    def lock(self):
+        return json.loads(self.pc.get("backup.lock"))
+
+    def test_second_run_is_blocked_while_the_first_holds_the_lock(self):
+        a = Run(self.pc, self.mirror, "2026-12-06", os.path.join(self.base, "a"))
+        self.assertIsNone(a.pack()); a.take_lock(); self.assertIsNone(a.guard("start"))
+        before = self.pc.snapshot()
+        line, _ = self.task("2026-12-06")                               # b starts while a is working
+        self.assertIn("BLOCKED: another backup run may be writing", line)
+        self.assertEqual(self.pc.snapshot(), before)                    # b changed nothing, lock untouched
+        a.transfer(); self.assertIsNone(a.verify())
+        self.assertTrue(a.record().startswith("DYS backup OK:"))
+        self.assertEqual(self.lock()["state"], "released")
+        line, _ = self.task("2026-12-13")                               # free again
+        self.assertTrue(line.startswith("DYS backup OK:"), line)
+
+    def test_both_take_the_lock_at_once_only_one_goes_on(self):
+        a = Run(self.pc, self.mirror, "2026-12-06", os.path.join(self.base, "a"))
+        b = Run(self.pc, self.mirror, "2026-12-06", os.path.join(self.base, "b"))
+        self.assertIsNone(a.pack()); self.assertIsNone(b.pack())        # both saw no lock
+        a.take_lock(); b.take_lock()                                    # b's write lands last
+        self.assertIn("belongs to another run", a.guard("start"))
+        self.assertFalse(a.locked)
+        self.assertIsNone(b.guard("start"))
+        b.transfer(); self.assertIsNone(b.verify())
+        self.assertTrue(b.record().startswith("DYS backup OK:"))
+        s = self.state()
+        self.assertEqual((s["seq"], s["txn"]), (1, b.plan["txn"]))
+        self.assertEqual(len(self.pc.snapshot(bp.HISTORY)), 2)          # legacy copy + b, nothing from a
+
+    def test_race_lost_after_start_is_caught_before_recording(self):
+        a = Run(self.pc, self.mirror, "2026-12-06", os.path.join(self.base, "a"))
+        b = Run(self.pc, self.mirror, "2026-12-06", os.path.join(self.base, "b"))
+        self.assertIsNone(a.pack()); self.assertIsNone(b.pack())
+        a.take_lock(); self.assertIsNone(a.guard("start"))               # a read back its own lock...
+        b.take_lock(); self.assertIsNone(b.guard("start"))               # ...then b overwrote it
+        a.transfer(); b.transfer()
+        line = a.verify()
+        self.assertIn("conflict", line)                                 # a never records
+        self.assertEqual(self.lock()["txn"], b.plan["txn"])             # and doesn't release b's lock
+        self.assertIsNone(b.verify())
+        self.assertTrue(b.record().startswith("DYS backup OK:"))
+        self.assertEqual(self.state()["txn"], b.plan["txn"])
+        self.check_slot_matches_record()
+
+    def test_tonights_overlap_a_late_writer_after_verify(self):
+        """Nov 15: run A verified and recorded, run B then rewrote a weekly file. Now A refuses to record."""
+        a = Run(self.pc, self.mirror, "2026-12-06", os.path.join(self.base, "a"))
+        self.assertIsNone(a.pack()); a.take_lock(); self.assertIsNone(a.guard("start"))
+        a.transfer(); self.assertIsNone(a.verify())
+        self.pc.put("weekly-2\\repo-code.bundle", other_bundle(self.mirror, os.path.join(self.base, "x.bundle")))
+        line = a.record()
+        self.assertIn("changed on the computer after it was checked", line)
+        self.assertEqual(self.state()["version"], 1)                    # nothing recorded
+        self.assertEqual(self.lock()["state"], "released")              # a released its own lock
+
+    def test_writer_after_the_record_is_reported_and_blocks_the_next_run(self):
+        a = Run(self.pc, self.mirror, "2026-12-06", os.path.join(self.base, "a"))
+        self.assertIsNone(a.pack()); a.take_lock(); self.assertIsNone(a.guard("start"))
+        a.transfer(); self.assertIsNone(a.verify())
+        self.assertIsNone(a.guard("commit"))
+        commit = jload(os.path.join(a.out, "commit.json"))
+        for c in commit["files"]:
+            a.write(c["dest"], c["local"])
+        self.pc.put("weekly-2\\repo-code.bundle", other_bundle(self.mirror, os.path.join(self.base, "x.bundle")))
+        final = a.listing("final.json")
+        sc = a.stage_to("staged-commit.json", [ROOT + "\\" + c["dest"] for c in commit["files"]])
+        code, text = call("confirm", "--out", a.out, "--dest-listing", final, "--staged", sc)
+        self.assertEqual(code, 5)
+        self.assertIn("changed on the computer after they were checked", text)
+        line, _ = self.task("2026-12-13")
+        self.assertIn("no longer matches its record", line)
+
+    def test_record_written_by_another_run_stops_this_one(self):
+        a = Run(self.pc, self.mirror, "2026-12-06", os.path.join(self.base, "a"))
+        self.assertIsNone(a.pack()); a.take_lock(); self.assertIsNone(a.guard("start"))
+        a.transfer(); self.assertIsNone(a.verify())
+        self.pc.put("state-history\\backup-state-000001-20261206-zzzzzz.json", b"{}")
+        self.assertIn("state-history changed", a.record())
+
+    def test_abandoned_lock_lapses_after_two_hours(self):
+        a = Run(self.pc, self.mirror, "2026-12-06", os.path.join(self.base, "a"))
+        self.assertIsNone(a.pack()); a.take_lock(); self.assertIsNone(a.guard("start"))   # then a crashes
+        line, _ = self.task("2026-12-06")
+        self.assertIn("holds backup.lock until", line)
+        lock = self.lock()
+        lock["expires"] = bp.iso(bp.now_utc() - timedelta(minutes=1))
+        self.pc.put("backup.lock", json.dumps(lock).encode())
+        line, _ = self.task("2026-12-06")
+        self.assertTrue(line.startswith("DYS backup OK:"), line)
+        self.assertEqual(self.lock()["state"], "released")
+
+    def test_resumed_run_older_than_two_hours_must_start_over(self):
+        a = Run(self.pc, self.mirror, "2026-12-06", os.path.join(self.base, "a"))
+        self.assertIsNone(a.pack()); a.take_lock(); self.assertIsNone(a.guard("start"))
+        a.transfer()
+        plan = jload(os.path.join(a.out, "plan.json"))
+        plan["created_at"] = bp.iso(bp.now_utc() - timedelta(hours=3))
+        jdump(os.path.join(a.out, "plan.json"), plan)
+        self.assertIn("more than 2 hours ago", a.verify())
+        self.assertEqual(self.state()["version"], 1)
+
+    def test_unreadable_lock_is_held_until_it_is_old(self):
+        self.pc.put("backup.lock", b'{"state": "act')                   # a half-written lock, just now
+        line, _ = self.task("2026-12-06")
+        self.assertIn("unreadable backup.lock", line)
+        p = self.pc._real("backup.lock")
+        old = (bp.now_utc() - timedelta(hours=3)).timestamp()
+        os.utime(p, (old, old))
+        line, _ = self.task("2026-12-06")
+        self.assertTrue(line.startswith("DYS backup OK:"), line)
+
+    def test_break_lock_takes_over_only_the_named_run(self):
+        a = Run(self.pc, self.mirror, "2026-12-06", os.path.join(self.base, "a"))
+        self.assertIsNone(a.pack()); a.take_lock()
+        self.n += 1
+        line, _ = Run(self.pc, self.mirror, "2026-12-06", os.path.join(self.base, "w"), break_lock="20261206-nope").all()
+        self.assertIn("holds backup.lock", line)
+        line, _ = Run(self.pc, self.mirror, "2026-12-06", os.path.join(self.base, "b"), break_lock=a.plan["txn"]).all()
+        self.assertTrue(line.startswith("DYS backup OK:"), line)
+
+    def test_failed_run_releases_its_lock(self):
+        line, _ = self.task("2026-12-06", always={"weekly-2\\saved-data.zip"})
+        self.assertTrue(line.startswith("FAILED:"), line)
+        self.assertEqual(self.lock()["state"], "released")
+        line, _ = self.task("2026-12-06")
+        self.assertTrue(line.startswith("DYS backup OK:"), line)
+
+    def check_slot_matches_record(self):
+        s = self.state()
+        for whole, f in s["slots"][s["newest_slot"]]["files"].items():
+            data = b"".join(self.pc.get(p) for p in f["parts"])
+            self.assertEqual(hashlib.sha256(data).hexdigest(), f["sha256"], whole)
+
+
+class Reconcile(Base):
+    """The Nov 15 state: record says one checksum, the computer holds another complete copy."""
+
+    def setUp(self):
+        super().setUp()
+        self.seed_legacy()
+        line, _ = self.task("2026-11-22")                               # weekly-2 recorded, weekly-1 = legacy copy
+        self.assertTrue(line.startswith("DYS backup OK:"), line)
+        self.weekly1 = self.pc.snapshot("weekly-1")
+        self.pc.put("weekly-2\\repo-code.bundle", other_bundle(self.mirror, os.path.join(self.base, "x.bundle")))
+
+    def reconcile(self, **kw):
+        self.n += 1
+        return Run(self.pc, self.mirror, "2026-11-22", os.path.join(self.base, f"rec{self.n}"), **kw).all(
+            cmd="reconcile", extra=["--slot", "weekly-2"])
+
+    def test_mismatch_blocks_normal_runs(self):
+        before = self.pc.snapshot()
+        line, _ = self.task("2026-11-29")
+        self.assertIn("no longer matches its record", line)
+        self.assertEqual(self.pc.snapshot(), before)                    # weekly-1 not overwritten to "fix" it
+
+    def test_reconcile_corrects_the_record_and_keeps_weekly_1(self):
+        line, _ = self.reconcile()
+        self.assertTrue(line.startswith("DYS backup OK:"), line)
+        s = self.state()
+        self.assertEqual((s["seq"], s["newest_slot"], s["runs"][-1]["verdict"]), (2, "weekly-2", "reconciled"))
+        f = s["slots"]["weekly-2"]["files"]["weekly-2\\repo-code.bundle"]
+        self.assertEqual(hashlib.sha256(self.pc.get("weekly-2\\repo-code.bundle")).hexdigest(), f["sha256"])
+        self.assertIn("was_sha256", f["reconciled"])
+        self.assertEqual(self.pc.snapshot("weekly-1"), self.weekly1)    # untouched
+        self.assertIn(b"RECORD CORRECTED", self.pc.get("weekly-2\\FILE-LIST.txt"))
+        line, _ = self.task("2026-11-29")                               # rotation goes on as normal
+        self.assertTrue(line.startswith("DYS backup OK:"), line)
+        self.assertEqual(self.state()["newest_slot"], "weekly-1")
+
+    def test_reconcile_refuses_a_damaged_file(self):
+        self.pc.put("weekly-2\\repo-code.bundle", b"# v2 git bundle\nnot really")
+        state_before = self.pc.get("backup-state.json")
+        line, _ = self.reconcile()
+        self.assertTrue(line.startswith("FAILED:"), line)
+        self.assertIn("repo-code.bundle: bundle holds no branches", line)
+        self.assertEqual(self.pc.get("backup-state.json"), state_before)
+        self.assertEqual(json.loads(self.pc.get("backup.lock"))["state"], "released")
+        self.assertEqual(self.pc.snapshot("weekly-1"), self.weekly1)
 
 
 class WindowsNames(Base):

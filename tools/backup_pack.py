@@ -60,6 +60,8 @@ SLOTS = ("weekly-1", "weekly-2")
 HISTORY = "state-history"
 LEGACY_SUFFIX = "-legacy-v1.json"       # the version-1 state, saved once as it was before the first new run
 DEST_ROOT = "C:\\Users\\chris\\Documents\\DYS Backup"
+LOCK = "backup.lock"                   # one run at a time: owner's run id and when its claim runs out
+LOCK_TTL = timedelta(hours=2)          # a run normally takes 15-40 minutes; after this a lock counts as abandoned
 WIN_MAX_PATH = 259
 _WIN_RESERVED = {"CON", "PRN", "AUX", "NUL"} | {f"COM{i}" for i in range(1, 10)} | {f"LPT{i}" for i in range(1, 10)}
 
@@ -106,6 +108,22 @@ def atomic_write(path, data):
         except OSError:
             pass
         raise
+
+
+def now_utc():
+    return datetime.now(timezone.utc)
+
+
+def iso(t):
+    return t.isoformat(timespec="seconds")
+
+
+def parse_time(s):
+    try:
+        t = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
 
 
 def write_json(path, obj):
@@ -218,7 +236,7 @@ def load_listing(path):
         if not isinstance(e, dict) or "name" not in e or e.get("type", "file") != "file":
             continue
         dest = e["name"].replace("/", "\\").strip("\\")
-        out[key(dest)] = (dest, int(e.get("size") or 0))
+        out[key(dest)] = (dest, int(e.get("size") or 0), e.get("mtimeMs"))
     return out
 
 
@@ -409,9 +427,19 @@ def check_file(path, kind, expect):
             if expect is not None and len(members) != expect:
                 return f"tar holds {len(members)} files, expected {expect}"
         elif kind == "bundle":
+            # "git bundle verify" alone passes a bundle cut off half way; reading it into a scratch repository
+            # makes git check every object and that every branch is complete
             with tempfile.TemporaryDirectory() as d:
                 run(["git", "init", "-q", "--bare", d])
                 run(["git", "-C", d, "bundle", "verify", "-q", path])
+                heads = [ln for ln in run(["git", "-C", d, "bundle", "list-heads", path]).splitlines() if ln.strip()]
+                if not heads:
+                    return "bundle holds no branches"
+                run(["git", "-C", d, "fetch", "-q", "--no-write-fetch-head", path, "refs/*:refs/check/*"])
+                got = run(["git", "-C", d, "for-each-ref", "--format=%(refname)", "refs/check/"]).split()
+                want = {ln.split()[1] for ln in heads if len(ln.split()) == 2 and ln.split()[1].startswith("refs/")}
+                if len(got) != len(want):
+                    return f"bundle gave {len(got)} of {len(want)} branches"
     except (zipfile.BadZipFile, tarfile.TarError, EOFError, OSError, subprocess.CalledProcessError, ValueError) as e:
         return f"{kind} doesn't open ({type(e).__name__})"
     return None
@@ -440,6 +468,137 @@ def split_if_big(path):
             i += 1
     os.remove(path)
     return parts
+
+
+# ---------- the run lock and the guards ----------
+
+def _history_names(listing):
+    return sorted(k for k in listing if k.startswith(key(HISTORY) + "\\"))
+
+
+def lock_holder(lock_path, listing, now=None):
+    """None when no other run may be writing; else a sentence saying who holds the lock and until when."""
+    now = now or now_utc()
+    if key(LOCK) not in listing:
+        return None
+    if not lock_path or not os.path.exists(lock_path):
+        raise Blocked("backup.lock is on the computer but wasn't read back, so another run may be active")
+    try:
+        lock = read_json(lock_path)
+        if not isinstance(lock, dict):
+            raise ValueError("not a lock")
+    except (OSError, ValueError):
+        mtime = listing[key(LOCK)][2]
+        until = (datetime.fromtimestamp(mtime / 1000, timezone.utc) + LOCK_TTL) if mtime else None
+        if until and until > now:
+            return f"an unreadable backup.lock written at {iso(until - LOCK_TTL)} (treated as held until {iso(until)})"
+        return None                     # unreadable and old: an abandoned half-written lock
+    if lock.get("state") != "active":
+        return None
+    until = parse_time(lock.get("expires"))
+    if until and until > now:
+        return f"backup run {lock.get('txn')} (started {lock.get('since')}) holds backup.lock until {lock.get('expires')}"
+    return None                         # expired: that run was abandoned
+
+
+def take_lock(out, txn, lock_path, listing, break_lock="", now=None):
+    """Write the lock files for this run (the task copies them to the computer) after checking no one holds it."""
+    now = now or now_utc()
+    holder = lock_holder(lock_path, listing, now)
+    if holder:
+        held_txn = None
+        try:
+            held_txn = read_json(lock_path).get("txn")
+        except (OSError, ValueError, AttributeError):
+            pass
+        if not (break_lock and break_lock == held_txn):
+            raise Blocked("another backup run may be writing: " + holder +
+                          ". Nothing was copied. If no run is active, wait until then, or (with Keo's OK) pass --break-lock with that run id")
+    acquire = os.path.join(out, "lock", "acquire.json")
+    release = os.path.join(out, "lock", "release.json")
+    write_json(acquire, {"lock": "DYS backup", "state": "active", "txn": txn, "since": iso(now), "expires": iso(now + LOCK_TTL)})
+    write_json(release, {"lock": "DYS backup", "state": "released", "txn": txn, "released": iso(now)})
+    return {"dest": LOCK, "device_path": DEST_ROOT + "\\" + LOCK, "acquire": acquire, "release": release, "txn": txn,
+            "expires": iso(now + LOCK_TTL)}
+
+
+def base_info(state_path, listing):
+    """What the record looked like when this run began; every later step checks it hasn't changed."""
+    info = {"history": _history_names(listing), "pointer_sha": None, "pointer_bytes": None}
+    if os.path.exists(state_path) and key("backup-state.json") in listing:
+        info["pointer_sha"], info["pointer_bytes"] = sha256(state_path), listing[key("backup-state.json")][1]
+    return info
+
+
+def guard_checks(plan, listing, staged, phase, landed=None, now=None):
+    """Problems that mean this run must not go on writing. phase: start, verify, commit or release."""
+    now = now or now_utc()
+    problems = []
+    lk = key(LOCK)
+    if lk not in listing or lk not in staged or not os.path.exists(staged[lk]):
+        problems.append("backup.lock is missing or wasn't read back")
+    else:
+        try:
+            lock = read_json(staged[lk])
+        except (OSError, ValueError):
+            lock = {}
+        if not isinstance(lock, dict) or lock.get("txn") != plan["txn"] or lock.get("state") != "active":
+            problems.append(f"backup.lock now belongs to another run ({lock.get('txn') if isinstance(lock, dict) else 'unreadable'})")
+    if phase == "release":
+        return problems
+    made = parse_time(plan.get("created_at"))
+    if not made or now - made > LOCK_TTL:
+        problems.append("this run started more than 2 hours ago (a resumed or stalled run); it must start over")
+    base = plan.get("base") or {}
+    pk = key("backup-state.json")
+    if base.get("pointer_sha"):
+        if pk not in listing or pk not in staged or listing[pk][1] != base["pointer_bytes"] or sha256(staged[pk]) != base["pointer_sha"]:
+            problems.append("backup-state.json changed since this run began (another run recorded a backup)")
+    if _history_names(listing) != base.get("history", []):
+        problems.append("state-history changed since this run began (another run recorded a backup)")
+    if phase == "commit":
+        for dest, (size, mtime) in (landed or {}).items():
+            now_entry = listing.get(key(dest))
+            if not now_entry or now_entry[1] != size or (mtime is not None and now_entry[2] != mtime):
+                problems.append(f"{dest} changed on the computer after it was checked")
+    return problems
+
+
+def guard_cmd(args):
+    out = os.path.abspath(args.out)
+    plan = read_json(os.path.join(out, "plan.json"))
+    listing = load_listing(args.dest_listing)
+    staged = load_staged(args.staged) if args.staged else {}
+    landed = None
+    if args.phase == "commit":
+        landed = (read_json(os.path.join(out, "verify.json")).get("landed") or {})
+    problems = guard_checks(plan, listing, staged, args.phase, landed)
+    write_json(os.path.join(out, f"guard-{args.phase}.json"), {"ok": not problems, "problems": problems})
+    if problems:
+        print("CONFLICT: " + "; ".join(problems))
+        return 3
+    print(f"GUARD OK ({args.phase}): this run holds backup.lock and nothing else has changed the backup")
+    return 0
+
+
+def _slot_mismatch(state, listing):
+    """Why the newest weekly copy no longer matches its record, or None."""
+    slot = state.get("newest_slot")
+    rec = (state.get("slots") or {}).get(slot) or {}
+    if rec.get("status") != "verified":
+        return None
+    landed = rec.get("landed") or {}
+    for whole, f in (rec.get("files") or {}).items():
+        parts = f.get("parts") or [whole]
+        entries = [listing.get(key(p)) for p in parts]
+        if any(e is None for e in entries):
+            return f"{whole} is missing"
+        if sum(e[1] for e in entries) != f["bytes"]:
+            return f"{whole} is {sum(e[1] for e in entries):,} bytes, its record says {f['bytes']:,}"
+        for p, e in zip(parts, entries):
+            if p in landed and landed[p][1] is not None and e[2] != landed[p][1]:
+                return f"{p} was rewritten after it was recorded"
+    return None
 
 
 # ---------- step 1: pack ----------
@@ -472,11 +631,17 @@ def pack(args):
     if args.state_history and os.path.isdir(args.state_history):
         history = [os.path.join(args.state_history, n) for n in sorted(os.listdir(args.state_history)) if n.lower().endswith(".json")]
     state, notes = load_state(args.state, history)
+    listing = load_listing(args.dest_listing)
+    bad_slot = _slot_mismatch(state, listing)
+    if bad_slot:
+        raise Blocked(f"the newest weekly copy ({state.get('newest_slot')}) no longer matches its record: {bad_slot}. "
+                      "Nothing was copied, so it isn't replaced; a person has to look (reconcile with Keo's OK)")
+    lock = take_lock(out, txn, args.lock, listing, args.break_lock)
+    base = base_info(args.state, listing)
     legacy_raw = None
     if state.get("migrated_from") == 1 and state.get("seq") == 0:
         with open(args.state, encoding="utf-8-sig") as f:
             legacy_raw = f.read()
-    listing = load_listing(args.dest_listing)
     last = state.get("last_good") or {}
     warn = []
 
@@ -648,6 +813,7 @@ def pack(args):
         size += b
     if cur:
         batches.append(cur)
+    guard_paths = [DEST_ROOT + "\\" + LOCK, DEST_ROOT + "\\backup-state.json"]
 
     verdict = "hold" if hold else "ok"
     total = sum(t["bytes"] for t in transfer)
@@ -657,12 +823,13 @@ def pack(args):
         summary = (f"OK: {len(transfer)} files, {total / 1e6:.0f} MB into {slot}; saved data {stats['files']:,} files, "
                    f"{stats['price_days']} price days (newest {stats['newest_day']})")
     plan = {
-        "plan_version": 2, "txn": txn, "date": today.isoformat(), "verdict": verdict, "summary": summary,
+        "plan_version": 2, "kind": "backup", "txn": txn, "date": today.isoformat(), "created_at": iso(now_utc()),
+        "verdict": verdict, "summary": summary, "lock": lock, "base": base, "guard_paths": guard_paths,
         "hold": hold, "warnings": warn, "notes": notes, "slot": None if hold else slot, "dest_root": DEST_ROOT,
         "transfer": [dict({k: t[k] for k in ("local", "dest", "bytes", "sha256")}, device_path=DEST_ROOT + "\\" + t["dest"])
                      for t in transfer],
         "wholes": wholes, "verify_existing": verify_existing, "stage_batches": batches,
-        "stage_paths": [[DEST_ROOT + "\\" + d for d in b] for b in batches],
+        "stage_paths": [[DEST_ROOT + "\\" + d for d in b] for b in batches] + [guard_paths],
         "stats": stats, "base_state": state, "monthly_plan": monthly_plan, "archive_plan": archive_plan,
         "legacy_raw": legacy_raw,
     }
@@ -728,6 +895,64 @@ def _check_landed(dest, want_bytes, want_sha, listing, staged):
     return None
 
 
+def _landed_listing(dests, listing):
+    return {d: [listing[key(d)][1], listing[key(d)][2]] for d in dests if key(d) in listing}
+
+
+def _new_state(base, txn):
+    state = json.loads(json.dumps(base))
+    state["version"], state["txn"] = STATE_VERSION, txn
+    state["seq"] = int(base.get("seq") or 0) + 1
+    state["committed_at"] = iso(now_utc())
+    state.pop("integrity", None)
+    return state
+
+
+def _write_commit(out, plan, state, listing, filelist):
+    """The record files, in the order they must be written: slot list, old record (once), history copy,
+    backup-state.json, and last the lock release."""
+    state = seal(state)
+    txn = plan["txn"]
+    cdir = os.path.join(out, "commit")
+    shutil.rmtree(cdir, ignore_errors=True)
+    commit = []
+    body = (json.dumps(state, indent=1, ensure_ascii=False) + "\n").encode("utf-8")
+    legacy_dest = f"{HISTORY}\\backup-state-000000{LEGACY_SUFFIX}"
+    if plan.get("legacy_raw") and key(legacy_dest) not in listing:
+        lp = os.path.join(cdir, "legacy-v1.json")
+        atomic_write(lp, plan["legacy_raw"].encode("utf-8"))
+        commit.append({"local": lp, "dest": legacy_dest})          # the old record, kept as it was
+    if filelist:
+        fl = os.path.join(cdir, "FILE-LIST.txt")
+        atomic_write(fl, ("\r\n".join(filelist) + "\r\n").encode("utf-8"))
+        commit.append({"local": fl, "dest": f"{plan['slot']}\\FILE-LIST.txt"})
+    hist_dest = f"{HISTORY}\\backup-state-{state['seq']:06d}-{txn}.json"
+    if key(hist_dest) in listing:
+        raise Blocked(f"{hist_dest} already exists on the computer")
+    hp = os.path.join(cdir, "history.json")
+    atomic_write(hp, body)
+    commit.append({"local": hp, "dest": hist_dest})
+    sp = os.path.join(cdir, "backup-state.json")
+    atomic_write(sp, body)
+    commit.append({"local": sp, "dest": "backup-state.json"})
+    rl = os.path.join(cdir, "lock-release.json")
+    atomic_write(rl, (json.dumps({"lock": "DYS backup", "state": "released", "txn": txn, "released": iso(now_utc())}) + "\n").encode())
+    commit.append({"local": rl, "dest": LOCK, "lock": True})
+    for c in commit:
+        c.update({"bytes": os.path.getsize(c["local"]), "sha256": sha256(c["local"])})
+    write_json(os.path.join(out, "commit.json"), {"txn": txn, "seq": state["seq"], "files": commit})
+    return commit
+
+
+def _fail(out, verdict, problems, resend, attempt, extra=None):
+    write_json(os.path.join(out, "verify.json"), {"verdict": verdict, "problems": problems, "resend": sorted(resend),
+                                                  "attempt": attempt, **(extra or {})})
+    print(("RETRY: " if verdict == "retry" else "FAILED: ") + "; ".join(problems))
+    if verdict == "retry":
+        print("resend: " + ", ".join(sorted(resend)))
+    return 4
+
+
 def verify(args):
     out = os.path.abspath(args.out)
     plan = read_json(os.path.join(out, "plan.json"))
@@ -735,6 +960,11 @@ def verify(args):
         raise Blocked("plan.json is not from this script version")
     listing = load_listing(args.dest_listing)
     staged = load_staged(args.staged) if args.staged else {}
+    conflict = guard_checks(plan, listing, staged, "verify")
+    if conflict:                                  # someone else is writing: never retry, never record
+        return _fail(out, "failed", ["conflict: " + c for c in conflict], set(), args.attempt, {"conflict": True})
+    if plan.get("kind") == "reconcile":
+        return _verify_reconcile(out, plan, listing, staged, args.attempt)
     problems, resend = [], set()
 
     for t in plan["transfer"]:
@@ -790,23 +1020,15 @@ def verify(args):
     if problems:
         source_broken = any(v == "broken-at-source" for v in landed.values())
         verdict = "failed" if (attempt >= 2 or source_broken or not resend) else "retry"
-        res = {"verdict": verdict, "problems": problems, "resend": sorted(resend), "attempt": attempt}
-        write_json(os.path.join(out, "verify.json"), res)
-        print(("RETRY: " if verdict == "retry" else "FAILED: ") + "; ".join(problems))
-        if verdict == "retry":
-            print("resend: " + ", ".join(sorted(resend)))
-        return 4
+        return _fail(out, verdict, problems, resend, attempt)
 
     # everything checked out at the destination: build the new state
     base = plan["base_state"]
     today, txn, slot, stats = plan["date"], plan["txn"], plan["slot"], plan["stats"]
-    state = json.loads(json.dumps(base))
-    state["version"], state["txn"] = STATE_VERSION, txn
-    state["seq"] = int(base.get("seq") or 0) + 1
-    state["committed_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    state.pop("integrity", None)
+    state = _new_state(base, txn)
     monthly, archives = state.setdefault("monthly", {}), state.setdefault("archives", {})
     entry = {"date": today, "txn": txn, "verdict": plan["verdict"]}
+    seen = _landed_listing([t["dest"] for t in plan["transfer"]], listing)
     if plan["verdict"] == "hold":
         entry["why"] = plan["hold"]
     else:
@@ -832,8 +1054,9 @@ def verify(args):
             m = v["month"]
             if (monthly.get(m) or {}).get("status") == "legacy-unverified":   # it was there but didn't check out
                 monthly[m] = {"status": "needs-recovery", "why": why_not.get(m) or "its file on the computer wasn't read back"}
-        state.setdefault("slots", {})[slot] = {"status": "verified", "txn": txn, "date": today,
-                                               "data_commit": stats["commit"], "files": files}
+        slot_parts = [p for whole in files for p in files[whole]["parts"]]
+        state.setdefault("slots", {})[slot] = {"status": "verified", "txn": txn, "date": today, "data_commit": stats["commit"],
+                                               "files": files, "landed": _landed_listing(slot_parts, listing)}
         state["newest_slot"] = slot
         state["last_good"] = {"date": today, **stats}
         entry.update({"slot": slot, "data_commit": stats["commit"], "files": stats["files"], "bytes": stats["bytes"],
@@ -843,79 +1066,233 @@ def verify(args):
     if plan["warnings"]:
         entry["warnings"] = plan["warnings"]
     state["runs"] = (list(state.get("runs") or []) + [entry])[-KEEP_RUNS:]
-    state = seal(state)
 
-    cdir = os.path.join(out, "commit")
-    shutil.rmtree(cdir, ignore_errors=True)
-    commit = []
-    body = (json.dumps(state, indent=1, ensure_ascii=False) + "\n").encode("utf-8")
-    legacy_dest = f"{HISTORY}\\backup-state-000000{LEGACY_SUFFIX}"
-    if plan.get("legacy_raw") and key(legacy_dest) not in listing:
-        lp = os.path.join(cdir, "legacy-v1.json")
-        atomic_write(lp, plan["legacy_raw"].encode("utf-8"))
-        commit.append({"local": lp, "dest": legacy_dest})          # the old record, kept as it was
+    filelist = None
     if plan["verdict"] == "ok":       # the slot's own list, written after its files checked out
         st = plan["stats"]
-        lines = ["DRIVE YOUR STYLE - DATA BACKUP: THIS WEEK'S COPY",
-                 f"Made {today} from GitHub repo {REPO}, run {txn}. Every file below was read back from this computer and matched.",
-                 f"Saved data: {st['files']:,} files, {st['bytes']:,} bytes, {st['price_days']} price days "
-                 f"(newest {st['newest_day']}), data commit {st['commit']}.",
-                 "Columns: SHA-256 checksum, size in bytes, file.", ""]
-        lines += [f"{t['sha256']}  {t['bytes']:12d}  {t['dest']}" for t in plan["transfer"]]
+        filelist = ["DRIVE YOUR STYLE - DATA BACKUP: THIS WEEK'S COPY",
+                    f"Made {today} from GitHub repo {REPO}, run {txn}. Every file below was read back from this computer and matched.",
+                    f"Saved data: {st['files']:,} files, {st['bytes']:,} bytes, {st['price_days']} price days "
+                    f"(newest {st['newest_day']}), data commit {st['commit']}.",
+                    "Columns: SHA-256 checksum, size in bytes, file.", ""]
+        filelist += [f"{t['sha256']}  {t['bytes']:12d}  {t['dest']}" for t in plan["transfer"]]
         if any(len(w["parts"]) > 1 for w in plan["wholes"].values()):
-            lines += ["", "Files ending in .part01, .part02... are one file cut into pieces: join them in order to restore.",
-                      "Whole-file checksums: " + "; ".join(f"{d} {w['sha256']}" for d, w in plan["wholes"].items() if len(w["parts"]) > 1)]
-        lines += ["", "Only this list and backup-state.json say what this folder holds; anything else here is left from an earlier run."]
-        fl = os.path.join(cdir, "FILE-LIST.txt")
-        atomic_write(fl, ("\r\n".join(lines) + "\r\n").encode("utf-8"))
-        commit.append({"local": fl, "dest": f"{slot}\\FILE-LIST.txt"})
-    hist_dest = f"{HISTORY}\\backup-state-{state['seq']:06d}-{txn}.json"
-    if key(hist_dest) in listing:
-        raise Blocked(f"{hist_dest} already exists on the computer")
-    hp = os.path.join(cdir, "history.json")
-    atomic_write(hp, body)
-    commit.append({"local": hp, "dest": hist_dest})                 # the commit point
-    sp = os.path.join(cdir, "backup-state.json")
-    atomic_write(sp, body)
-    commit.append({"local": sp, "dest": "backup-state.json"})       # pointer to it, always last
-    for c in commit:
-        c.update({"bytes": os.path.getsize(c["local"]), "sha256": sha256(c["local"])})
-    write_json(os.path.join(out, "commit.json"), {"txn": txn, "seq": state["seq"], "files": commit})
+            filelist += ["", "Files ending in .part01, .part02... are one file cut into pieces: join them in order to restore.",
+                         "Whole-file checksums: " + "; ".join(f"{d} {w['sha256']}" for d, w in plan["wholes"].items() if len(w["parts"]) > 1)]
+        filelist += ["", "Only this list and backup-state.json say what this folder holds; anything else here is left from an earlier run."]
+    commit = _write_commit(out, plan, state, listing, filelist)
     write_json(os.path.join(out, "verify.json"), {"verdict": "ready", "attempt": attempt, "kept_unverified": kept,
-                                                   "adopted": adopted})
+                                                   "adopted": adopted, "landed": seen})
     print(f"READY: every file matched on the computer; write the {len(commit)} files in commit.json in order")
     for c in commit:
         print(f"  {c['bytes']:>12,}  {c['dest']}")
     return 0
 
 
-# ---------- step 3: confirm the state landed ----------
+# ---------- correcting a record from the files on the computer ----------
+
+def reconcile(args):
+    """Plan to correct one weekly slot's record from the files actually there (read back and checked). Copies
+    nothing. Only for a slot whose files are intact but whose record lists other checksums (Nov 15, 2026:
+    two runs overlapped). Run with Keo's OK; never by the weekly task."""
+    out = os.path.abspath(args.out)
+    shutil.rmtree(out, ignore_errors=True)
+    os.makedirs(out)
+    today = today_pt(args.today)
+    txn = f"{today:%Y%m%d}-{secrets.token_hex(3)}"
+    history = []
+    if args.state_history and os.path.isdir(args.state_history):
+        history = [os.path.join(args.state_history, n) for n in sorted(os.listdir(args.state_history)) if n.lower().endswith(".json")]
+    state, notes = load_state(args.state, history)
+    if state.get("migrated_from") == 1 and not state.get("seq"):
+        raise Blocked("reconcile needs a version-2 record")
+    listing = load_listing(args.dest_listing)
+    rec = (state.get("slots") or {}).get(args.slot) or {}
+    if rec.get("status") != "verified" or not rec.get("files"):
+        raise Blocked(f"{args.slot} has no verified record to correct")
+    run = next((r for r in reversed(state.get("runs") or []) if r.get("txn") == rec.get("txn")), {})
+    lock = take_lock(out, txn, args.lock, listing, args.break_lock)
+    dests = [p for whole, f in rec["files"].items() for p in (f.get("parts") or [whole])]
+    sizes = {d: listing[key(d)][1] for d in dests if key(d) in listing}
+    missing = [d for d in dests if d not in sizes]
+    if missing:
+        raise Blocked(f"{', '.join(missing)} not on the computer: nothing to reconcile from")
+    batches, cur, size = [], [], 0
+    for d in dests:
+        if cur and (size + sizes[d] > STAGE_BATCH or len(cur) >= STAGE_FILES):
+            batches.append(cur)
+            cur, size = [], 0
+        cur.append(d)
+        size += sizes[d]
+    batches.append(cur)
+    guard_paths = [DEST_ROOT + "\\" + LOCK, DEST_ROOT + "\\backup-state.json"]
+    plan = {"plan_version": 2, "kind": "reconcile", "txn": txn, "date": today.isoformat(), "created_at": iso(now_utc()),
+            "verdict": "ok", "slot": args.slot, "summary": f"record of {args.slot} checked against the files on the computer",
+            "hold": [], "warnings": [], "notes": notes, "transfer": [], "wholes": {}, "verify_existing": [],
+            "lock": lock, "base": base_info(args.state, listing), "guard_paths": guard_paths, "base_state": state,
+            "stage_paths": [[DEST_ROOT + "\\" + d for d in b] for b in batches] + [guard_paths],
+            "expect_files": run.get("files"), "stats": state.get("last_good") or {}}
+    write_json(os.path.join(out, "plan.json"), plan)
+    print(f"RECONCILE PLAN: read back {len(dests)} file(s) of {args.slot}; nothing is copied")
+    return 0
+
+
+def _verify_reconcile(out, plan, listing, staged, attempt):
+    slot = plan["slot"]
+    state = _new_state(plan["base_state"], plan["txn"])
+    rec = state["slots"][slot]
+    problems, changed = [], []
+    with tempfile.TemporaryDirectory() as tmp:
+        for whole, f in rec["files"].items():
+            parts = f.get("parts") or [whole]
+            if any(key(p) not in staged or key(p) not in listing or os.path.getsize(staged[key(p)]) != listing[key(p)][1] for p in parts):
+                problems.append(f"{whole}: not read back intact")
+                continue
+            path = staged[key(parts[0])]
+            if len(parts) > 1:
+                path = os.path.join(tmp, "joined")
+                _join([staged[key(p)] for p in parts], path)
+            kind = kind_of(whole)
+            bad = check_file(path, kind, plan.get("expect_files") if kind == "zip" else None)
+            if bad:
+                problems.append(f"{whole}: {bad}")
+                continue
+            digest, size = sha256(path), os.path.getsize(path)
+            if digest != f["sha256"] or size != f["bytes"]:
+                changed.append(whole)
+                f["reconciled"] = {"date": plan["date"], "txn": plan["txn"], "was_sha256": f["sha256"], "was_bytes": f["bytes"]}
+                f["sha256"], f["bytes"] = digest, size
+    if problems:
+        return _fail(out, "failed", problems, set(), attempt)
+    parts = [p for whole, f in rec["files"].items() for p in (f.get("parts") or [whole])]
+    rec["landed"] = _landed_listing(parts, listing)
+    state["runs"] = (list(state.get("runs") or []) + [{"date": plan["date"], "txn": plan["txn"], "verdict": "reconciled",
+                                                       "slot": slot, "changed": changed}])[-KEEP_RUNS:]
+    filelist = ["DRIVE YOUR STYLE - DATA BACKUP: THIS WEEK'S COPY (RECORD CORRECTED)",
+                f"Copy made {rec.get('date')} by run {rec.get('txn')}, data commit {rec.get('data_commit')}. "
+                f"On {plan['date']} run {plan['txn']} read every file below back from this computer, checked that it opens, "
+                f"and recorded its checksum.",
+                "Columns: SHA-256 checksum, size in bytes, file.", ""]
+    filelist += [f"{f['sha256']}  {f['bytes']:12d}  {whole}" for whole, f in rec["files"].items()]
+    if changed:
+        filelist += ["", "Corrected: " + ", ".join(changed) + " (two backup runs overlapped and the later one rewrote it; "
+                     "the file was checked and is complete)."]
+    filelist += ["", "Only this list and backup-state.json say what this folder holds; anything else here is left from an earlier run."]
+    commit = _write_commit(out, plan, state, listing, filelist)
+    write_json(os.path.join(out, "verify.json"), {"verdict": "ready", "attempt": attempt, "changed": changed,
+                                                   "landed": _landed_listing(parts, listing)})
+    print(f"READY: {len(rec['files'])} file(s) of {slot} checked; {len(changed)} record entr{'y' if len(changed) == 1 else 'ies'} to correct; "
+          f"write the {len(commit)} files in commit.json in order")
+    return 0
+
+
+# ---------- step 3: confirm the record landed ----------
 
 def confirm(args):
     out = os.path.abspath(args.out)
     plan = read_json(os.path.join(out, "plan.json"))
     commit = read_json(os.path.join(out, "commit.json"))
+    landed = read_json(os.path.join(out, "verify.json")).get("landed") or {}
     listing = load_listing(args.dest_listing)
     staged = load_staged(args.staged) if args.staged else {}
-    problems, landed = [], set()
+    problems, ok = [], set()
     for c in commit["files"]:
         bad = _check_landed(c["dest"], c["bytes"], c["sha256"], listing, staged)
         if bad:
             problems.append(f"{c['dest']}: {bad}")
         else:
-            landed.add(c["dest"])
+            ok.add(c["dest"])
     state_copies = [c["dest"] for c in commit["files"]
                     if c["dest"] == "backup-state.json" or (c["dest"].startswith(HISTORY) and not c["dest"].endswith(LEGACY_SUFFIX))]
-    if not any(d in landed for d in state_copies):
+    if not any(d in ok for d in state_copies):
         # neither copy of the new state is intact: this run is not recorded (the earlier state still stands)
         write_json(os.path.join(out, "confirm.json"), {"verdict": "failed", "problems": problems, "committed": False})
         print("DYS backup FAILED: the backup record didn't save (" + "; ".join(problems) + "); "
               "the files were copied and checked, but the next run will treat them as not done")
         return 5
-    warnings = list(plan["warnings"]) + [f"{p} (the run is still recorded: the other state copy is intact)" for p in problems]
+    rewritten = [d for d, (size, mtime) in landed.items()
+                 if key(d) not in listing or listing[key(d)][1] != size or (mtime is not None and listing[key(d)][2] != mtime)]
+    if rewritten:
+        write_json(os.path.join(out, "confirm.json"), {"verdict": "failed", "problems": problems, "committed": True, "rewritten": rewritten})
+        print("DYS backup FAILED: these files changed on the computer after they were checked, so the record may not match them: "
+              + ", ".join(rewritten) + ". The next run will refuse to start until a person looks")
+        return 5
+    warnings = list(plan["warnings"])
+    for p in problems:
+        if p.startswith(LOCK):
+            warnings.append(f"backup.lock wasn't released ({p}); it lapses at {plan['lock']['expires']}")
+        else:
+            warnings.append(f"{p} (the run is still recorded: the other state copy is intact)")
     write_json(os.path.join(out, "confirm.json"), {"verdict": "ok", "committed": True, "problems": problems})
-    print(("DYS backup OK: " if plan["verdict"] == "ok" else "DYS backup HELD: ") + plan["summary"]
-          + ("" if not warnings else " | WARNINGS: " + "; ".join(warnings)))
+    head = "DYS backup HELD: " if plan["verdict"] == "hold" else "DYS backup OK: "
+    print(head + plan["summary"] + ("" if not warnings else " | WARNINGS: " + "; ".join(warnings)))
+    return 0
+
+
+# ---------- audit: every recorded file against its checksum (read-only) ----------
+
+def recorded_files(state):
+    """{whole dest: (bytes, sha256, [parts], kind)} for every file the record calls verified."""
+    out = {}
+    for slot, rec in (state.get("slots") or {}).items():
+        if rec.get("status") == "verified":
+            for whole, f in (rec.get("files") or {}).items():
+                out[whole] = (f["bytes"], f["sha256"], f.get("parts") or [whole])
+    for m, rec in (state.get("monthly") or {}).items():
+        if rec.get("status") == "verified":
+            for whole, f in (rec.get("files") or {}).items():
+                out[whole] = (f["bytes"], f["sha256"], f.get("parts") or [whole])
+    for tag, rec in (state.get("archives") or {}).items():
+        if rec.get("status") == "verified" and rec.get("dest"):
+            out[rec["dest"]] = (rec["bytes"], rec["sha256"], [rec["dest"]])
+    return out
+
+
+def audit(args):
+    """--plan: print the files to read back (as batches of computer paths). Otherwise check them all."""
+    state = read_json(args.state)
+    if not intact(state):
+        print("AUDIT FAILED: backup-state.json doesn't match its own checksum")
+        return 4
+    files = recorded_files(state)
+    listing = load_listing(args.dest_listing)
+    if args.plan:
+        batches, cur, size = [], [], 0
+        for whole, (b, _sha, parts) in sorted(files.items()):
+            for part in parts:
+                sz = listing.get(key(part), (None, 0))[1]
+                if cur and (size + sz > STAGE_BATCH or len(cur) >= STAGE_FILES):
+                    batches.append(cur)
+                    cur, size = [], 0
+                cur.append(DEST_ROOT + "\\" + part)
+                size += sz
+        if cur:
+            batches.append(cur)
+        print(json.dumps(batches))
+        return 0
+    staged = load_staged(args.staged)
+    bad = []
+    with tempfile.TemporaryDirectory() as tmp:
+        for whole, (b, sha, parts) in sorted(files.items()):
+            if any(key(p) not in listing or key(p) not in staged for p in parts):
+                bad.append(f"{whole}: missing or not read back")
+                continue
+            path = staged[key(parts[0])]
+            if len(parts) > 1:
+                path = os.path.join(tmp, "joined")
+                _join([staged[key(p)] for p in parts], path)
+            if os.path.getsize(path) != b or sha256(path) != sha:
+                bad.append(f"{whole}: doesn't match its recorded checksum")
+                continue
+            problem = check_file(path, kind_of(whole), None)
+            if problem:
+                bad.append(f"{whole}: {problem}")
+            else:
+                print(f"  match  {b:>12,}  {whole}")
+    if bad:
+        print("AUDIT FAILED: " + "; ".join(bad))
+        return 4
+    print(f"AUDIT OK: all {len(files)} recorded files match their checksums and open")
     return 0
 
 
@@ -923,21 +1300,38 @@ def confirm(args):
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
-    if not argv or argv[0] not in ("pack", "verify", "confirm"):
-        print("FAILED: backup_pack.py now runs in three steps (pack, verify, confirm) and records nothing until the copy "
+    if not argv or argv[0] not in ("pack", "guard", "verify", "confirm", "reconcile", "audit"):
+        print("FAILED: backup_pack.py now runs in steps (pack, guard, verify, confirm) and records nothing until the copy "
               "is checked on the computer. The task needs the prompt in tools/BACKUP-TASK.md; nothing was done.")
         return 2
     ap = argparse.ArgumentParser(prog="backup_pack.py")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("pack")
-    p.add_argument("--out", required=True)
-    p.add_argument("--state", required=True)
-    p.add_argument("--state-history", default="")
-    p.add_argument("--dest-listing", required=True)
-    p.add_argument("--repo", default=REPO)
-    p.add_argument("--today", default="")
-    p.add_argument("--mirror", default="", help="use this existing mirror clone instead of cloning (tests)")
-    p.add_argument("--recover-month", default="", help="with Keo's OK only: remake a recorded-but-missing monthly copy")
+    for name in ("pack", "reconcile"):
+        p = sub.add_parser(name)
+        p.add_argument("--out", required=True)
+        p.add_argument("--state", required=True)
+        p.add_argument("--state-history", default="")
+        p.add_argument("--dest-listing", required=True)
+        p.add_argument("--lock", default="", help="backup.lock as read back from the computer (if it is there)")
+        p.add_argument("--break-lock", default="", help="with Keo's OK only: the run id of an abandoned lock to take over")
+        p.add_argument("--today", default="")
+        if name == "pack":
+            p.add_argument("--repo", default=REPO)
+            p.add_argument("--mirror", default="", help="use this existing mirror clone instead of cloning (tests)")
+            p.add_argument("--recover-month", default="", help="with Keo's OK only: remake a recorded-but-missing monthly copy")
+        else:
+            p.add_argument("--slot", required=True, choices=SLOTS)
+    a = sub.add_parser("audit")
+    a.add_argument("--out", default=".")
+    a.add_argument("--state", required=True)
+    a.add_argument("--dest-listing", required=True)
+    a.add_argument("--staged", default="")
+    a.add_argument("--plan", action="store_true")
+    g = sub.add_parser("guard")
+    g.add_argument("--out", required=True)
+    g.add_argument("--dest-listing", required=True)
+    g.add_argument("--staged", default="")
+    g.add_argument("--phase", required=True, choices=("start", "commit", "release"))
     for name in ("verify", "confirm"):
         q = sub.add_parser(name)
         q.add_argument("--out", required=True)
@@ -946,7 +1340,7 @@ def main(argv=None):
         q.add_argument("--attempt", type=int, default=1)
     args = ap.parse_args(argv)
     try:
-        return {"pack": pack, "verify": verify, "confirm": confirm}[args.cmd](args)
+        return {"pack": pack, "guard": guard_cmd, "verify": verify, "confirm": confirm, "reconcile": reconcile, "audit": audit}[args.cmd](args)
     except Blocked as e:
         print("BLOCKED: " + str(e))
         try:
