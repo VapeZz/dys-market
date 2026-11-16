@@ -422,3 +422,17 @@ a.row{text-decoration:none;color:inherit}
 .dl-note{margin:0;font-size:13px;line-height:1.45;color:var(--ink-2)}
 .dl-foot{margin:0;font-size:11.5px;line-height:1.4;color:var(--ink-2)}
 .dl .kv div>span:last-child{white-space:nowrap;text-align:right}
+.chip.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+:root[data-theme="light"] .chip.warn{color:color-mix(in srgb,var(--warn) 62%,#000)}
+.dl-form .dl-full{grid-column:1/-1}
+.dl-sum{margin:0;font-size:15px;line-height:1.45;color:var(--ink)}
+.dl-tiles .tile b{font-size:18px}
+.dl-tiles .tile b.up{color:var(--dl-up)}.dl-tiles .tile b.down{color:var(--dl-down)}
+.dl-data{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.dl-load{min-height:40px}
+.dl-more{border-top:1px solid var(--line);padding-top:8px}
+.dl-more>summary{cursor:pointer;font-size:14px;font-weight:600;color:var(--ink-2);padding:8px 0;flex-direction:row;justify-content:space-between;align-items:center}
+.dl-more>summary::after{content:"Show";font-weight:600}
+.dl-more[open]>summary::after{content:"Hide"}
+.dl-more[open]{display:flex;flex-direction:column;gap:10px}
+.own-res{display:block;margin-top:4px}

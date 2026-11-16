@@ -102,7 +102,8 @@ test("grade route: expected value from population odds and each grade's sold med
   const exp = Math.round(0.4 * D.netSale(20000, "c", cfg) + 0.4 * D.netSale(7000, "c", cfg) + 0.2 * D.netSale(3600, "c", cfg));
   assert.strictEqual(G.expected, exp);
   assert.strictEqual(G.cost, 3500 + 150 + 2500 + 1500 + Math.round(3500 * 0.01 * 3));
-  assert.deepStrictEqual([G.pass, r.verdict, r.route], [true, "buy", "grade"]);
+  assert.deepStrictEqual([G.pass, r.verdict, r.gradeClears, r.reason], [true, "pass", true, "margin"]);   // grading is shown, never called
+  assert.ok(/Grading might pay \(expected \+\$\d+\.\d\d\), but that bets on the grade\./.test(D.summary(r, c.item, c.offer, Y.cfg())));
   assert.strictEqual(r.routes.flip.pass, false);                                              // reselling raw at $40 doesn't clear
   assert.strictEqual(run({ ...c, offer: { ...c.offer, cond: "LP" } }).routes.grade.pass, false);
   assert.strictEqual(run({ ...c, data: { ...c.data, pop: { total: 99, g10: 50, g9: 30 } } }).routes.grade.pass, false);
@@ -125,13 +126,13 @@ test("confidence grades the evidence, not the price", () => {
   assert.strictEqual(run(card({ offer: { ask: 9900 } })).confidence, run(card()).confidence);
 });
 test("every synthetic scenario lands where it is meant to", () => {
-  const want = { "good-flip": "buy", "fair-price": "pass", thin: "pass", stale: "pass", scattered: "pass", disagree: "pass", falling: "pass", "no-second": "pass", played: "pass", grade: "buy", sealed: "pass", cheap: "pass" };
+  const want = { "good-flip": "buy", "fair-price": "pass", thin: "pass", stale: "pass", scattered: "pass", disagree: "pass", falling: "pass", "no-second": "pass", played: "pass", grade: "pass", sealed: "pass", cheap: "pass" };
   for (const s of Y.scenarios()) assert.strictEqual(run(s).verdict, want[s.key], s.key);
 });
 test("the panel: PASS or BUY candidate, every cost line, names escaped, no chart call", () => {
   const c = card({ item: { name: "<b>x</b>" } }), cfg = Y.cfg();
   const r = D.check(c.item, c.data, c.offer, cfg), h = D.html(r, c.item, c.data, c.offer, cfg);
-  assert.ok(/<b>BUY candidate<\/b>/.test(h) && /Marketplace fee \(on price \+ 7.5% buyer tax\)/.test(h) && /Shipping out \+ supplies/.test(h) && /Net profit/.test(h) && /Offer up to \$/.test(h));
+  assert.ok(/<b>BUY candidate<\/b>/.test(h) && /Marketplace fee \(on price \+ 7.5% buyer tax\)/.test(h) && /Shipping out \+ supplies/.test(h) && /Net profit/.test(h) && /Max to pay/.test(h) && /Don&#39;t pay more than \$/.test(h));
   assert.ok(!/Buy zone/.test(h) && !/<b>x<\/b>/.test(h));
   const p = run(card({ offer: { ask: 9900 } })), hp = D.html(p, c.item, c.data, { ...c.offer, ask: 9900 }, cfg);
   assert.ok(/<b>PASS<\/b>/.test(hp) && /PASS unless every check clears/.test(hp));
@@ -142,5 +143,57 @@ test("no panel ever prints a missing number (scenarios and 3,000 random cases), 
   for (const c of Y.randomCases(3000, 11)) { const cfg = Y.cfg(), r = D.check(c.item, c.data, c.offer, cfg, c.ctx), h = D.html(r, c.item, c.data, c.offer, cfg); assert.ok(!bad.test(h), h.match(/.{40}(undefined|NaN|null|Infinity).{40}/)?.[0]); }
   const cfg = Y.cfg({ grade: { fee: 2500, ship: 1500, months: "90–100" } }), c = card(), r = D.check(c.item, c.data, c.offer, cfg);
   assert.ok(Number.isFinite(r.routes.grade.cost) && !bad.test(D.html(r, c.item, c.data, c.offer, cfg)));
+});
+test("independent fee examples (eBay trading cards: 13.25% to $7,500, 2.35% above, on the total)", () => {
+  assert.strictEqual(D.fee({ flat: 0, parts: [[13.25, 0, null, null]] }, 7500, 0), 994);        // a $75 sale: 13.25% = $9.94
+  const live = { flat: 40, parts: [[13.25, 0, 750000, null], [2.35, 750000, null, null]] };    // Edge's eBay row (assets/grade-fees.json)
+  assert.strictEqual(D.fee(live, 1000000, 0), Math.round(750000 * 0.1325 + 250000 * 0.0235 + 40));   // $10,000: $993.75 + $58.75 + $0.40
+  assert.strictEqual(D.fee(live, 8000, 8), Math.round(8640 * 0.1325 + 40));                     // $80 with 8% tax: fee on $86.40
+});
+test("no sold data: PASS that says so, and never a number it doesn't have", () => {
+  const c = card(), cfg = Y.cfg();
+  for (const data of [null, { asOf: T, comps: [] }]) {
+    const r = D.check(c.item, data, c.offer, cfg), h = D.html(r, c.item, data, c.offer, cfg);
+    assert.deepStrictEqual([r.verdict, r.reason], ["pass", "no-data"]);
+    assert.ok(/No sold prices loaded yet/.test(D.summary(r, c.item, c.offer, cfg)) && /Edge never fills in a price/.test(h) && !/Evidence:/.test(h));
+    assert.ok(/<b class="[^"]*">—<\/b>/.test(h) && !/undefined|NaN|\bnull\b/.test(h));
+  }
+});
+test("plain-language summary for each outcome", () => {
+  const cfg = Y.cfg(), S = (c, ctx) => { const r = D.check(c.item, c.data, c.offer, cfg, ctx); return [r, D.summary(r, c.item, c.offer, cfg)]; };
+  let [r, s] = S(card()); assert.ok(r.verdict === "buy" && /Sells about one every \d+ days near \$100\.00\. At \$50\.00 you'd net about \+\$28\.36/.test(s) && /Don't pay more than \$/.test(s), s);
+  [, s] = S(card({ offer: { ask: 9000 } })); assert.ok(/under your 20% target\. Pay \$\d+\.\d\d or less plus the \$1\.50 shipping\./.test(s), s);
+  [, s] = S(card({ data: { comps: flat("raw", 10000, [9, 40]) } })); assert.ok(/Only 2 sales of this exact card in 90 days/.test(s), s);
+  [, s] = S(card({ data: { comps: flat("raw", 10000, [9, 40, 50, 60, 70]) } })); assert.ok(/Only 1 sold in the last 30 days/.test(s), s);
+  [, s] = S(card({ item: { tcg: 15000 } })); assert.ok(/TCGplayer \(\$150\.00\) and eBay sold \(\$100\.00\) disagree/.test(s), s);
+  [, s] = S(card({ item: { tcg: null } })); assert.ok(/Only one price source/.test(s), s);
+  [, s] = S(card(), { warning: { id: "knife", verdict: "pass", name: "Falling knife" } }); assert.ok(/Wait\./.test(s), s);
+  [, s] = S(card({ data: { asOf: T - 9 } })); assert.ok(/too old to trust: sales data is 9 days old/.test(s), s);
+  [, s] = S(card({ data: { comps: flat("raw", 10000, [30, 31, 40, 50, 60]) } })); assert.ok(/The last sale of this exact card was 30 days ago: it rarely sells/.test(s), s);
+});
+test("my collection: sell, hold, grade, unclear, unknown", () => {
+  const cfg = Y.cfg(), it = card().item, data = card().data;
+  const sell = D.own(it, data, { cost: 3000, cond: "NM" }, cfg);
+  assert.deepStrictEqual([sell.label, sell.proceeds, sell.profit], ["sell", 7986, 4986]);
+  assert.ok(/Selling now nets about \$79\.86: \+\$49\.86 over what you paid\./.test(sell.text), sell.text);
+  const hold = D.own(it, data, { cost: 7500, cond: "NM" }, cfg);
+  assert.deepStrictEqual([hold.label, hold.profit], ["hold", 486]);
+  assert.strictEqual(D.own(it, data, { cost: 0, cond: "NM" }, cfg).label, "sell");                 // pulled from a pack: anything over the minimum profit
+  const g = card({ data: { comps: [...flat("raw", 4000, AGES), ...flat("PSA 10", 20000, AGES), ...flat("PSA 9", 7000, AGES)], pop: { total: 1000, g10: 400, g9: 400 } }, item: { tcg: 4000 } });
+  assert.strictEqual(D.own(g.item, g.data, { cost: 1000, cond: "NM" }, cfg).label, "grade");
+  assert.strictEqual(D.own(it, { asOf: T, comps: flat("raw", 10000, [9, 40]) }, { cost: 1000 }, cfg).label, "unclear");
+  assert.strictEqual(D.own(it, null, { cost: 1000 }, cfg).label, "unknown");
+});
+test("worked by hand: an $80 card at a show, then the same card online at $60 + $4.99 shipping", () => {
+  // 10 exact raw sales at $110 (5 in the last 30 days), TCGplayer $112. eBay 13.25% + $0.40 on price + 7.5% tax:
+  // fee on $118.25 = $15.67 + $0.40 = $16.07; shipping out $5.00 (card $50+), supplies $0.50 → $88.43 left.
+  const c = card({ item: { tcg: 11200 }, data: { comps: flat("raw", 11000, AGES) }, offer: { ask: 8000, shipIn: 0 } }), cfg = Y.cfg();
+  let r = D.check(c.item, c.data, c.offer, cfg), F = r.routes.flip;
+  assert.deepStrictEqual([F.exit, F.proceeds, F.profit, F.max, r.verdict, r.reason], [11000, 8843, 843, 7369, "pass", "margin"]);
+  assert.strictEqual(D.summary(r, c.item, c.offer, cfg), "At $80.00 you'd net +$8.43 (+11%), under your 20% target. Pay $73.69 or less.");
+  const o = { ask: 6000, shipIn: 499, cond: "NM", taxIn: 0 };                      // cost $64.99 → +$23.44, 36%
+  r = D.check(c.item, c.data, o, cfg); F = r.routes.flip;
+  assert.deepStrictEqual([F.cost, F.profit, r.verdict], [6499, 2344, "buy"]);
+  assert.strictEqual(D.summary(r, c.item, o, cfg), "Sells about one every 6 days near $110.00. At $60.00 you'd net about +$23.44 (+36%) after fees, tax and shipping. Don't pay more than $68.70 plus the $4.99 shipping.");   // $73.69 all-in
 });
 console.log(`${n} deal check tests passed${process.exitCode ? " (with failures above)" : ""}`);

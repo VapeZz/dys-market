@@ -9,6 +9,7 @@ const results = cases.map((c) => {
   return { verdict: r.verdict, route: r.route, confidence: r.confidence, scope: r.scope,
     flip: { exit: F.exit, profit: F.profit, max: F.max, pass: F.pass, gates: Object.fromEntries(F.gates.filter((g) => g.hard).map((g) => [g.code, g.ok])) },
     grade: G ? { expected: G.expected, profit: G.profit, pass: G.pass } : null,
-    hold: H ? { m6: H.m6, m12: H.m12 } : null };
+    hold: H ? { m6: H.m6, m12: H.m12 } : null,
+    own: D.own(c.item, c.data, { cost: c.offer.ask, cond: c.offer.cond }, cfg, c.ctx).label };
 });
 process.stdout.write(JSON.stringify({ today: Y.DAY0, cases, results }));

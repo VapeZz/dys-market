@@ -19,13 +19,10 @@
   const TA = part("edge-ta.js", "EdgeTA");
   // the strategy box under the price tiles (edge-strat.js) reads the chart's numbers; without the chart or the file there is no box
   const STRAT = part("edge-strat.js", "EdgeStrat");
-  // the Deal check (edge-deal.js, M1): sold comps per item from data/edge/deal/<set>.json. No file, no panel.
-  // M1 is in development on synthetic data only; production has no deal files until the data licence is confirmed.
+  // the Deal check (edge-deal.js, M1) and its live sold prices (edge-pkmn.js): PkmnPrices read on demand through the
+  // owner's relay, kept in this page's memory only. Without a relay the panel says so and stays a PASS.
   const DEAL = part("edge-deal.js", "EdgeDeal");
-  // index.json lists the sets that have a file, so a set without one is never requested
-  const dealFile = (g) => getJSON("edge/deal/index.json").catch(() => null)
-    .then((ix) => ix && Array.isArray(ix.sets) && ix.sets.map(String).includes(String(g)) ? getJSON(`edge/deal/${g}.json`) : null)
-    .then((j) => j && j.v === 1 && j.items ? j : null).catch(() => { delete cache[`edge/deal/${g}.json`]; return null; });
+  const PKMN = part("edge-pkmn.js", "EdgePkmn");
   // how each strategy rule did in the backtest (a fixed file, rebuilt when the rules change); without it the box says "not backtested"
   const BACKTEST = fetch(`${BASE}assets/edge-backtest.json${VER}`).then((r) => r.ok ? r.json() : null).then((j) => j && j.v === 1 && j.rules ? j : null).catch(() => null);
   /* layout (shared with the market site): big pictures, grid view, 5 tabs; ?v2=0 or Mine > Settings brings back the old one */
@@ -177,6 +174,27 @@
   const shipIn = (t) => t === "s" ? S.set.buySealed : S.set.buyCard;
   const net = (p, t, k = S.set.platform) => p ? netSale(plat(k), p) - shipOut(p, t, k) : 0;
   const maxBuy = (p, t) => p ? Math.max(0, Math.floor(net(p, t) / (1 + S.set.roi / 100) - shipIn(t))) : 0;
+  /* the Deal check's settings, from Mine → Settings */
+  const dayNum = (d) => d ? Math.floor(Date.parse(d + "T00:00:00Z") / 864e5) : null;
+  function dealCfg(value) {
+    const { gr, ti, tier } = grader();
+    return { today: Math.floor(Date.now() / 864e5), fees: plat(), buyerTax: S.set.platform === "none" ? 0 : S.set.buyerTax,
+      shipOut: (x, t) => shipOut(x, t), supplies: (t) => t === "s" ? S.set.supSealed : S.set.supCard, roi: S.set.roi, minProfit: S.set.minProfit, holdRate: S.set.holdRate,
+      grade: { fee: feeAt(gr, ti, value || 0), ship: S.set.gradeShip, months: Math.max(1, Math.round((parseInt(tier[3], 10) || 60) / 30)) + 1 } };
+  }
+  /* the PkmnPrices relay (address and passphrase), kept on this phone only and out of backup files */
+  const RKEY = "dys-edge-relay";
+  const pkmnConn = () => { try { const j = JSON.parse(localStorage.getItem(RKEY) || "null"); return j && j.relay && j.pass ? { relay: j.relay, pass: j.pass } : null; } catch { return null; } };
+  const SOLD_WHY = { "not-set-up": "Sold prices aren't set up yet (Mine → Settings).", network: "No connection to the sold-price relay. Try again.",
+    denied: "The relay refused the passphrase. Check it in Mine → Settings.", "not-found": "PkmnPrices doesn't have this exact item, so there are no sold prices to show.", error: "PkmnPrices answered with an error. Try again later." };
+  function soldNote(res) {
+    if (!res.ok) return { ok: false, note: SOLD_WHY[res.reason] || "Couldn't get sold prices." };
+    const m = res.meta, bits = [`${m.calls} call${m.calls === 1 ? "" : "s"}, ${m.credits} credit${m.credits === 1 ? "" : "s"}`];
+    if (m.capped.length) bits.push(`more ${m.capped.join(" and ")} sales exist than were read`);
+    if (m.errors.length) bits.push(`not read: ${m.errors.join("; ")}`);
+    if (m.undated + m.future + m.otherCurrency) bits.push(`${m.undated + m.future + m.otherCurrency} sales left out (no date, future date or not in US dollars)`);
+    return { ok: true, data: res.data, note: `Read just now: ${bits.join(" · ")}. Kept on this page only.` };
+  }
   const flip = (p, lo, t) => { if (!p || !lo) return null; const cost = lo + shipIn(t), pr = net(p, t) - cost; return { pr, roi: pr / cost * 100, cost }; };
   function tierFor(gr, v) { const t = gr.tiers; for (let i = 0; i < t.length; i++) if (t[i][2] == null || v <= t[i][2]) return i; return t.length - 1; }
   const feeAt = (gr, ti, v) => gr.upcharge ? Math.max(gr.tiers[ti][1], gr.tiers[tierFor(gr, v)][1]) : gr.tiers[ti][1];
@@ -544,7 +562,7 @@
     sheet.hidden = false; document.body.style.overflow = "hidden";
     const card = $("#sheet-card");
     card.innerHTML = `<div class="grab"><span class="lab">Card details</span><button type="button" class="btn sm close">Close</button></div><p class="muted">Loading…</p>`;
-    const [{ it, set }, eb, , ta, daily, strat, backtest, deal, dealData] = await Promise.all([detail(id, g, n), getJSON("ebay.json").catch(() => ({ cards: {} })), loadGraded(), TA, dailyFile(g), STRAT, BACKTEST, DEAL, dealFile(g)]);
+    const [{ it, set }, eb, , ta, daily, strat, backtest, deal, pkmn] = await Promise.all([detail(id, g, n), getJSON("ebay.json").catch(() => ({ cards: {} })), loadGraded(), TA, dailyFile(g), STRAT, BACKTEST, DEAL, PKMN]);
     if (!it) { card.innerHTML = `<div class="grab"><span class="lab">Card details</span><button type="button" class="btn sm close">Close</button></div><div class="empty"><b>No price for this one yet</b>It may be too new or not sold recently.</div>`; return; }
     const x = { id: it.id, g, n: it.n, t: it.t, sn: set.n };
     S.recent = [x, ...S.recent.filter((y) => !(y.id === x.id && y.n === x.n))].slice(0, 12); save();
@@ -563,7 +581,7 @@
       <div class="prices"><div class="tile"><span class="lab">Lowest listing</span><b>${money(lo)}</b><small class="${lo && p ? cls(p - lo) : ""}">${lo && p ? `${pct((lo - p) / p * 100, 0)} vs market` : "on TCGplayer"}</small></div>
         <div class="tile"><span class="lab">Max buy</span><b>${money(maxBuy(p, it.t))}</b><small>for ${S.set.roi}% profit</small></div>
         <div class="tile"><span class="lab">Flip now</span><b class="${f ? cls(f.pr) : ""}">${f ? signed(f.pr) : "—"}</b><small>${f ? `${f.roi.toFixed(0)}% buying the lowest` : "no listing"}</small></div></div>
-      ${deal && dealData && dealData.items[it.id] ? `<section class="sec panel" id="c-deal"></section>` : ""}
+      ${deal ? `<section class="sec panel" id="c-deal"></section>` : ""}
       ${ta && strat ? `<section class="sec" id="c-strat" hidden></section>` : ""}
       ${ta ? `<section class="sec ta" id="c-ta"></section>` : simple}
       ${it.t === "c" ? `<section class="sec"><span class="lab">By condition</span><div class="cond">${COND.map(([c, m]) => `<div><b>${c}</b>${money(Math.round(p * m), p * m >= 10000)}</div>`).join("")}</div></section>` : ""}
@@ -602,14 +620,12 @@
     } catch (err) { console.error(err); box.remove(); }
     const dbox = $("#c-deal");
     if (dbox) try {
-      const dd = dealData.items[it.id], { gr, ti, tier } = grader();
-      const cfgD = { today: Math.floor(Date.now() / 864e5), fees: plat(), buyerTax: S.set.platform === "none" ? 0 : S.set.buyerTax,
-        shipOut: (x, t) => shipOut(x, t), supplies: (t) => t === "s" ? S.set.supSealed : S.set.supCard, roi: S.set.roi, minProfit: S.set.minProfit, holdRate: S.set.holdRate,
-        grade: { fee: feeAt(gr, ti, p || 0), ship: S.set.gradeShip, months: Math.max(1, Math.round((parseInt(tier[3], 10) || 60) / 30)) + 1 } };
-      const day = (d) => d ? Math.floor(Date.parse(d + "T00:00:00Z") / 864e5) : null;
-      deal.mount(dbox, { name: it.n, t: it.t, tcg: p, tcgDay: day(set.dates?.[set.dates.length - 1]) },
-        { ...dd, asOf: dd.asOf ?? dealData.asOf, source: dealData.source }, { ask: lo || p || 0, cond: "NM", shipIn: shipIn(it.t), taxIn: S.set.taxIn }, cfgD,
-        { warning: reading && !reading.demoted ? { id: reading.id, verdict: reading.verdict, name: reading.name } : null });
+      const item = { id: it.id, n: it.n, name: it.n, t: it.t, tcg: p, tcgDay: dayNum(set.dates?.[set.dates.length - 1]) };
+      const warning = reading && !reading.demoted ? { id: reading.id, verdict: reading.verdict, name: reading.name } : null;
+      const conn = pkmnConn(), had = pkmn && conn ? pkmn._mem.get(`${it.t}|${it.id}`) : null;
+      const first = had ? await had : null;
+      deal.mount(dbox, item, first && first.ok ? first.data : null, { ask: lo || p || 0, cond: "NM", shipIn: shipIn(it.t), taxIn: S.set.taxIn }, dealCfg(p), { warning },
+        pkmn && conn ? { load: (fresh) => pkmn.get(item, conn, fresh).then(soldNote) } : { off: true, note: pkmn ? "Sold prices aren't set up yet: add your PkmnPrices relay in Mine → Settings. Until then this stays a PASS." : "The sold-price reader didn't load." });
     } catch (err) { console.error(err); dbox.remove(); }
     const form = $("#c-form");
     $("#c-inv").onclick = () => {
@@ -1242,6 +1258,9 @@
     seg($("#m-seg"), [["inv", "Inventory"], ["watch", "Watchlist"], ["set", "Settings"]], SUB.mine, (k) => { SUB.mine = k; draw(); });
     draw();
   }
+  /* "Sell, grade or keep?" for what the owner holds: today's real sold prices, this page only */
+  const OWN = new Map();
+  const OWNL = { sell: ["good", "Sell clears your target"], grade: ["good", "Grading looks better"], hold: ["", "Keep for now"], unclear: ["warn", "Not enough sales"], unknown: ["", "No sold data"] };
   function mineInv(el) {
     const draw = () => {
       if (!S.inv.length) { el.innerHTML = `<div class="empty"><b>Nothing here yet</b>Open any card from Search or Deals and tap Add to inventory. You'll see what it's worth and your profit every day.</div>`; return; }
@@ -1250,9 +1269,31 @@
       el.innerHTML = `<div class="tiles"><div class="tile"><span class="lab">Value</span><b>${money(p.value, true)}</b><small>${p.n} items</small></div>
         <div class="tile"><span class="lab">Cost</span><b>${money(p.cost, true)}</b><small>paid</small></div>
         <div class="tile"><span class="lab">Profit</span><b class="${cls(p.pl)}">${p.pl >= 0 ? "+" : ""}${money(p.pl, true)}</b><small>${p.cost ? pct(p.pl / p.cost * 100, 0) : "—"}</small></div></div>
-        <div class="list">${rows.map(({ x, val, cost }) => rowHTML(x, `<b>${money(Math.round(val))}</b><small class="${cls(val - cost)}">${cost ? signed(Math.round(val - cost)) : `${x.qty}×`}</small>`,
-          `<span class="why">${x.qty}× · ${x.t === "c" ? esc(x.cond) + " · " : ""}paid ${money(x.cost)} each${val && x.qty ? ` · sells for ${money(Math.round(net(Math.round(val / x.qty), x.t)))} each on ${esc(plat().label)}` : ""}</span>`)).join("")}</div>
+        <section class="sec panel own-box"><span class="lab">Sell, grade or keep?</span>
+          <p class="muted small" style="margin:0">Checks each item against real eBay sold prices (PkmnPrices, up to about 250 credits an item of your 20,000 a day). Facts at today's prices, not a forecast. Nothing is saved.</p>
+          <div class="btns"><button type="button" class="btn sm" id="own-go"${pkmnConn() ? "" : " disabled"}>${OWN.size ? "Check again" : `Check my ${S.inv.length} item${S.inv.length === 1 ? "" : "s"}`}</button></div>
+          <p class="small muted" id="own-st" style="margin:0">${pkmnConn() ? "" : "Set up sold prices in Mine → Settings first."}</p></section>
+        <div class="list">${rows.map(({ x, val, cost }) => { const o = OWN.get(x.k), L = o ? OWNL[o.label] || OWNL.unknown : null;
+          return rowHTML(x, `<b>${money(Math.round(val))}</b><small class="${cls(val - cost)}">${cost ? signed(Math.round(val - cost)) : `${x.qty}×`}</small>`,
+          `<span class="why">${x.qty}× · ${x.t === "c" ? esc(x.cond) + " · " : ""}paid ${money(x.cost)} each${val && x.qty ? ` · sells for ${money(Math.round(net(Math.round(val / x.qty), x.t)))} each on ${esc(plat().label)}` : ""}</span>${o ? `<span class="why own-res"><span class="chip ${L[0]}">${L[1]}</span> ${esc(o.text)}</span>` : ""}`); }).join("")}</div>
         <p class="muted small">Tap an item to change it. Values use today's market price for its condition.</p>`;
+      const go = $("#own-go", el);
+      if (go) go.onclick = async () => {
+        const conn = pkmnConn(), [deal, pkmn] = await Promise.all([DEAL, PKMN]), st = $("#own-st", el);
+        if (!conn || !deal || !pkmn) { st.textContent = "Sold prices aren't set up yet (Mine → Settings)."; return; }
+        go.disabled = true; let credits = 0, i = 0;
+        for (const x of S.inv) {
+          st.textContent = `Checking ${++i} of ${S.inv.length}…`;
+          try {
+            const d = await detail(x.id, x.g, x.n), it = d.it;
+            if (!it) { OWN.set(x.k, { label: "unknown", text: "No market price for this item right now." }); continue; }
+            const item = { id: it.id, n: it.n, name: it.n, t: it.t, tcg: it.p, tcgDay: dayNum(d.set.dates?.[d.set.dates.length - 1]) };
+            const res = await pkmn.get(item, conn, true); credits += res.meta ? res.meta.credits : 0;
+            OWN.set(x.k, res.ok ? deal.own(item, res.data, { cost: x.cost || 0, cond: x.cond || "NM" }, dealCfg(it.p)) : { label: "unknown", text: soldNote(res).note });
+          } catch (err) { console.error(err); OWN.set(x.k, { label: "unknown", text: "Couldn't check this one." }); }
+        }
+        draw(); const s2 = $("#own-st", el); if (s2) s2.textContent = `Checked ${S.inv.length} item${S.inv.length === 1 ? "" : "s"} just now · ${credits} credits.`;
+      };
     };
     draw();
   }
@@ -1277,6 +1318,12 @@
         <p class="muted small" style="margin:0">Enter your PokemonPriceTracker API key (the same one saved on GitHub as PPT_API_KEY) to unlock graded sold prices for PSA, CGC, BGS and TAG. The grading board fills in by itself, Find ranks real grading opportunities, and each card shows its graded prices. The key stays on this phone and isn't saved in backup files. For personal use, which your API plan covers.</p>
         <form class="btns" id="pp-f"><input class="field" id="pp-k" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="PokemonPriceTracker API key" placeholder="${pptKey() ? "Saved ✓" : "PokemonPriceTracker API key"}" style="flex:1;min-width:0"><button class="btn primary" type="submit">Save</button>${pptKey() ? `<button type="button" class="btn ghost danger" id="pp-rm">Remove</button>` : ""}</form>
         <p class="small" id="pp-st" style="margin:0"></p></section>
+      <section class="sec panel"><h2>Sold prices (PkmnPrices)</h2>
+        <p class="muted small" style="margin:0">The Deal check reads real eBay sold prices from your PkmnPrices plan on demand, through your private relay (PkmnPrices doesn't answer phone pages directly). The address and passphrase stay on this phone and out of backup files. Results are kept only while the page is open.</p>
+        <form class="form" id="rl-f"><label class="f full">Relay address<input class="field" id="rl-u" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://…workers.dev" value="${esc(pkmnConn()?.relay || "")}"></label>
+          <label class="f full">Passphrase<input class="field" id="rl-p" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${pkmnConn() ? "Saved ✓" : "Relay passphrase"}"></label>
+          <div class="btns full"><button class="btn primary" type="submit">Save</button>${pkmnConn() ? `<button class="btn" type="button" id="rl-t">Test</button><button class="btn ghost danger" type="button" id="rl-x">Remove</button>` : ""}</div></form>
+        <p class="small" id="rl-st" style="margin:0"></p></section>
       <form class="sec panel" id="st-f"><h2>Your numbers</h2>
       <div class="form"><label class="f full">I usually sell on${platSelect("st-plat", s.platform)}</label>
         <label class="f">Target profit %<input class="field" id="st-roi" type="number" inputmode="numeric" min="0" max="500" value="${s.roi}"></label>
@@ -1320,6 +1367,21 @@
     };
     const rm = $("#pp-rm"); if (rm) rm.onclick = () => { try { localStorage.removeItem(PKEY); } catch {} GR = null; GRP = null; GR_ERR = ""; POP = null; toast("Key removed from this phone"); mineSettings(el); };
     ppStatus();
+    $("#rl-f").onsubmit = (e) => {
+      e.preventDefault();
+      const u = $("#rl-u").value.trim(), pw = $("#rl-p").value.trim() || pkmnConn()?.pass || "";
+      if (!/^https:\/\/[^\s/]+/.test(u) || !pw) { $("#rl-st").className = "small down"; $("#rl-st").textContent = "Needs an https address and a passphrase."; return; }
+      try { localStorage.setItem(RKEY, JSON.stringify({ relay: u, pass: pw })); } catch { toast("This browser won't save it"); return; }
+      toast("Saved on this phone"); mineSettings(el);
+    };
+    const rt = $("#rl-t"); if (rt) rt.onclick = async () => {
+      const c = pkmnConn(), st = $("#rl-st"); st.className = "small muted"; st.textContent = "Testing…";
+      try {
+        const r = await fetch(`${c.relay.replace(/\/+$/, "")}/v1/cards?tcg_player_id=610516`, { headers: { "X-Edge-Pass": c.pass, Accept: "application/json" } });
+        st.className = `small ${r.ok ? "up" : "down"}`; st.textContent = r.ok ? "Connected: PkmnPrices answered (1 credit)." : r.status === 401 ? "The relay refused the passphrase." : `The relay answered HTTP ${r.status}.`;
+      } catch { st.className = "small down"; st.textContent = "Couldn't reach the relay."; }
+    };
+    const rx = $("#rl-x"); if (rx) rx.onclick = () => { try { localStorage.removeItem(RKEY); } catch {} toast("Removed from this phone"); mineSettings(el); };
     $("#st-f").onsubmit = (e) => {
       e.preventDefault();
       const n = (id) => Math.max(0, parseFloat($(id).value) || 0);

@@ -215,10 +215,16 @@
     out.routes.hold = holdRoute(flip, offer, cfg);
     out.scope = (flip.ev.m90 || item.tcg || 0) >= SCOPE_MIN;
     out.confidence = confidence(flip);
-    const pick = [flip, out.routes.grade].filter((r) => r && r.pass).sort((a, b) => b.profit - a.profit)[0];
-    if (!out.scope) { out.why = `Out of M1 scope: worth under ${money(SCOPE_MIN)}`; return out; }
+    out.fetchAge = data && data.asOf != null ? day - data.asOf : null;
+    if (!data || !(data.comps || []).length) { out.reason = "no-data"; out.why = data ? "No sold prices on record" : "No sold prices loaded"; return out; }
+    // only a resale that clears every check makes a BUY candidate; a grading route that clears is shown, never called
+    // (population odds count only copies people chose to send in, so they run high for a raw copy bought at a table)
+    out.gradeClears = !!(out.routes.grade && out.routes.grade.pass);
+    const pick = flip.pass ? flip : null;
+    if (!out.scope) { out.reason = "scope"; out.why = `Out of M1 scope: worth under ${money(SCOPE_MIN)}`; return out; }
     if (pick) { out.verdict = "buy"; out.route = pick.route; out.why = pick.route === "flip" ? `Every check clears for a resale at ${money(flip.exit)}` : "Every check clears for grading"; return out; }
-    const miss = flip.gates.find((x) => x.hard && !x.ok);
+    const ORDER = ["fresh", "evidence", "liquidity", "spread", "agree", "trend", "margin"];   // the clearest reason first: old data before thin data
+    const miss = ORDER.map((c) => flip.gates.find((x) => x.code === c && x.hard && !x.ok)).find(Boolean) || flip.gates.find((x) => x.hard && !x.ok);
     const WHY = { evidence: "Not enough evidence", liquidity: "Not enough evidence", fresh: "Not enough evidence", spread: "Not enough evidence",
       agree: "Sold prices not confirmed by a second source", trend: "Market is falling or flagged", margin: "Doesn't clear your margin" };
     out.why = miss ? WHY[miss.code] || "A check misses" : "A check misses";
@@ -234,59 +240,125 @@
     return miss === 0 ? (deep ? "A" : "B") : miss === 1 ? "C" : "D";
   }
 
+  /* ---------- plain words ---------- */
+  const daysTxt = (d) => d == null ? "" : d < 1.5 ? "about one a day" : `about one every ${Math.round(d)} days`;
+  // one sentence on the verdict, for a phone screen
+  function summary(r, item, offer, cfg) {
+    const F = r.routes.flip, G = r.routes.grade, ev = F.ev, tgt = cfg.roi;
+    if (r.reason === "no-data") return "No sold prices loaded yet. Edge won't guess a value, so this stays a PASS until real sales are in.";
+    if (!r.scope) return `Under ${money(SCOPE_MIN)}: fees and shipping eat most of any profit, so the Deal check doesn't call it.`;
+    if (r.verdict === "buy") return `Sells ${daysTxt(ev.everyDays)} near ${money(F.exit)}. At ${money(offer.ask)} you'd net about ${signed(F.profit)} (${pct(F.roi)}) after fees, tax and shipping. Don't pay more than ${money(F.max)}${offer.shipIn ? ` plus the ${money(offer.shipIn)} shipping` : ""}.`;
+    switch (r.reason) {
+      case "evidence": return `Only ${ev.n90} sale${ev.n90 === 1 ? "" : "s"} of this exact card in 90 days: too few to trust a price.`;
+      case "liquidity": return `Only ${ev.n30} sold in the last 30 days: it could take a while to resell.`;
+      case "fresh": {
+        if (r.fetchAge != null && r.fetchAge <= MAX_FETCH_AGE && ev.saleAge != null) return `The last sale of this exact card was ${ev.saleAge} days ago: it rarely sells, so a quick resale is unlikely.`;
+        const g = F.gates.find((x) => x.code === "fresh"); return `The sales data is too old to trust: ${g ? g.text.charAt(0).toLowerCase() + g.text.slice(1) : "check the dates"}. Refresh it.`; }
+      case "spread": return "Sold prices are all over the place (mixed conditions or listings), so there's no reliable value.";
+      case "agree": return item.tcg ? `TCGplayer (${money(item.tcg)}) and eBay sold (${money(ev.m90)}) disagree by more than ${MAX_DISAGREE}%. Find out which is right before buying.` : "Only one price source, so the value can't be cross-checked.";
+      case "trend": return "Prices are falling or a tested warning is on. Wait.";
+      case "margin": return `At ${money(offer.ask)} you'd net ${signed(F.profit)} (${pct(F.roi)}), under your ${tgt}% target. ${F.max ? `Pay ${money(F.max)} or less${offer.shipIn ? ` plus the ${money(offer.shipIn)} shipping` : ""}.` : "No price works at this resale value."}${r.gradeClears ? ` Grading might pay (expected ${signed(G.profit)}), but that bets on the grade.` : ""}`;
+      default: return r.why;
+    }
+  }
+
+  /* a card the owner already holds: sell now, grade, or keep (facts at today's sold prices, not a forecast) */
+  function own(item, data, holding, cfg, ctx = {}) {
+    const offer = { ask: holding.cost || 0, cond: holding.cond || "NM", shipIn: 0, taxIn: 0 };
+    const r = check(item, data, offer, cfg, ctx), F = r.routes.flip, G = r.routes.grade;
+    const out = { r, offer, label: "unknown", text: "", proceeds: F.proceeds, profit: F.profit, gradeProfit: G ? G.profit : null };
+    if (r.reason === "no-data") { out.text = "No sold prices loaded."; return out; }
+    const weak = F.gates.find((x) => ["evidence", "liquidity", "fresh", "spread"].includes(x.code) && !x.ok);
+    if (weak) { out.label = "unclear"; out.text = `Not enough reliable sales to value it: ${weak.text.charAt(0).toLowerCase() + weak.text.slice(1)}.`; return out; }
+    const falling = F.gates.find((x) => x.code === "trend" && !x.ok);
+    if (G && G.pass && (F.profit == null || G.profit > F.profit)) { out.label = "grade"; out.text = `Grading: expected ${signed(G.profit)} vs ${signed(F.profit)} selling raw today (${Math.round(G.p10 * 100)}% PSA 10 odds).`; return out; }
+    const clears = F.profit != null && F.profit >= (cfg.minProfit ?? MIN_PROFIT) && F.profit * 100 >= F.cost * cfg.roi;
+    if (clears) { out.label = "sell"; out.text = `Selling now nets about ${money(F.proceeds)}: ${signed(F.profit)} over what you paid${falling ? ", and prices are slipping" : ""}.`; return out; }
+    out.label = "hold"; out.text = `Selling now nets about ${money(F.proceeds)} (${signed(F.profit)} vs what you paid), under your ${cfg.roi}% target.`;
+    return out;
+  }
+
   /* ---------- the panel ---------- */
   const CONF = { A: "deep, fresh, consistent sales that agree with TCGplayer", B: "enough fresh, consistent sales that agree with TCGplayer", C: "one evidence check misses", D: "two or more evidence checks miss" };
   const ROUTE = { flip: "Resell", grade: "Grade, then sell" };
   const gateList = (gs) => `<ul class="dl-gates">${gs.map((x) => `<li class="${x.ok ? "ok" : x.hard ? "no" : "info"}"><i aria-hidden="true">${x.ok ? "✓" : x.hard ? "✕" : "•"}</i><span>${esc(x.text)}</span></li>`).join("")}</ul>`;
-  function html(r, item, data, offer, cfg) {
-    const F = r.routes.flip, G = r.routes.grade, H = r.routes.hold;
-    const head = r.verdict === "buy" ? `<div class="dl-call dl-buy"><b>BUY candidate</b><span>${esc(ROUTE[r.route])} · ${esc(r.why)}</span></div>`
+  const ageTxt = (n) => n == null ? "" : n <= 0 ? "today" : n === 1 ? "yesterday" : `${n} days ago`;
+  // state: { status: "idle" | "loading" | "ready" | "error" | "off", note }
+  function html(r, item, data, offer, cfg, state = {}) {
+    const F = r.routes.flip, G = r.routes.grade, H = r.routes.hold, ev = F.ev, none = r.reason === "no-data";
+    const head = r.verdict === "buy" ? `<div class="dl-call dl-buy"><b>BUY candidate</b><span>${esc(ROUTE[r.route])}</span></div>`
       : `<div class="dl-call dl-pass"><b>PASS</b><span>${esc(r.why)}</span></div>`;
-    const ev = F.ev;
-    const dated = data && data.asOf != null ? `${esc(data.source || "sold data")}, read ${cfg.today - data.asOf === 0 ? "today" : `${cfg.today - data.asOf} days ago`}` : "no sold data";
-    return `<div class="dl-head"><span class="lab">Deal check</span><span class="dl-beta">M1 · sold comps · ${esc(dated)}</span></div>
+    const st = state.status || (data ? "ready" : "idle");
+    const badge = st === "loading" ? "Getting sold prices…" : data && data.asOf != null ? `Sold prices read ${ageTxt(cfg.today - data.asOf)}` : st === "off" ? "Sold prices not set up" : "No sold prices yet";
+    const btn = state.canLoad ? `<button type="button" class="btn sm dl-load"${st === "loading" ? " disabled" : ""}>${data ? "Refresh sold prices" : "Get sold prices"}</button>` : "";
+    const tile = (lab, val, sub, cls = "") => `<div class="tile"><span class="lab">${lab}</span><b class="${cls}">${val}</b><small>${sub}</small></div>`;
+    return `<div class="dl-head"><span class="lab">Deal check</span><span class="dl-beta">${esc(badge)}</span></div>
       <form class="dl-form" onsubmit="return false">
-        <label class="f">Asking $<input class="field dl-ask" type="number" inputmode="decimal" min="0" step="0.01" value="${(offer.ask / 100).toFixed(2)}"></label>
-        ${item.t === "c" ? `<label class="f">Condition<select class="select dl-cond">${Object.keys(COND).map((c) => `<option${c === offer.cond ? " selected" : ""}>${c}</option>`).join("")}</select></label>` : ""}
+        <label class="f">Price $<input class="field dl-ask" type="number" inputmode="decimal" min="0" step="0.01" value="${(offer.ask / 100).toFixed(2)}"></label>
+        <label class="f">Shipping to you $<input class="field dl-ship" type="number" inputmode="decimal" min="0" step="0.01" value="${((offer.shipIn || 0) / 100).toFixed(2)}"></label>
+        ${item.t === "c" ? `<label class="f dl-full">Condition<select class="select dl-cond">${Object.keys(COND).map((c) => `<option${c === offer.cond ? " selected" : ""}>${c}</option>`).join("")}</select></label>` : ""}
       </form>
       ${head}
-      <div class="chips"><span class="chip dl-conf dl-conf-${r.confidence}" title="${esc(CONF[r.confidence])}">Evidence: ${r.confidence}</span>
-        ${F.max ? `<span class="chip">Offer up to ${money(F.max)} to resell</span>` : ""}${G && G.pass ? `<span class="chip">Grade route clears</span>` : ""}</div>
-      <p class="dl-note">Evidence ${r.confidence}: ${esc(CONF[r.confidence])}.</p>
-      <span class="lab">Sold comps · ${esc(F.grade)} · exact printing</span>
+      <p class="dl-sum">${esc(summary(r, item, offer, cfg))}</p>
+      <div class="prices dl-tiles">${tile("Resale value", F.exit ? money(F.exit) : "—", F.exit ? `${ev.n30} sold in 30 days` : "no sold data")}
+        ${tile("Net profit", F.profit != null ? signed(F.profit) : "—", F.profit != null ? `${pct(F.roi)} after costs` : "needs sold data", F.profit > 0 ? "up" : F.profit < 0 ? "down" : "")}
+        ${tile("Max to pay", F.max ? money(F.max) : "—", F.max ? `for ${cfg.roi}% profit` : "—")}</div>
+      ${btn || state.note ? `<div class="dl-data">${btn}${state.note ? `<p class="dl-note">${esc(state.note)}</p>` : ""}</div>` : ""}
+      ${none ? "" : `<div class="chips"><span class="chip dl-conf dl-conf-${r.confidence}" title="${esc(CONF[r.confidence])}">Evidence: ${r.confidence}</span>
+        <span class="chip">${esc(daysTxt(ev.everyDays) || "no sales in 30 days")}</span>${G && G.pass ? `<span class="chip">Grading might pay</span>` : ""}</div>`}
+      <details class="dl-more"${state.open ? " open" : ""}><summary>Why, sold comps and costs</summary>
+      ${none ? `<p class="dl-note">No sold prices are loaded for this card. Edge never fills in a price it doesn't have.${item.tcg ? ` TCGplayer market is ${money(item.tcg)}, but a market price alone isn't a sale.` : ""}</p>` : `
+      ${gateList(F.gates)}
+      <span class="lab">Sold comps · ${esc(F.grade)} · this exact printing</span>
       <div class="kv"><div><span>Median, last 30 days</span><span>${F.ev.m30 ? money(F.ev.m30) : "—"} <small>(${ev.n30} sold)</small></span></div>
         <div><span>Median, last 90 days</span><span>${money(ev.m90)} <small>(${ev.n90} sold)</small></span></div>
-        <div><span>Middle half of 90 days</span><span>${money(ev.q1)} – ${money(ev.q3)}</span></div>
-        <div><span>Exit used (the lower median${item.t === "c" && offer.cond !== "NM" ? `, ${offer.cond}` : ""})</span><span><b>${money(F.exit)}</b></span></div>
+        <div><span>Middle half of 90 days</span><span>${ev.q1 != null ? `${money(ev.q1)} – ${money(ev.q3)}` : "—"}</span></div>
+        <div><span>Newest sale</span><span>${ev.saleAge != null ? ageTxt(ev.saleAge) : "—"}</span></div>
+        ${ev.inexact ? `<div><span>Sales shared with other printings (left out)</span><span>${ev.inexact}</span></div>` : ""}
         ${item.tcg ? `<div><span>TCGplayer market (second source)</span><span>${money(item.tcg)}</span></div>` : ""}</div>
       <span class="lab">${item.t === "s" ? "Resell" : "Resell raw"} · after every cost</span>
-      <div class="kv">${F.exit ? `<div><span>Sale at the exit</span><span>${money(F.exit)}</span></div>
+      <div class="kv">${F.exit ? `<div><span>Sale at the resale value${item.t === "c" && offer.cond !== "NM" ? ` (${offer.cond})` : ""}</span><span>${money(F.exit)}</span></div>
         <div><span>Marketplace fee (on price + ${cfg.buyerTax || 0}% buyer tax)</span><span>−${money(fee(cfg.fees, F.exit, cfg.buyerTax || 0))}</span></div>
         <div><span>Shipping out + supplies</span><span>−${money((cfg.shipOut ? cfg.shipOut(F.exit, item.t) : 0) + (cfg.supplies ? cfg.supplies(item.t) : 0))}</span></div>
-        <div><span>Your cost (ask, ${offer.taxIn || 0}% tax, shipping in)</span><span>−${money(F.cost)}</span></div>
+        <div><span>Your cost (price, ${offer.taxIn || 0}% tax, shipping)</span><span>−${money(F.cost)}</span></div>
         <div><span><b>Net profit</b></span><span><b class="${F.profit > 0 ? "up" : "down"}">${signed(F.profit)}</b> <small>${pct(F.roi)}</small></span></div>` : `<div><span>No exact sold price on record</span><span>—</span></div>`}</div>
-      ${gateList(F.gates)}
-      ${G && (G.e10.n90 || (data && data.pop)) ? `<span class="lab">Grade, then sell · ${G.pass ? "clears" : "does not clear"}</span>
+      ${G && (G.e10.n90 || (data && data.pop)) ? `<span class="lab">Grade, then sell · ${G.pass ? "might pay (information only)" : "does not clear"}</span>
         <div class="kv">${G.expected != null ? `<div><span>Expected sale net (PSA 10 ${(G.p10 * 100).toFixed(0)}% · 9 ${(G.p9 * 100).toFixed(0)}% · lower ${((1 - G.p10 - G.p9) * 100).toFixed(0)}%)</span><span>${money(G.expected)}</span></div>
           <div><span>Cost with grading and ${G.months} months of money</span><span>−${money(G.cost)}</span></div>
-          <div><span><b>Expected net</b></span><span><b class="${G.profit > 0 ? "up" : "down"}">${signed(G.profit)}</b> <small>${pct(G.roi)}</small></span></div>` : `<div><span>Not enough data for an expected value</span><span>—</span></div>`}</div>
+          <div><span><b>Expected net</b></span><span><b class="${G.profit > 0 ? "up" : "down"}">${signed(G.profit)}</b> <small>${pct(G.roi)}</small></span></div>` : `<div><span>Not enough data for an expected value</span><span>—</span></div>`}
+          ${data && data.pop ? `<div><span>PSA population${data.pop.asOf != null ? `, updated ${ageTxt(cfg.today - data.pop.asOf)}` : ""}</span><span>${data.pop.total.toLocaleString("en-US")}</span></div>` : ""}</div>
         ${gateList(G.gates)}` : ""}
-      ${H ? `<span class="lab">Hold · information only</span><p class="dl-note">To break even after fees and ${cfg.holdRate || 0}% a month cost of money, ${H.m12 > 0 ? `the sold price has to rise ${pct(H.m6, 1)} in 6 months or ${pct(H.m12, 1)} in 12` : "today's exit already covers 12 months"}. Edge makes no hold call yet.</p>` : ""}
-      <p class="dl-foot">PASS unless every check clears. "BUY candidate" means the sold evidence supports this price, not that the price will rise. Check the copy and the live listings before you buy. Market data, not financial advice.</p>`;
+      ${H ? `<span class="lab">Hold · information only</span><p class="dl-note">To break even after fees and ${cfg.holdRate || 0}% a month cost of money, ${H.m12 > 0 ? `the sold price has to rise ${pct(H.m6, 1)} in 6 months or ${pct(H.m12, 1)} in 12` : "today's resale value already covers 12 months"}. Edge makes no hold call yet.</p>` : ""}
+      ${data && data.source ? `<p class="dl-note">Source: ${esc(data.source)}.</p>` : ""}`}
+      </details>
+      <p class="dl-foot">PASS unless every check clears. "BUY candidate" means real sold prices support this price, not that the price will rise. Check the copy and live listings before you buy. Market data, not financial advice.</p>`;
   }
-  function mount(root, item, data, offer, cfg, ctx = {}) {
+  /* hooks.load(fresh) → Promise<{ ok, data, note }>; without hooks the panel only reads `data` */
+  function mount(root, item, data, offer, cfg, ctx = {}, hooks = null) {
+    const state = { status: data ? "ready" : hooks && hooks.load ? "idle" : (hooks && hooks.off ? "off" : "idle"), canLoad: !!(hooks && hooks.load), note: hooks && hooks.note || "", open: false };
+    let last = null;
     const draw = () => {
       const r = check(item, data, offer, cfg, ctx);
-      root.classList.add("dl"); root.dataset.verdict = r.verdict; root.innerHTML = html(r, item, data, offer, cfg);
-      const a = root.querySelector(".dl-ask"), c = root.querySelector(".dl-cond");
-      if (a) a.onchange = () => { offer.ask = Math.max(0, Math.round((parseFloat(a.value) || 0) * 100)); draw(); };
+      const det = root.querySelector(".dl-more"); if (det) state.open = det.open;
+      root.classList.add("dl"); root.dataset.verdict = r.verdict; root.dataset.reason = r.reason || ""; root.innerHTML = html(r, item, data, offer, cfg, state);
+      const a = root.querySelector(".dl-ask"), s = root.querySelector(".dl-ship"), c = root.querySelector(".dl-cond"), b = root.querySelector(".dl-load");
+      const num = (el) => Math.max(0, Math.round((parseFloat(el.value) || 0) * 100));
+      if (a) a.onchange = () => { offer.ask = num(a); draw(); };
+      if (s) s.onchange = () => { offer.shipIn = num(s); draw(); };
       if (c) c.onchange = () => { offer.cond = c.value; draw(); };
-      return r;
+      if (b) b.onclick = async () => {
+        state.status = "loading"; state.note = ""; draw();
+        let res; try { res = await hooks.load(!!data); } catch (e) { res = { ok: false, note: "Couldn't get sold prices." }; }
+        if (res && res.ok) { data = res.data; state.status = "ready"; } else state.status = "error";
+        state.note = (res && res.note) || ""; draw();
+      };
+      last = r; return r;
     };
-    return draw();
+    draw();
+    return { get result() { return last; }, redraw: draw };
   }
 
-  const api = { v: VERSION, check, mount, html, comps, fee, netSale, costIn, maxAsk, median, rank, COND,
+  const api = { v: VERSION, check, own, summary, mount, html, comps, fee, netSale, costIn, maxAsk, median, rank, COND,
     K: { SCOPE_MIN, MIN_COMPS, MIN_SALES_30, MAX_FETCH_AGE, MAX_SALE_AGE, MAX_SPREAD, MAX_DISAGREE, FALLING, MIN_PROFIT, GRADE_MIN_POP, GRADE_MIN_SALES_30, LOWER_GRADES } };
   if (typeof window !== "undefined") window.EdgeDeal = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;

@@ -170,17 +170,38 @@ def check(case, day):
     out["hold"] = None if not exit_ else {"m6": rise_needed(exit_, t, cost, 6), "m12": rise_needed(exit_, t, cost, 12)}
     # verdict
     scope = (e["m90"] or item.get("tcg") or 0) >= SCOPE_MIN
-    cands = [r for r in (("flip", flip_pass, profit), ("grade", grade and grade["pass"], grade and grade["profit"])) if r[1]]
-    cands.sort(key=lambda r: -r[2])
-    if not scope or not cands:
+    no_data = not case["data"] or not comps
+    if no_data or not scope or not flip_pass:
         out["verdict"], out["route"] = "pass", None
     else:
-        out["verdict"], out["route"] = "buy", cands[0][0]
+        out["verdict"], out["route"] = "buy", "flip"
     miss = sum(1 for k in ("evidence", "liquidity", "fresh", "spread", "agree") if not g[k])
     deep = e["n90"] >= MIN_COMPS * 3 and e["n30"] >= MIN_SALES_30 * 2
     out["confidence"] = ("A" if deep else "B") if miss == 0 else "C" if miss == 1 else "D"
     out["scope"] = scope
     return out
+
+
+def own_label(case, day):
+    """The collection label for a card held at cost = the case's ask, received (no tax, no shipping in)."""
+    c = json.loads(json.dumps(case))
+    c["offer"] = {"ask": case["offer"]["ask"], "cond": case["offer"].get("cond") or "NM", "shipIn": 0, "taxIn": 0}
+    if c["offer"]["cond"] is None:
+        c["offer"]["cond"] = "NM"
+    r = check(c, day)
+    comps = (case["data"] or {}).get("comps") or []
+    if not case["data"] or not comps:
+        return "unknown"
+    g = r["flip"]["gates"]
+    if not all(g[k] for k in ("evidence", "liquidity", "fresh", "spread")):
+        return "unclear"
+    gr, f = r["grade"], r["flip"]
+    if gr and gr["pass"] and (f["profit"] is None or gr["profit"] > f["profit"]):
+        return "grade"
+    cost = cost_in(c["offer"]["ask"], c["offer"])
+    if f["profit"] is not None and f["profit"] >= MIN_PROFIT and f["profit"] * 100 >= cost * ROI:
+        return "sell"
+    return "hold"
 
 
 def main(path):
@@ -210,6 +231,7 @@ def main(path):
         elif ref["grade"]:
             for k in ("expected", "profit", "pass"):
                 cmp("grade." + k, ref["grade"][k], app["grade"][k])
+        cmp("own", own_label(case, day), app["own"])
         if (ref["hold"] is None) != (app["hold"] is None):
             diffs.append((i, "hold", ref["hold"], app["hold"]))
         elif ref["hold"]:
