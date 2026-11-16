@@ -183,7 +183,7 @@
       grade: { fee: feeAt(gr, ti, value || 0), ship: S.set.gradeShip, months: Math.max(1, Math.round((parseInt(tier[3], 10) || 60) / 30)) + 1 } };
   }
   /* the PkmnPrices relay (address and passphrase), kept on this phone only and out of backup files */
-  const RKEY = "dys-edge-relay";
+  const RKEY = "dys-edge-relay", RELAY = "https://dys-edge-relay.keo-llaneza.workers.dev";
   const pkmnConn = () => { try { const j = JSON.parse(localStorage.getItem(RKEY) || "null"); return j && j.relay && j.pass ? { relay: j.relay, pass: j.pass } : null; } catch { return null; } };
   const SOLD_WHY = { "not-set-up": "Sold prices aren't set up yet (Mine → Settings).", network: "No connection to the sold-price relay. Try again.",
     denied: "The relay refused the passphrase. Check it in Mine → Settings.", "not-found": "PkmnPrices doesn't have this exact item, so there are no sold prices to show.", error: "PkmnPrices answered with an error. Try again later." };
@@ -1319,10 +1319,14 @@
         <form class="btns" id="pp-f"><input class="field" id="pp-k" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="PokemonPriceTracker API key" placeholder="${pptKey() ? "Saved ✓" : "PokemonPriceTracker API key"}" style="flex:1;min-width:0"><button class="btn primary" type="submit">Save</button>${pptKey() ? `<button type="button" class="btn ghost danger" id="pp-rm">Remove</button>` : ""}</form>
         <p class="small" id="pp-st" style="margin:0"></p></section>
       <section class="sec panel"><h2>Sold prices (PkmnPrices)</h2>
-        <p class="muted small" style="margin:0">The Deal check reads real eBay sold prices from your PkmnPrices plan on demand, through your private relay (PkmnPrices doesn't answer phone pages directly). The address and passphrase stay on this phone and out of backup files. Results are kept only while the page is open.</p>
+        <p class="muted small" style="margin:0">The Deal check reads real eBay sold prices from your PkmnPrices plan on demand, through your private relay. Pair this phone once: it makes its own private key, kept on this phone and out of backup files, and shows a pairing code to send to Claude. Results are kept only while the page is open.</p>
+        <div class="btns"><button type="button" class="btn primary" id="rl-pair">${pkmnConn()?.device ? "Paired ✓ · pair again" : "Pair this phone"}</button></div>
+        <p class="small" id="rl-code" style="margin:0;word-break:break-all"></p>
+        <details><summary class="small muted">Or use a relay address and passphrase</summary>
         <form class="form" id="rl-f"><label class="f full">Relay address<input class="field" id="rl-u" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://…workers.dev" value="${esc(pkmnConn()?.relay || "")}"></label>
           <label class="f full">Passphrase<input class="field" id="rl-p" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${pkmnConn() ? "Saved ✓" : "Relay passphrase"}"></label>
-          <div class="btns full"><button class="btn primary" type="submit">Save</button>${pkmnConn() ? `<button class="btn" type="button" id="rl-t">Test</button><button class="btn ghost danger" type="button" id="rl-x">Remove</button>` : ""}</div></form>
+          <div class="btns full"><button class="btn primary" type="submit">Save</button></div></form></details>
+        ${pkmnConn() ? `<div class="btns"><button class="btn" type="button" id="rl-t">Test</button><button class="btn ghost danger" type="button" id="rl-x">Remove from this phone</button></div>` : ""}
         <p class="small" id="rl-st" style="margin:0"></p></section>
       <form class="sec panel" id="st-f"><h2>Your numbers</h2>
       <div class="form"><label class="f full">I usually sell on${platSelect("st-plat", s.platform)}</label>
@@ -1371,8 +1375,18 @@
       e.preventDefault();
       const u = $("#rl-u").value.trim(), pw = $("#rl-p").value.trim() || pkmnConn()?.pass || "";
       if (!/^https:\/\/[^\s/]+/.test(u) || !pw) { $("#rl-st").className = "small down"; $("#rl-st").textContent = "Needs an https address and a passphrase."; return; }
-      try { localStorage.setItem(RKEY, JSON.stringify({ relay: u, pass: pw })); } catch { toast("This browser won't save it"); return; }
+      try { localStorage.setItem(RKEY, JSON.stringify({ relay: u.replace(/\/+$/, ""), pass: pw })); } catch { toast("This browser won't save it"); return; }
       toast("Saved on this phone"); mineSettings(el);
+    };
+    // pairing: this phone makes a random token and keeps it; only its SHA-256 goes to the relay's EDGE_DEVICE_HASHES
+    $("#rl-pair").onclick = async () => {
+      const b = crypto.getRandomValues(new Uint8Array(32)), token = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+      const h = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token)))].map((x) => x.toString(16).padStart(2, "0")).join("");
+      try { localStorage.setItem(RKEY, JSON.stringify({ relay: RELAY, pass: token, device: "phone", paired: new Date().toISOString(), hash: h })); } catch { toast("This browser won't save it"); return; }
+      mineSettings(el);
+      const c = $("#rl-code"); c.className = "small";
+      c.innerHTML = `Pairing code for Claude (safe to share: it can't be used to sign in): <b>${h}</b> <button type="button" class="btn sm" id="rl-copy">Copy</button>`;
+      $("#rl-copy").onclick = () => navigator.clipboard?.writeText(h).then(() => toast("Copied"), () => {});
     };
     const rt = $("#rl-t"); if (rt) rt.onclick = async () => {
       const c = pkmnConn(), st = $("#rl-st"); st.className = "small muted"; st.textContent = "Testing…";

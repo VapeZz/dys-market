@@ -240,9 +240,17 @@ def main():
         page.click("#rl-t")
         page.wait_for_function("() => !/Testing/.test(document.querySelector('#rl-st').textContent)", timeout=10000)
         ok("Connected" in page.inner_text("#rl-st"), f"relay test: {page.inner_text('#rl-st')!r}")
+        page.evaluate("() => { document.querySelector('#rl-f').closest('details').open = true; }")
         page.fill("#rl-u", "http://insecure.example")
         page.evaluate("() => document.querySelector('#rl-f').requestSubmit()")
         ok("Needs an https address" in page.inner_text("#rl-st"), "an http address is refused")
+        page.click("#rl-pair")
+        page.wait_for_function("() => /Pairing code/.test(document.querySelector('#rl-code').textContent)", timeout=5000)
+        code = re.search(r"[0-9a-f]{64}", page.inner_text("#rl-code"))
+        stored = page.evaluate("() => JSON.parse(localStorage.getItem('dys-edge-relay'))")
+        import hashlib
+        ok(code and stored["relay"].endswith("keo-llaneza.workers.dev") and len(stored["pass"]) == 64 and hashlib.sha256(stored["pass"].encode()).hexdigest() == code.group(0) and stored["pass"] not in page.inner_text("body"),
+           "pairing: the code shown is the hash of a token that stays hidden")
         backup = page.evaluate("() => JSON.stringify(JSON.parse(localStorage.getItem('dys-edge-v1')))")
         ok("test-pass" not in backup and "relay.test" not in backup, "the relay is not in Edge's backup data")
         ctx.close()

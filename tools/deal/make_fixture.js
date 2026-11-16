@@ -9,8 +9,8 @@ const DAYMS = 864e5, today = Math.floor(Date.now() / DAYMS);
 const KINDS = ["good", "thin", "stale", "scattered", "falling", "fair", "good", "good", "none"];
 const kindOf = (id) => KINDS[(id * 2654435761 >>> 0) % KINDS.length];
 const iso = (d) => new Date(d * DAYMS).toISOString().slice(0, 10);
-const rows = (list) => list.map(([d, c, , exact]) => ({ sold_at: iso(d), price: c / 100, currency: "USD", attribution: exact ? "exact" : "shared", sale_type: "fixed_price" }));
-const page = (list) => [200, { data: rows(list).reverse(), pagination: { has_more: false, next_cursor: null } }];
+const rows = (list, variant) => list.map(([d, c, , exact]) => ({ sold_at: iso(d), price: c / 100, currency: "USD", attribution: exact ? "exact" : "shared", sale_type: "fixed_price", variant }));
+const page = (list, variant = null) => [200, { data: rows(list, variant).reverse(), pagination: { has_more: false, next_cursor: null } }];
 const out = {}, kinds = {};
 for (const g of sets) {
   const s = JSON.parse(fs.readFileSync(path.join(dir, `data/set/${g}.json`), "utf8"));
@@ -31,11 +31,11 @@ for (const g of sets) {
     }
     if (k === "none") { out[`/v1/cards|${it.id}`] = [200, { data: [] }]; continue; }
     out[`/v1/cards|${it.id}`] = [200, { data: [{ id, name: it.n }] }];
-    out[`/v1/cards/${id}/listings/ebay|false`] = page(main);
-    const big = it.p >= 2000;
-    out[`/v1/cards/${id}/listings/ebay|true10`] = page(big ? S({ grade: "PSA 10", n: 10, mid: mid * 2.6, jitter: 0.06 }) : []);
-    out[`/v1/cards/${id}/listings/ebay|true9`] = page(big ? S({ grade: "PSA 9", n: 9, mid: mid * 1.2, jitter: 0.06 }) : []);
     const v = (/\((1st Edition Holofoil|Reverse Holofoil|Holofoil)\)$/.exec(it.n) || [, "Normal"])[1];
+    out[`/v1/cards/${id}/listings/ebay|false`] = page(main, v);
+    const big = it.p >= 2000;
+    out[`/v1/cards/${id}/listings/ebay|true10`] = page(big ? S({ grade: "PSA 10", n: 10, mid: mid * 2.6, jitter: 0.06 }) : [], v);
+    out[`/v1/cards/${id}/listings/ebay|true9`] = page(big ? S({ grade: "PSA 9", n: 9, mid: mid * 1.2, jitter: 0.06 }) : [], v);
     out[`/v1/cards/${id}/population`] = [200, { variants: [{ variant: v, updated_at: iso(today - 12), total_population: 2000, graders: { PSA: { total: 2000, grades: { 10: 700, 9: 900 } } } }] }];
   }
 }
