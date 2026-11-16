@@ -1369,6 +1369,12 @@
     };
     draw();
   }
+  // a backup file of everything on this phone: settings, inventory, watchlist, the ledger copy (never the pairing token)
+  function saveBackup() {
+    const blob = new Blob([JSON.stringify({ app: "dys-edge", v: 1, saved: new Date().toISOString(), data: S, ...(LS ? { ledger: LS.state } : {}) }, null, 1)], { type: "application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `dys-edge-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
   let LMOUNT = null;
   function mineLedger(el) {
     const resume = LEDGER_RESUME, draft = LEDGER_DRAFT; LEDGER_RESUME = LEDGER_DRAFT = null;
@@ -1378,7 +1384,10 @@
       feeEst: (k, p, t) => { const pl = FEES.sell[k]; if (!pl || !p) return 0; const v = Math.round(p * (1 + S.set.buyerTax / 100)); return Math.round(v - netSale(pl, v)); },
       shipEst: (p, t) => shipOut(p, t, "ebay"), supplies: (t) => t === "s" ? S.set.supSealed : S.set.supCard,
       pick: (f) => { PICK = { list: "ledger", label: "this buy", back: "mine", form: f }; location.hash = "search"; },
-      oldInv: () => S.inv.map((x) => ({ ...x, sn: x.sn || setName(x.g) })), clearOldInv: () => { S.inv = []; save(); },
+      // moving inventory into the ledger never touches the old list: a copy is kept beside it, and S.inv stays as it was
+      oldInv: () => S.inv.map((x) => ({ ...x, sn: x.sn || setName(x.g) })),
+      archiveOldInv: () => { try { if (!localStorage.getItem("dys-edge-inv-before-ledger")) localStorage.setItem("dys-edge-inv-before-ledger", JSON.stringify({ saved: new Date().toISOString(), inv: S.inv })); return true; } catch { return false; } },
+      backup: saveBackup,
       openCard: (id, g, n) => openCard(id, g, n),
       download: (name, text) => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type: "text/csv" })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); } });
   }
@@ -1513,11 +1522,7 @@
         minProfit: cents($("#st-minp").value), holdRate: Math.min(10, n("#st-hold")) });
       save(); toast("Settings saved");
     };
-    $("#bk-save").onclick = () => {
-      const blob = new Blob([JSON.stringify({ app: "dys-edge", v: 1, saved: new Date().toISOString(), data: S, ...(LS ? { ledger: LS.state } : {}) }, null, 1)], { type: "application/json" });
-      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `dys-edge-backup-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-    };
+    $("#bk-save").onclick = saveBackup;
     $("#bk-load").onchange = async (e) => {
       const file = e.target.files?.[0]; if (!file) return;
       let d; try { d = JSON.parse(await file.text()); } catch { d = null; }

@@ -260,4 +260,39 @@ test("buyRows: one buy row and one item per line, with sane defaults", () => {
   assert.strictEqual(items[1].cond, "NM"); assert.ok(items.every((x) => x.buy === buy.id && x.book === "Personal"));
 });
 
+test("a buy saved twice from the same form writes the same rows; a moved inventory row keeps its ID", () => {
+  const f = { day: "2026-11-16", book: "Business", where: "Card show", pay: "Cash", buyId: "b-fixed", lines: [{ id: "i-a", kind: "Raw", name: "A", price: 100 }, { id: "i-b", kind: "Sealed", name: "B", price: 200 }] };
+  const one = L.buyRows(f, rnd), two = L.buyRows(f, rnd);
+  assert.deepStrictEqual(one, two);
+  const st = L.Store(mem(), "k", (() => { let t = 0; return () => ++t; })(), rnd);
+  for (const r of [one, two]) { st.put("buys", r.buy); r.items.forEach((x) => st.put("items", x)); }
+  assert.strictEqual(st.T.buys.length, 1); assert.strictEqual(st.T.items.length, 2);
+  const o = { k: "610516|Umbreon ex - 161/131 (Holofoil)", id: 610516, at: "2026-10-01", cost: 80000 };
+  assert.strictEqual(L.migId(o), L.migId({ ...o })); assert.notStrictEqual(L.migId(o), L.migId({ ...o, at: "2026-10-02" }));
+});
+test("web app: a sync whose answer was lost, sent again, lands once", async () => {
+  const g = app(); let t = 1;
+  const st = L.Store(mem(), "k", () => t++, rnd);
+  st.put("sales", { id: "s-1", day: "2026-11-16", item: "i1", book: "Business", qty: 1, plat: "eBay", price: 5000 });
+  st.put("cash", { id: "m-1", day: "2026-11-16", book: "Business", kind: "Starting cash", amount: 100000 });
+  // the Sheet takes the changes, then the phone loses the answer
+  assert.strictEqual((await st.sync(async (body) => { g.post({ token: TOK, ...JSON.parse(JSON.stringify(body)) }); throw new Error("lost"); })).ok, false);
+  assert.strictEqual(st.queue, 2);
+  const r = await st.sync(async (body) => g.post({ token: TOK, ...JSON.parse(JSON.stringify(body)) }));
+  assert.ok(r.ok); assert.strictEqual(st.queue, 0);
+  assert.strictEqual(st.T.sales.length, 1); assert.strictEqual(st.T.cash.length, 1);
+  assert.strictEqual(g.ss.getSheetByName("Sales").getLastRow(), 2); assert.strictEqual(g.ss.getSheetByName("Log").getLastRow(), 3);
+});
+test("recovery: a phone that lost its copy gets everything back from the Sheet", async () => {
+  const g = app(); let t = 1; const send = async (body) => g.post({ token: TOK, ...JSON.parse(JSON.stringify(body)) });
+  const a = L.Store(mem(), "k", () => t++, rnd), T = show();
+  T.buys.forEach((r) => a.put("buys", r)); T.items.forEach((r) => a.put("items", r));
+  a.put("sales", { id: "s", day: "2026-04-01", item: "i2", book: "Business", qty: 1, plat: "eBay", price: 8000, fees: 1100 });
+  await a.sync(send);
+  const fresh = L.Store(mem(), "k", () => t++, rnd);
+  await fresh.sync(send);
+  const x = L.compute(a.T, { year: "2026" }), y = L.compute(fresh.T, { year: "2026" });
+  assert.deepStrictEqual(y.tot, x.tot); assert.deepStrictEqual(y.items.map((i) => i.cost), x.items.map((i) => i.cost));
+});
+
 Promise.all(pending).then(() => { console.log(`${n} ledger checks passed${process.exitCode ? " (with failures above)" : ""}`); });

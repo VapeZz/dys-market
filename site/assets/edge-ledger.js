@@ -206,20 +206,22 @@
   /* ---------- building rows from the forms ---------- */
   // a buy: one row for the purchase and one per line (each line is an item)
   function buyRows(f, rand = Math.random) {
-    const buy = { id: newId("b", rand), day: f.day, book: f.book, where: f.where, from: f.from || "", pay: f.pay, tax: int(f.tax), ship: int(f.ship), fees: int(f.fees), note: f.note || "" };
-    const items = (f.lines || []).map((l) => ({ id: newId("i", rand), buy: buy.id, day: f.day, book: f.book, kind: l.kind || "Raw", tcg: l.tcg || "", g: l.g || "", n: l.n || "",
+    const buy = { id: f.buyId || newId("b", rand), day: f.day, book: f.book, where: f.where, from: f.from || "", pay: f.pay, tax: int(f.tax), ship: int(f.ship), fees: int(f.fees), note: f.note || "" };
+    const items = (f.lines || []).map((l) => ({ id: l.id || newId("i", rand), buy: buy.id, day: f.day, book: f.book, kind: l.kind || "Raw", tcg: l.tcg || "", g: l.g || "", n: l.n || "",
       name: l.name || "Item", set: l.set || "", cond: l.kind === "Raw" ? l.cond || "NM" : "", grader: l.kind === "Graded" ? l.grader || "PSA" : "", grade: l.kind === "Graded" ? String(l.grade || "") : "",
       cert: l.cert || "", qty: Math.max(1, int(l.qty) || 1), price: Math.max(0, int(l.price)), status: "", note: l.note || "" }));
     return { buy, items };
   }
   // a buy line for a card or sealed product picked in Edge (c: { id, g, n, t, price, set })
   const lineFromCard = (c) => ({ kind: c.t === "s" ? "Sealed" : "Raw", tcg: c.id, g: c.g, n: c.n, name: c.n, set: c.set || "", qty: 1, cond: "NM", price: Math.max(0, int(c.price)) });
+  // a moved inventory row's ledger ID comes from the row itself, so moving it twice gives the same item, not two
+  const migId = (o) => { let h = 0x811c9dc5; for (const ch of `${o.k}|${o.at || ""}|${o.cost}`) { h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return `iv${h.toString(36)}${String(o.id).slice(-4)}`; };
   const netOf = (s) => int(s.price) + int(s.shipIn) - int(s.fees) - int(s.shipOut) - int(s.supplies) - int(s.other);
 
   /* ---------- screens (Mine → Ledger) ---------- */
   /* ctx from edge.js: { store, h (helpers: money, signed, esc, img, cleanN, localDay, fmtDay, cents, dollars, toast, cls, pct),
        priceOf(item), feeEst(platKey, priceCents, t) → cents, shipEst(priceCents, t), supplies(t), pick(form) (search for cards to add to form.lines), resume (a form to reopen),
-       conn() → { url, token } | null, sync() → Promise, oldInv() → [rows], clearOldInv(), openCard(id, g, n), draft (prefill a buy) } */
+       conn() → { url, token } | null, sync() → Promise, oldInv() → [rows], archiveOldInv() → keeps a copy, true if saved, backup() (backup file), openCard(id, g, n), draft (prefill a buy) } */
   function mount(root, ctx) {
     const { money: short, esc, img, cleanN, localDay, fmtDay, cents, dollars, toast, cls } = ctx.h;
     // the ledger shows every amount to the cent (Edge's money() rounds $1,000+ to whole dollars); the tiles stay short
@@ -253,8 +255,9 @@
     function home(el, r) {
       const t = r.tot[book], old = ctx.oldInv ? ctx.oldInv() : [];
       el.innerHTML = `${old.length && !st.state.migrated ? `<div class="panel lg-move"><b>Move your inventory into the ledger</b>
-          <p class="small muted" style="margin:4px 0 8px">Your ${old.length} inventory item${old.length === 1 ? "" : "s"} on this phone become ledger items at what you paid, dated the day you added them. Which book are they in?</p>
-          <div class="btns"><button type="button" class="btn primary" data-a="mig" data-b="Business">Business</button><button type="button" class="btn" data-a="mig" data-b="Personal">Personal</button></div></div>` : ""}
+          <p class="small muted" style="margin:4px 0 8px">Your ${old.length} inventory item${old.length === 1 ? "" : "s"} on this phone become ledger items at what you paid, dated the day you added them. Your old list stays on this phone as it is; nothing is deleted. Save a backup file first, then pick the book they're in.</p>
+          <div class="btns"><button type="button" class="btn" data-a="bk">1. Save a backup file</button></div>
+          <div class="btns" style="margin-top:8px"><button type="button" class="btn primary" data-a="mig" data-b="Business">2. Move into Business</button><button type="button" class="btn" data-a="mig" data-b="Personal">2. Move into Personal</button></div></div>` : ""}
         <div class="btns lg-acts"><button type="button" class="btn primary" data-a="buy">+ Buy</button><button type="button" class="btn" data-a="sell">Sell</button><button type="button" class="btn" data-a="cost">+ Expense</button><button type="button" class="btn" data-a="cash">Cash</button></div>
         <div class="tiles lg-tiles">
           <div class="tile"><span class="lab">Cash</span><b class="${t.cash < 0 ? "down" : ""}">${money(t.cash, true)}</b><small>money in − money out</small></div>
@@ -307,7 +310,8 @@
     }
 
     /* ---------- forms ---------- */
-    function open(kind, data = {}) { form = { kind, ...data }; draw(); window.scrollTo && window.scrollTo(0, 0); }
+    // each form gets its row IDs when it opens, so saving it twice (a double tap, a retry) updates the same rows
+    function open(kind, data = {}) { form = { kind, rowId: newId({ sell: "s", cost: "c", cash: "m" }[kind] || "x"), feeId: newId("c"), shipId: newId("c"), upId: newId("c"), ...data }; draw(); window.scrollTo && window.scrollTo(0, 0); }
     function close() { form = null; draw(); }
     const money$ = (id, label, v, full) => `<label class="f${full ? " full" : ""}">${label} $<input class="field" id="${id}" type="number" inputmode="decimal" min="0" step="0.01" value="${v ? dollars(v) : ""}" placeholder="0"></label>`;
     const day$ = (v) => `<label class="f">Date<input class="field" id="lf-day" type="date" value="${esc(v || localDay())}"></label>`;
@@ -358,6 +362,8 @@
         e.preventDefault(); keep();
         if (!f.lines.length) return;
         if (f.lines.some((l) => !l.name)) { toast("Every item needs a name"); return; }
+        if (f.saved) return; f.saved = true;
+        f.buyId ||= newId("b"); f.lines.forEach((l) => { l.id ||= newId("i"); });
         const { buy, items } = buyRows(f), paid = items.reduce((s, x) => s + x.price * x.qty, 0) + buy.tax + buy.ship + buy.fees;
         st.put("buys", buy); for (const x of items) st.put("items", x);
         toast(`Saved: ${items.length} item${items.length === 1 ? "" : "s"}, ${money(paid)}`);
@@ -397,7 +403,8 @@
       fc = (e) => { if (e.target.closest("[data-a=close]")) close(); };
       $("#lf").onsubmit = (e) => {
         e.preventDefault(); keep();
-        st.put("sales", { day: f.day, item: x.id, book: x.book, qty: f.qty, plat: f.plat, price: f.price, shipIn: f.shipIn || 0, fees: f.fees || 0, shipOut: f.shipOut || 0, supplies: f.supplies || 0, other: f.other || 0, note: f.note || "" });
+        if (f.saved) return; f.saved = true;
+        st.put("sales", { id: f.rowId, day: f.day, item: x.id, book: x.book, qty: f.qty, plat: f.plat, price: f.price, shipIn: f.shipIn || 0, fees: f.fees || 0, shipOut: f.shipOut || 0, supplies: f.supplies || 0, other: f.other || 0, note: f.note || "" });
         if (x.status === "Listed" && f.qty >= x.left) st.put("items", { ...rawItem(x.id), status: "" });
         toast(`Sale saved · profit ${signed(netOf(f) - costNow())}`); form = null; view = "home"; draw(); ctx.sync();
       };
@@ -416,7 +423,8 @@
         e.preventDefault();
         const amount = cents($("#lf-amt").value); if (!amount) { toast("Enter an amount"); return; }
         const item = $("#lf-item").value, it = item ? rawItem(item) : null;
-        st.put("costs", { day: $("#lf-day").value, book: it ? it.book : $("#lf-book").value, item, kind: $("#lf-kind").value, amount, note: $("#lf-note").value.trim() });
+        if (f.saved) return; f.saved = true;
+        st.put("costs", { id: f.rowId, day: $("#lf-day").value, book: it ? it.book : $("#lf-book").value, item, kind: $("#lf-kind").value, amount, note: $("#lf-note").value.trim() });
         toast("Expense saved"); form = null; draw(); ctx.sync();
       };
     }
@@ -435,7 +443,8 @@
         const amount = cents($("#lf-amt").value), kind = $("#lf-kind").value, b = $("#lf-book").value, to = kind === "Move" ? $("#lf-to").value : "";
         if (!amount) { toast("Enter an amount"); return; }
         if (kind === "Move" && to === b) { toast("Pick the other book"); return; }
-        st.put("cash", { day: $("#lf-day").value, book: b, kind, amount, to, note: $("#lf-note").value.trim() });
+        if (f.saved) return; f.saved = true;
+        st.put("cash", { id: f.rowId, day: $("#lf-day").value, book: b, kind, amount, to, note: $("#lf-note").value.trim() });
         toast("Saved"); form = null; draw(); ctx.sync();
       };
     }
@@ -484,8 +493,8 @@
         e.preventDefault();
         const day = $("#lf-day").value, gr = $("#lf-gr").value, fee = cents($("#lf-fee").value), ship = cents($("#lf-ship").value);
         st.put("items", { ...x, status: "At grading", grader: gr });
-        if (fee) st.put("costs", { day, book: x.book, item: x.id, kind: "Grading", amount: fee, note: `${gr} grading fee` });
-        if (ship) st.put("costs", { day, book: x.book, item: x.id, kind: "Shipping", amount: ship, note: `To ${gr} and back` });
+        if (fee) st.put("costs", { id: f.feeId, day, book: x.book, item: x.id, kind: "Grading", amount: fee, note: `${gr} grading fee` });
+        if (ship) st.put("costs", { id: f.shipId, day, book: x.book, item: x.id, kind: "Shipping", amount: ship, note: `To ${gr} and back` });
         toast("Marked at grading"); open("item", { item: x.id }); ctx.sync();
       };
     }
@@ -501,7 +510,7 @@
         e.preventDefault();
         const grade = $("#lf-grade").value.trim(); if (!grade) { toast("Enter the grade"); return; }
         st.put("items", { ...x, kind: "Graded", grader: $("#lf-gr").value, grade, cert: $("#lf-cert").value.trim(), cond: "", status: "" });
-        const up = cents($("#lf-up").value); if (up) st.put("costs", { day: localDay(), book: x.book, item: x.id, kind: "Grading", amount: up, note: "Upcharge / extra" });
+        const up = cents($("#lf-up").value); if (up) st.put("costs", { id: f.upId, day: localDay(), book: x.book, item: x.id, kind: "Grading", amount: up, note: "Upcharge / extra" });
         toast(`Graded ${$("#lf-gr").value} ${grade}`); open("item", { item: x.id }); ctx.sync();
       };
     }
@@ -534,10 +543,13 @@
       else if (a === "held") { showSold = false; draw(); }
       else if (a === "soldl") { showSold = true; draw(); }
       else if (a === "sync") ctx.sync().then(draw);
+      else if (a === "bk") { ctx.backup(); toast("Backup file saved"); }
       else if (a === "mig") {
         const bk = e.target.closest("[data-b]").dataset.b, old = ctx.oldInv();
-        for (const o of old) st.put("items", { buy: "", day: o.at || localDay(), book: bk, kind: o.t === "s" ? "Sealed" : "Raw", tcg: o.id, g: o.g, n: o.n, name: o.n, set: o.sn || "", cond: o.t === "s" ? "" : o.cond || "NM", grader: "", grade: "", cert: "", qty: o.qty || 1, price: o.cost || 0, status: "", note: "Moved from Edge inventory" });
-        st.set("migrated", true); ctx.clearOldInv(); toast(`${old.length} item${old.length === 1 ? "" : "s"} moved into ${bk}`); draw(); ctx.sync();
+        if (st.state.migrated) return;
+        if (!ctx.archiveOldInv()) { toast("Couldn't keep a copy on this phone. Save a backup file first."); return; }
+        for (const o of old) st.put("items", { id: migId(o), buy: "", day: o.at || localDay(), book: bk, kind: o.t === "s" ? "Sealed" : "Raw", tcg: o.id, g: o.g, n: o.n, name: o.n, set: o.sn || "", cond: o.t === "s" ? "" : o.cond || "NM", grader: "", grade: "", cert: "", qty: o.qty || 1, price: o.cost || 0, status: "", note: "Moved from Edge inventory" });
+        st.set("migrated", true); toast(`${old.length} item${old.length === 1 ? "" : "s"} moved into ${bk}`); draw(); ctx.sync();
       }
     }
     // one click handler: the open form's, or the lists' (so one tap is never handled twice)
@@ -549,7 +561,7 @@
   }
 
   const api = { v: VERSION, TABLES, BOOKS, WHERE, PAY, KINDS, STATUS, PLATS, PLAT_FEES, COST_KINDS, CASH_KINDS, MONEY, LONG_DAYS,
-    allocate, compute, exportYear, summaryRows, shownRows, Store, buyRows, lineFromCard, netOf, mount, newId, blank, csv };
+    allocate, compute, exportYear, summaryRows, shownRows, Store, buyRows, lineFromCard, migId, netOf, mount, newId, blank, csv };
   if (typeof window !== "undefined") window.EdgeLedger = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();

@@ -124,6 +124,10 @@ def run(page, width, theme):
     page.click("#inv-move")
     page.wait_for_selector(".lg-move", timeout=5000)
     ok("2 inventory items" in page.inner_text(".lg-move"), f"{tag}: move offer counts 2 items")
+    with page.expect_download() as bkd:
+        page.click(".lg-move [data-a=bk]")
+    bk = json.load(open(bkd.value.path(), encoding="utf-8"))
+    ok(len(bk["data"]["inv"]) == 2 and TOKEN not in json.dumps(bk), f"{tag}: backup file before the move has the inventory and no token")
     page.click(".lg-move [data-b=Business]")
     ok("2 items moved into Business" in toast(page, "moved"), f"{tag}: move toast")
     wait_synced(page)
@@ -134,7 +138,9 @@ def run(page, width, theme):
     ok(umb.get("Price each") == 800 and umb.get("Acquired") == "2026-10-01" and umb.get("Cost each") == 800 and umb.get("Qty held") == 1, f"{tag}: Umbreon row {umb}")
     etb = next((i for i in items if "Elite Trainer" in i["Item"]), {})
     ok(etb.get("Qty") == 2 and etb.get("Type") == "Sealed" and etb.get("Price each") == 300, f"{tag}: ETB row")
-    ok(page.evaluate("() => JSON.parse(localStorage.getItem('dys-edge-v1')).inv.length") == 0, f"{tag}: old list emptied")
+    ok(page.evaluate("() => JSON.parse(localStorage.getItem('dys-edge-v1')).inv.length") == 2, f"{tag}: old list kept as it was")
+    ok(page.evaluate("() => JSON.parse(localStorage.getItem('dys-edge-inv-before-ledger')).inv.length") == 2, f"{tag}: copy of the old list kept beside it")
+    ok(page.query_selector(".lg-move") is None, f"{tag}: move offer gone after the move")
     # Inventory now reads the ledger: same value as before
     page.click("#m-seg button:has-text('Inventory')")
     page.wait_for_selector(".tiles .tile b")
@@ -197,8 +203,9 @@ def run(page, width, theme):
     page.fill("#lf-sup", "1")
     out = page.inner_text("#lf-out")
     ok("$1,035.35" in out, f"{tag}: net shown ({out})")
-    page.click("#lf button[type=submit]")
+    page.evaluate("() => { const f = document.querySelector('#lf'); f.requestSubmit(); try { f.requestSubmit(); } catch (e) {} }")
     t = toast(page, "Sale saved")
+    ok(page.evaluate("() => JSON.parse(localStorage.getItem('dys-edge-ledger')).T.sales.length") == 1, f"{tag}: a double submit saves one sale")
     ok("Sale saved" in t, f"{tag}: sale toast {t}")
 
     # expense, starting cash
