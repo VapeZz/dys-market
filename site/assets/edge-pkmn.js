@@ -16,8 +16,8 @@
    Sales without a date, outside USD, or from the future are left out and counted in meta. */
 (() => {
   const VERSION = 1, DAY = 864e5;
-  const PAGE = 50;                                   // rows per call (one credit each)
-  const MAX_PAGES = { raw: 3, "PSA 10": 3, "PSA 9": 2, sealed: 3 };
+  const PAGE = 20;                                   // rows per call (one credit each); the API's page size is 20 (seen Nov 16)
+  const MAX_PAGES = { raw: 5, "PSA 10": 3, "PSA 9": 2, sealed: 4 };   // at most about 300 credits a card
   const WINDOW = 90;                                 // days of sales the Deal check reads
   const QUERIES = { raw: { graded: "false" }, "PSA 10": { graded: "true", grader: "PSA", grade: "10" }, "PSA 9": { graded: "true", grader: "PSA", grade: "9" } };
   const SOURCE = "PkmnPrices · eBay sold (runs about 8 days behind)";
@@ -39,7 +39,7 @@
   }
 
   /* the sold rows for one grade, newest first, until WINDOW days back or MAX_PAGES */
-  async function sales(cfg, base, grade, day, meta) {
+  async function sales(cfg, base, grade, day, meta, variant) {
     const out = [];
     let cursor = null;
     for (let page = 0; page < (MAX_PAGES[grade] || 2); page++) {
@@ -54,7 +54,10 @@
         if (d > day) { meta.future++; continue; }
         oldest = Math.min(oldest, d);
         if (cur !== "USD" || !(px > 0)) { meta.otherCurrency++; continue; }
-        if (d > day - WINDOW) out.push([d, Math.round(px * 100), grade, x.attribution === "exact" ? 1 : 0]);
+        // a sale of another printing of the same card (Normal vs Reverse Holofoil...) is not this item's sale
+        if (variant && x.variant && x.variant !== variant) { meta.otherPrinting++; continue; }
+        const exact = x.attribution === "exact" && (!variant || x.variant === variant) ? 1 : 0;
+        if (d > day - WINDOW) out.push([d, Math.round(px * 100), grade, exact]);
       }
       const pg = (r.body && r.body.pagination) || {};
       cursor = pg.next_cursor || null;
@@ -78,7 +81,7 @@
   /* everything the Deal check needs for one Edge item: { id (TCGplayer product), n (name), t ("c" | "s") } */
   async function lookup(item, cfg) {
     const day = cfg.today ?? Math.floor(Date.now() / DAY);
-    const meta = { calls: 0, credits: 0, errors: [], undated: 0, future: 0, otherCurrency: 0, capped: [], found: false };
+    const meta = { calls: 0, credits: 0, errors: [], undated: 0, future: 0, otherCurrency: 0, otherPrinting: 0, capped: [], found: false };
     if (!cfg.relay) return { ok: false, reason: "not-set-up", meta };
     let base = null;
     if (item.t === "s") {
@@ -98,15 +101,15 @@
     if (!base) return { ok: false, reason: "not-found", meta };
     meta.found = true;
     const comps = [];
-    if (item.t === "s") comps.push(...await sales(cfg, base, "sealed", day, meta));
-    else for (const g of ["raw", "PSA 10", "PSA 9"]) comps.push(...await sales(cfg, base, g, day, meta));
+    if (item.t === "s") comps.push(...await sales(cfg, base, "sealed", day, meta, null));
+    else for (const g of ["raw", "PSA 10", "PSA 9"]) comps.push(...await sales(cfg, base, g, day, meta, variantOf(item.n)));
     let pop = null;
     if (item.t === "c") {
       const r = await call(cfg, `${base}/population`);
       meta.calls++; meta.credits += r.credits;
       if (r.status === 200) pop = popOf(r.body, variantOf(item.n)); else meta.errors.push(`population: HTTP ${r.status}`);
     }
-    return { ok: true, data: { asOf: day, source: SOURCE, comps: comps.sort((a, b) => a[0] - b[0]), pop, popAsOf: pop ? pop.asOf : null, meta }, meta };
+    return { ok: true, data: { asOf: day, source: SOURCE, comps: comps.sort((a, b) => a[0] - b[0]), pop, popAsOf: pop ? pop.asOf : null, capped: meta.capped.slice(), meta }, meta };
   }
 
   /* memory-only cache for this page: one lookup per item per page load unless asked again */

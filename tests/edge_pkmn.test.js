@@ -22,13 +22,13 @@ function relay(routes) {
   };
   return { fetch, log };
 }
-const sale = (age, price, o = {}) => ({ sold_at: iso(T - age), price, currency: "USD", attribution: "exact", sale_type: "auction", ...o });
+const sale = (age, price, o = {}) => ({ sold_at: iso(T - age), price, currency: "USD", attribution: "exact", sale_type: "auction", variant: "Holofoil", ...o });
 const cfgFor = (r, o = {}) => ({ relay: "https://relay.example/", pass: "secret", fetch: r.fetch, today: T, ...o });
 const CARD = { id: 610516, n: "Umbreon ex - 161/131 (Holofoil)", t: "c" };
 
 const routes = () => ({
   "/v1/cards": [200, { data: [{ id: "pk-1", name: "Umbreon ex", number: "161" }] }],
-  "/v1/cards/pk-1/listings/ebay?false": [200, { data: [sale(8, 950), sale(10, 990.5), sale(12, 1010, { attribution: "shared" }), sale(20, 980), sale(25, 1000, { currency: "EUR" }), sale(40, 1020), { price: 999, currency: "USD" }], pagination: { has_more: true, next_cursor: "c2" } }],
+  "/v1/cards/pk-1/listings/ebay?false": [200, { data: [sale(8, 950), sale(10, 990.5), sale(12, 1010, { attribution: "shared" }), sale(20, 980), sale(25, 1000, { currency: "EUR" }), sale(40, 1020), { price: 999, currency: "USD" }, sale(15, 300, { variant: "Reverse Holofoil" }), sale(16, 990, { variant: null })], pagination: { has_more: true, next_cursor: "c2" } }],
   "/v1/cards/pk-1/listings/ebay?false@c2": [200, { data: [sale(60, 1050), sale(95, 1100), sale(-2, 5000)], pagination: { has_more: true, next_cursor: "c3" } }],
   "/v1/cards/pk-1/listings/ebay?true10": [200, { data: [sale(9, 2600), sale(11, 2550), sale(30, 2500)], pagination: { has_more: false } }],
   "/v1/cards/pk-1/listings/ebay?true9": [200, { data: [], pagination: { has_more: false } }],
@@ -40,7 +40,8 @@ const routes = () => ({
     const r = relay(routes()), res = await P.lookup(CARD, cfgFor(r));
     assert.ok(res.ok);
     const raw = res.data.comps.filter((c) => c[2] === "raw");
-    assert.deepStrictEqual(raw.map((c) => [T - c[0], c[1], c[3]]).sort((a, b) => a[0] - b[0]), [[8, 95000, 1], [10, 99050, 1], [12, 101000, 0], [20, 98000, 1], [40, 102000, 1], [60, 105000, 1]]);
+    assert.deepStrictEqual(raw.map((c) => [T - c[0], c[1], c[3]]).sort((a, b) => a[0] - b[0]), [[8, 95000, 1], [10, 99050, 1], [12, 101000, 0], [16, 99000, 0], [20, 98000, 1], [40, 102000, 1], [60, 105000, 1]]);   // a sale with no printing named counts as shared
+    assert.strictEqual(res.meta.otherPrinting, 1);                                          // the Reverse Holofoil sale is another item
     assert.strictEqual(res.data.comps.filter((c) => c[2] === "PSA 10").length, 3);
     assert.deepStrictEqual([res.meta.undated, res.meta.future, res.meta.otherCurrency], [1, 1, 1]);
     assert.ok(!r.log.some((x) => /cursor=c3/.test(x.url)), "stops once a page reaches 90 days back");
@@ -48,12 +49,12 @@ const routes = () => ({
     assert.deepStrictEqual(res.data.pop, { total: 23218, g10: 6778, g9: 11397, asOf: T - 20 });     // the Holofoil printing, not Normal
     assert.strictEqual(res.data.asOf, T);
     assert.ok(/PkmnPrices/.test(res.data.source) && /8 days behind/.test(res.data.source));
-    assert.strictEqual(res.meta.credits, 1 + 7 + 3 + 3 + 1 + 1);   // the mock charges rows returned, 1 for an answer without rows
+    assert.strictEqual(res.meta.credits, 1 + 9 + 3 + 3 + 1 + 1);   // the mock charges rows returned, 1 for an answer without rows
   });
   await test("the comps feed the Deal check unchanged", async () => {
     const res = await P.lookup(CARD, cfgFor(relay(routes())));
     const ev = D.comps(res.data, "raw", T);
-    assert.deepStrictEqual([ev.n90, ev.n30, ev.inexact], [5, 3, 1]);
+    assert.deepStrictEqual([ev.n90, ev.n30, ev.inexact], [5, 3, 2]);
     assert.strictEqual(ev.m90, 99050);
   });
   await test("page cap: more sales inside 90 days than read is flagged", async () => {
@@ -62,7 +63,9 @@ const routes = () => ({
     R["/v1/cards/pk-1/listings/ebay?true10@x"] = [200, { data: [sale(11, 2600)], pagination: { has_more: true, next_cursor: "y" } }];
     R["/v1/cards/pk-1/listings/ebay?true10@y"] = [200, { data: [sale(12, 2600)], pagination: { has_more: true, next_cursor: "z" } }];
     const res = await P.lookup(CARD, cfgFor(relay(R)));
-    assert.deepStrictEqual(res.meta.capped, ["PSA 10"]);
+    assert.deepStrictEqual([res.meta.capped, res.data.capped], [["PSA 10"], ["PSA 10"]]);
+    const ev = D.comps(res.data, "PSA 10", T);
+    assert.ok(ev.capped && ev.n90 === 4 && Math.abs(ev.everyDays - 4 / 4) < 1e-9);         // pace from the days read: 4 sales over days 9–12
     assert.strictEqual(res.data.comps.filter((c) => c[2] === "PSA 10").length, 4);
   });
   await test("not set up, offline, denied, not found, two matches", async () => {

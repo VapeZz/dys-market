@@ -169,7 +169,7 @@ def check(case, day):
     out["grade"] = grade
     out["hold"] = None if not exit_ else {"m6": rise_needed(exit_, t, cost, 6), "m12": rise_needed(exit_, t, cost, 12)}
     # verdict
-    scope = (e["m90"] or item.get("tcg") or 0) >= SCOPE_MIN
+    scope = max(e["m90"] or 0, item.get("tcg") or 0) >= SCOPE_MIN
     no_data = not case["data"] or not comps
     if no_data or not scope or not flip_pass:
         out["verdict"], out["route"] = "pass", None

@@ -101,7 +101,9 @@
     return { grade, n90: p90.length, n30: p30.length, m90, m30, q1, q3, newest, saleAge: newest == null ? null : day - newest,
       spread: m90 ? r2((q3 - q1) / 2 / m90 * 100) : null, change: m30 && m90 ? r2((m30 / m90 - 1) * 100) : null,
       exit: m30 != null && m90 != null ? Math.min(m30, m90) : m90,
-      everyDays: p30.length ? 30 / p30.length : null,
+      // when more sales exist than were read (data.capped), the counts are lower bounds and the pace comes from the days read
+      capped: !!(data.capped && data.capped.includes(grade)),
+      everyDays: !p30.length ? null : data.capped && data.capped.includes(grade) ? (Math.max(...all.map((c) => c[0])) - Math.min(...all.map((c) => c[0])) + 1) / p90.length : 30 / p30.length,
       inexact: (data.comps || []).filter((c) => c[2] === grade && !c[3] && c[0] > day - 90).length };
   }
 
@@ -110,9 +112,9 @@
   function gatesFor(ev, item, data, day, ctx) {
     const g = [];
     const ref = ev.m90;
-    g.push(gate("evidence", ev.n90 >= MIN_COMPS, ev.n90 >= MIN_COMPS ? `${ev.n90} exact ${ev.grade} sales in 90 days`
+    g.push(gate("evidence", ev.n90 >= MIN_COMPS, ev.n90 >= MIN_COMPS ? `${ev.n90}${ev.capped ? "+" : ""} exact ${ev.grade} sales in 90 days${ev.capped ? " (the newest read; more exist)" : ""}`
       : `Only ${ev.n90} exact ${ev.grade} sale${ev.n90 === 1 ? "" : "s"} in 90 days (needs ${MIN_COMPS})${ev.inexact ? `; ${ev.inexact} more shared with other printings were left out` : ""}`));
-    g.push(gate("liquidity", ev.n30 >= MIN_SALES_30, ev.n30 >= MIN_SALES_30 ? `${ev.n30} sold in the last 30 days (about one every ${ev.everyDays.toFixed(1)} days)`
+    g.push(gate("liquidity", ev.n30 >= MIN_SALES_30, ev.n30 >= MIN_SALES_30 ? `${ev.n30}${ev.capped ? "+" : ""} sold in the last 30 days (about ${ev.everyDays < 1 ? `${(1 / ev.everyDays).toFixed(0)} a day` : `one every ${ev.everyDays.toFixed(1)} days`})`
       : `${ev.n30} sold in the last 30 days (needs ${MIN_SALES_30}): hard to resell quickly`));
     const fetchAge = data.asOf == null ? null : day - data.asOf;
     const fresh = fetchAge != null && fetchAge <= MAX_FETCH_AGE && ev.saleAge != null && ev.saleAge <= MAX_SALE_AGE;
@@ -213,7 +215,9 @@
     out.routes.flip = flip;
     out.routes.grade = gradeRoute(item, data || {}, offer, cfg, day, ctx);
     out.routes.hold = holdRoute(flip, offer, cfg);
-    out.scope = (flip.ev.m90 || item.tcg || 0) >= SCOPE_MIN;
+    // out of scope only when every price we have says under $20 (a sold median far under TCGplayer is a data problem the
+    // agree check reports, e.g. Master Ball Umbreon 059/131 on Nov 16: sold $1.99, TCGplayer $50.04)
+    out.scope = Math.max(flip.ev.m90 || 0, item.tcg || 0) >= SCOPE_MIN;
     out.confidence = confidence(flip);
     out.fetchAge = data && data.asOf != null ? day - data.asOf : null;
     if (!data || !(data.comps || []).length) { out.reason = "no-data"; out.why = data ? "No sold prices on record" : "No sold prices loaded"; return out; }
@@ -241,7 +245,7 @@
   }
 
   /* ---------- plain words ---------- */
-  const daysTxt = (d) => d == null ? "" : d < 1.5 ? "about one a day" : `about one every ${Math.round(d)} days`;
+  const daysTxt = (d) => d == null ? "" : d < 0.75 ? `about ${Math.round(1 / d)} a day` : d < 1.5 ? "about one a day" : `about one every ${Math.round(d)} days`;
   // one sentence on the verdict, for a phone screen
   function summary(r, item, offer, cfg) {
     const F = r.routes.flip, G = r.routes.grade, ev = F.ev, tgt = cfg.roi;
@@ -300,7 +304,7 @@
       </form>
       ${head}
       <p class="dl-sum">${esc(summary(r, item, offer, cfg))}</p>
-      <div class="prices dl-tiles">${tile("Resale value", F.exit ? money(F.exit) : "—", F.exit ? `${ev.n30} sold in 30 days` : "no sold data")}
+      <div class="prices dl-tiles">${tile("Resale value", F.exit ? money(F.exit) : "—", F.exit ? `${ev.n30}${ev.capped ? "+" : ""} sold in 30 days` : "no sold data")}
         ${tile("Net profit", F.profit != null ? signed(F.profit) : "—", F.profit != null ? `${pct(F.roi)} after costs` : "needs sold data", F.profit > 0 ? "up" : F.profit < 0 ? "down" : "")}
         ${tile("Max to pay", F.max ? money(F.max) : "—", F.max ? `for ${cfg.roi}% profit` : "—")}</div>
       ${btn || state.note ? `<div class="dl-data">${btn}${state.note ? `<p class="dl-note">${esc(state.note)}</p>` : ""}</div>` : ""}
@@ -310,8 +314,8 @@
       ${none ? `<p class="dl-note">No sold prices are loaded for this card. Edge never fills in a price it doesn't have.${item.tcg ? ` TCGplayer market is ${money(item.tcg)}, but a market price alone isn't a sale.` : ""}</p>` : `
       ${gateList(F.gates)}
       <span class="lab">Sold comps · ${esc(F.grade)} · this exact printing</span>
-      <div class="kv"><div><span>Median, last 30 days</span><span>${F.ev.m30 ? money(F.ev.m30) : "—"} <small>(${ev.n30} sold)</small></span></div>
-        <div><span>Median, last 90 days</span><span>${money(ev.m90)} <small>(${ev.n90} sold)</small></span></div>
+      <div class="kv"><div><span>Median, last 30 days${ev.capped ? " (newest sales)" : ""}</span><span>${F.ev.m30 ? money(F.ev.m30) : "—"} <small>(${ev.n30}${ev.capped ? "+" : ""} sold)</small></span></div>
+        <div><span>Median, last 90 days${ev.capped ? " (newest sales)" : ""}</span><span>${money(ev.m90)} <small>(${ev.n90}${ev.capped ? "+" : ""} sold)</small></span></div>
         <div><span>Middle half of 90 days</span><span>${ev.q1 != null ? `${money(ev.q1)} – ${money(ev.q3)}` : "—"}</span></div>
         <div><span>Newest sale</span><span>${ev.saleAge != null ? ageTxt(ev.saleAge) : "—"}</span></div>
         ${ev.inexact ? `<div><span>Sales shared with other printings (left out)</span><span>${ev.inexact}</span></div>` : ""}

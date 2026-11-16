@@ -196,4 +196,10 @@ test("worked by hand: an $80 card at a show, then the same card online at $60 + 
   assert.deepStrictEqual([F.cost, F.profit, r.verdict], [6499, 2344, "buy"]);
   assert.strictEqual(D.summary(r, c.item, o, cfg), "Sells about one every 6 days near $110.00. At $60.00 you'd net about +$23.44 (+36%) after fees, tax and shipping. Don't pay more than $68.70 plus the $4.99 shipping.");   // $73.69 all-in
 });
+test("real case, Nov 16: sold median far under TCGplayer is a disagreement, not 'under $20'", () => {
+  // Master Ball Pattern Umbreon 059/131: PkmnPrices' exact sales had a $1.99 median while TCGplayer market was $50.04 and eBay sold $53.63
+  const c = card({ item: { tcg: 5004 }, data: { comps: flat("raw", 199, AGES) } }), r = run(c);
+  assert.deepStrictEqual([r.verdict, r.scope, r.reason], ["pass", true, "agree"]);
+  assert.ok(/TCGplayer \(\$50\.04\) and eBay sold \(\$1\.99\) disagree/.test(D.summary(r, c.item, c.offer, Y.cfg())));
+});
 console.log(`${n} deal check tests passed${process.exitCode ? " (with failures above)" : ""}`);
