@@ -19,6 +19,13 @@
   const TA = part("edge-ta.js", "EdgeTA");
   // the strategy box under the price tiles (edge-strat.js) reads the chart's numbers; without the chart or the file there is no box
   const STRAT = part("edge-strat.js", "EdgeStrat");
+  // the Deal check (edge-deal.js, M1): sold comps per item from data/edge/deal/<set>.json. No file, no panel.
+  // M1 is in development on synthetic data only; production has no deal files until the data licence is confirmed.
+  const DEAL = part("edge-deal.js", "EdgeDeal");
+  // index.json lists the sets that have a file, so a set without one is never requested
+  const dealFile = (g) => getJSON("edge/deal/index.json").catch(() => null)
+    .then((ix) => ix && Array.isArray(ix.sets) && ix.sets.map(String).includes(String(g)) ? getJSON(`edge/deal/${g}.json`) : null)
+    .then((j) => j && j.v === 1 && j.items ? j : null).catch(() => { delete cache[`edge/deal/${g}.json`]; return null; });
   // how each strategy rule did in the backtest (a fixed file, rebuilt when the rules change); without it the box says "not backtested"
   const BACKTEST = fetch(`${BASE}assets/edge-backtest.json${VER}`).then((r) => r.ok ? r.json() : null).then((j) => j && j.v === 1 && j.rules ? j : null).catch(() => null);
   /* layout (shared with the market site): big pictures, grid view, 5 tabs; ?v2=0 or Mine > Settings brings back the old one */
@@ -109,7 +116,8 @@
   const KEY = "dys-edge-v1";
   const DEF = { inv: [], watch: [], trade: { give: [], get: [] }, lot: [], lotExtra: 0, recent: [], board: [], sub: [], glog: [], pop: {},
     set: { platform: "ebay", roi: 20, shipCard: 100, shipCard50: 500, shipSealed: 800, shipSealed100: 1500, buyCard: 150, buySealed: 600, cash: 70, trade: 85, game: "pokemon",
-      gradeShip: 1500, gco: "PSA", gtier: {}, o10: 40, o9: 45, oddsV: 2, useMyRates: false, useMix: true, boxShip: 4000 } };
+      gradeShip: 1500, gco: "PSA", gtier: {}, o10: 40, o9: 45, oddsV: 2, useMyRates: false, useMix: true, boxShip: 4000,
+      buyerTax: 7.5, supCard: 50, supSealed: 150, taxIn: 0, minProfit: 500, holdRate: 1 } };
   const clone = (o) => JSON.parse(JSON.stringify(o));
   const load = () => {
     try {
@@ -536,7 +544,7 @@
     sheet.hidden = false; document.body.style.overflow = "hidden";
     const card = $("#sheet-card");
     card.innerHTML = `<div class="grab"><span class="lab">Card details</span><button type="button" class="btn sm close">Close</button></div><p class="muted">Loading…</p>`;
-    const [{ it, set }, eb, , ta, daily, strat, backtest] = await Promise.all([detail(id, g, n), getJSON("ebay.json").catch(() => ({ cards: {} })), loadGraded(), TA, dailyFile(g), STRAT, BACKTEST]);
+    const [{ it, set }, eb, , ta, daily, strat, backtest, deal, dealData] = await Promise.all([detail(id, g, n), getJSON("ebay.json").catch(() => ({ cards: {} })), loadGraded(), TA, dailyFile(g), STRAT, BACKTEST, DEAL, dealFile(g)]);
     if (!it) { card.innerHTML = `<div class="grab"><span class="lab">Card details</span><button type="button" class="btn sm close">Close</button></div><div class="empty"><b>No price for this one yet</b>It may be too new or not sold recently.</div>`; return; }
     const x = { id: it.id, g, n: it.n, t: it.t, sn: set.n };
     S.recent = [x, ...S.recent.filter((y) => !(y.id === x.id && y.n === x.n))].slice(0, 12); save();
@@ -555,6 +563,7 @@
       <div class="prices"><div class="tile"><span class="lab">Lowest listing</span><b>${money(lo)}</b><small class="${lo && p ? cls(p - lo) : ""}">${lo && p ? `${pct((lo - p) / p * 100, 0)} vs market` : "on TCGplayer"}</small></div>
         <div class="tile"><span class="lab">Max buy</span><b>${money(maxBuy(p, it.t))}</b><small>for ${S.set.roi}% profit</small></div>
         <div class="tile"><span class="lab">Flip now</span><b class="${f ? cls(f.pr) : ""}">${f ? signed(f.pr) : "—"}</b><small>${f ? `${f.roi.toFixed(0)}% buying the lowest` : "no listing"}</small></div></div>
+      ${deal && dealData && dealData.items[it.id] ? `<section class="sec panel" id="c-deal"></section>` : ""}
       ${ta && strat ? `<section class="sec" id="c-strat" hidden></section>` : ""}
       ${ta ? `<section class="sec ta" id="c-ta"></section>` : simple}
       ${it.t === "c" ? `<section class="sec"><span class="lab">By condition</span><div class="cond">${COND.map(([c, m]) => `<div><b>${c}</b>${money(Math.round(p * m), p * m >= 10000)}</div>`).join("")}</div></section>` : ""}
@@ -585,11 +594,23 @@
     if (ta) try { read = ta.mount($("#c-ta"), { dates: set.dates, values: it.s || [], daily: ta.dailyOf(daily, it.id, it.n) }); }
       catch (err) { console.error(err); $("#c-ta").outerHTML = simple; }
     const box = $("#c-strat");
+    let reading = null;
     if (box) try {
       if (!read) throw new Error("no chart reading");
-      strat.mount(box, strat.plan(read, { pub: set.pub, k: set.k, game: gameLabel(set.k) }, { net: (x) => net(x, it.t), shipIn: shipIn(it.t), roi: S.set.roi, maxBuy: (x) => maxBuy(x, it.t), lo }, backtest));
+      reading = strat.mount(box, strat.plan(read, { pub: set.pub, k: set.k, game: gameLabel(set.k) }, { net: (x) => net(x, it.t), shipIn: shipIn(it.t), roi: S.set.roi, maxBuy: (x) => maxBuy(x, it.t), lo }, backtest));
       box.hidden = false;
     } catch (err) { console.error(err); box.remove(); }
+    const dbox = $("#c-deal");
+    if (dbox) try {
+      const dd = dealData.items[it.id], { gr, ti, tier } = grader();
+      const cfgD = { today: Math.floor(Date.now() / 864e5), fees: plat(), buyerTax: S.set.platform === "none" ? 0 : S.set.buyerTax,
+        shipOut: (x, t) => shipOut(x, t), supplies: (t) => t === "s" ? S.set.supSealed : S.set.supCard, roi: S.set.roi, minProfit: S.set.minProfit, holdRate: S.set.holdRate,
+        grade: { fee: feeAt(gr, ti, p || 0), ship: S.set.gradeShip, months: Math.max(1, Math.round((parseInt(tier[3], 10) || 60) / 30)) + 1 } };
+      const day = (d) => d ? Math.floor(Date.parse(d + "T00:00:00Z") / 864e5) : null;
+      deal.mount(dbox, { name: it.n, t: it.t, tcg: p, tcgDay: day(set.dates?.[set.dates.length - 1]) },
+        { ...dd, asOf: dd.asOf ?? dealData.asOf, source: dealData.source }, { ask: lo || p || 0, cond: "NM", shipIn: shipIn(it.t), taxIn: S.set.taxIn }, cfgD,
+        { warning: reading && !reading.demoted ? { id: reading.id, verdict: reading.verdict, name: reading.name } : null });
+    } catch (err) { console.error(err); dbox.remove(); }
     const form = $("#c-form");
     $("#c-inv").onclick = () => {
       const k = keyOf(it.id, it.n), have = S.inv.find((y) => y.k === k);
@@ -1270,6 +1291,13 @@
         <label class="f">Card shipped to you $<input class="field" id="st-bc" type="number" inputmode="decimal" step="0.01" value="${d("buyCard")}"></label>
         <label class="f">Sealed shipped to you $<input class="field" id="st-bs" type="number" inputmode="decimal" step="0.01" value="${d("buySealed")}"></label>
         <label class="f full">Grading: shipping + insurance per card, both ways $<input class="field" id="st-gs" type="number" inputmode="decimal" step="0.01" value="${d("gradeShip")}"></label></div>
+      <h3>Deal check costs</h3>
+      <div class="form"><label class="f">Buyer's sales tax the marketplace charges fees on %<input class="field" id="st-btax" type="number" inputmode="decimal" step="0.01" min="0" max="20" value="${s.buyerTax}"></label>
+        <label class="f">Sales tax you pay when buying %<input class="field" id="st-tin" type="number" inputmode="decimal" step="0.001" min="0" max="20" value="${s.taxIn}"></label>
+        <label class="f">Supplies per card $<input class="field" id="st-supc" type="number" inputmode="decimal" step="0.01" value="${d("supCard")}"></label>
+        <label class="f">Supplies per sealed item $<input class="field" id="st-sups" type="number" inputmode="decimal" step="0.01" value="${d("supSealed")}"></label>
+        <label class="f">Smallest profit worth it $<input class="field" id="st-minp" type="number" inputmode="decimal" step="0.01" value="${d("minProfit")}"></label>
+        <label class="f">Cost of money, % a month<input class="field" id="st-hold" type="number" inputmode="decimal" step="0.1" min="0" max="10" value="${s.holdRate}"></label></div>
       <div class="btns"><button class="btn primary" type="submit">Save</button></div></form>
       <section class="sec panel"><h2>Backup</h2><p class="muted small" style="margin:0">Your inventory, watchlist, trades and settings live on this phone. Save a backup file now and then, or to move them to another device.</p>
         <div class="btns"><button type="button" class="btn" id="bk-save">Save backup file</button><label class="btn" for="bk-load">Restore from file</label><input type="file" id="bk-load" accept="application/json,.json" hidden></div><div id="bk-out"></div></section>
@@ -1297,7 +1325,9 @@
       const n = (id) => Math.max(0, parseFloat($(id).value) || 0);
       Object.assign(S.set, { platform: $("#st-plat").value, roi: n("#st-roi"), game: $("#st-game").value, cash: Math.min(100, n("#st-cash")), trade: Math.min(100, n("#st-trade")),
         shipCard: cents($("#st-sc").value), shipCard50: cents($("#st-sc50").value), shipSealed: cents($("#st-ss").value), shipSealed100: cents($("#st-ss100").value),
-        buyCard: cents($("#st-bc").value), buySealed: cents($("#st-bs").value), gradeShip: cents($("#st-gs").value) });
+        buyCard: cents($("#st-bc").value), buySealed: cents($("#st-bs").value), gradeShip: cents($("#st-gs").value),
+        buyerTax: Math.min(20, n("#st-btax")), taxIn: Math.min(20, n("#st-tin")), supCard: cents($("#st-supc").value), supSealed: cents($("#st-sups").value),
+        minProfit: cents($("#st-minp").value), holdRate: Math.min(10, n("#st-hold")) });
       save(); toast("Settings saved");
     };
     $("#bk-save").onclick = () => {

@@ -377,6 +377,7 @@ a.row{text-decoration:none;color:inherit}
 /* the backtest result inside the strategy box */
 .sg-beta.sg-v-pass{color:var(--sg-up);background:color-mix(in srgb,var(--up) 16%,transparent)}
 .sg-beta.sg-v-fail{color:var(--sg-down);background:color-mix(in srgb,var(--down) 15%,transparent)}
+.sg-beta.sg-exp{color:var(--sg-warn);background:color-mix(in srgb,var(--warn) 14%,transparent)}
 .sg-beta.sg-v-none{color:var(--ink-2);background:var(--chip)}
 .sg-bt{margin:0;font-size:13px;line-height:1.4;color:var(--ink-2);padding:9px 11px;border-radius:10px;border:1px solid var(--line-strong);background:var(--surface-2)}
 .sg-bt b{color:var(--ink)}
@@ -395,3 +396,29 @@ a.row{text-decoration:none;color:inherit}
 .sg-all li em{font-style:normal;flex:none;font-size:11.5px;font-weight:700;color:var(--ink-2)}
 .sg-all li em.sg-v-pass{color:var(--sg-up)}.sg-all li em.sg-v-unproven{color:var(--sg-warn)}.sg-all li em.sg-v-fail{color:var(--sg-down)}
 .sg-all li.sg-me{background:var(--surface-2);margin:0 -6px;padding-left:6px;padding-right:6px;border-radius:8px}
+/* ---------- Deal check on the card sheet (edge-deal.js, M1) ---------- */
+.dl{display:flex;flex-direction:column;gap:10px;min-width:0;--dl-up:var(--up);--dl-down:var(--down);--dl-warn:var(--warn)}
+:root[data-theme="light"] .dl{--dl-up:color-mix(in srgb,var(--up) 72%,#000);--dl-down:color-mix(in srgb,var(--down) 80%,#000);--dl-warn:color-mix(in srgb,var(--warn) 62%,#000)}
+.dl .lab{color:var(--ink-2)}
+.dl-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:22px}
+.dl-beta{margin-left:auto;font:600 10.5px/1.3 var(--font);padding:5px 8px;border-radius:999px;color:var(--ink-2);background:var(--chip);max-width:100%;overflow-wrap:anywhere}
+.dl-form{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dl-form .f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink-2);min-width:0}
+.dl-call{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;padding:12px;border-radius:12px;border:1px solid var(--line-strong);background:var(--surface-2)}
+.dl-call b{font:700 24px/1.1 var(--display);letter-spacing:-.01em;color:var(--ink-2)}
+.dl-call span{font-size:14px;font-weight:600;color:var(--ink-2)}
+.dl-call.dl-buy{border-color:color-mix(in srgb,var(--up) 55%,transparent);background:color-mix(in srgb,var(--up) 10%,var(--surface))}
+.dl-call.dl-buy b{color:var(--dl-up)}
+.dl .chip.dl-conf-A,.dl .chip.dl-conf-B{background:color-mix(in srgb,var(--up) 16%,transparent);color:var(--dl-up)}
+.dl .chip.dl-conf-C{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--dl-warn)}
+.dl .chip.dl-conf-D{background:color-mix(in srgb,var(--down) 15%,transparent);color:var(--dl-down)}
+.dl .kv small{font-size:11.5px;color:var(--ink-2);font-weight:500}
+.dl .kv b.up{color:var(--dl-up)}.dl .kv b.down{color:var(--dl-down)}
+.dl-gates{margin:0;padding:0;list-style:none;display:flex;flex-direction:column}
+.dl-gates li{display:flex;gap:8px;font-size:13px;line-height:1.4;padding:6px 0;border-top:1px solid var(--line);color:var(--ink-2)}
+.dl-gates li:first-child{border-top:0}
+.dl-gates i{font-style:normal;flex:none;width:14px;font-weight:700}
+.dl-gates li.ok i{color:var(--dl-up)}.dl-gates li.no i{color:var(--dl-down)}.dl-gates li.no span{color:var(--ink)}.dl-gates li.info i{color:var(--dl-warn)}
+.dl-note{margin:0;font-size:13px;line-height:1.45;color:var(--ink-2)}
+.dl-foot{margin:0;font-size:11.5px;line-height:1.4;color:var(--ink-2)}
+.dl .kv div>span:last-child{white-space:nowrap;text-align:right}

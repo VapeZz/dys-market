@@ -1,5 +1,10 @@
 "use strict";
-/* DYS Edge: the strategy box on a card's sheet (loaded by edge.js; owner only).
+/* DYS Edge: the trend reading on a card's sheet (loaded by edge.js; owner only). EXPERIMENTAL.
+
+   Since Nov 16, 2026 (M1) the box is labelled "Trend reading · experimental" and makes no buy calls: every chart
+   buy rule failed its backtest or is unproven, so a buy rule shows "No buy call" and points to the Deal check
+   (edge-deal.js, sold comps). The rules, the backtest and the ladder are unchanged; the support levels are
+   labelled Support, not Buy. The execution tiers (Easy, Average, Hard) are not shown: they were never defined.
 
    It reads the chart's own numbers (edge-ta.js: averages, RSI, MACD, bands, 52-week range) and turns them
    into one call, the reasons, a price ladder and a risk level. Version 1 rules: fixed, every rule and threshold
@@ -64,7 +69,7 @@
   const RISK_MED = 25, RISK_HIGH = 50;
   const NEW_SET_DAYS = 120;
 
-  const CALLS = { buy: "Buy zone", hold: "Hold", trim: "Trim", sell: "Sell", watch: "Watch" };
+  const CALLS = { buy: "Buy signal", hold: "Hold", trim: "Trim", sell: "Sell", watch: "Watch" };
   const TIERS = {
     easy: ["Easy", "one clear move on something you own"],
     average: ["Average", "needs a limit price and patience"],
@@ -77,21 +82,21 @@
     young: ["Too new", "watch", null, "Not enough price history yet. Calls start at 35 days."],
     // fast rules, in the order they are tried
     stretched: ["Stretched", "trim", "easy", "Own it: sell part into this strength. Don't own it: don't chase."],
-    knife: ["Falling knife", "watch", null, "Oversold but still falling. Wait for MACD to cross up before buying."],
+    knife: ["Falling knife", "watch", null, "Oversold but still falling. Wait: don't buy into it."],
     breakdown: ["Breakdown", "sell", "easy", "The trend is broken. Own it: sell. Don't own it: stay out."],
     turn: ["Bottom turning", "buy", "hard", "Early turn off the lows. Small first buy; add only if it holds."],
     dip: ["Dip in an uptrend", "buy", "average", "Pullback inside an uptrend. Buy here, add lower, cut if it breaks."],
     breakout: ["Breakout", "buy", "average", "Pushing at its high with momentum. Buy small; cut fast if it falls back."],
-    ride: ["Uptrend", "hold", "easy", "Rising, and not stretched yet. Hold; buy only on a dip."],
+    ride: ["Uptrend", "hold", "easy", "Rising, and not stretched yet. Own it: hold."],
     weak: ["Weak trend", "watch", null, "The longer trend is down and nothing has turned. Wait."],
     none: ["No setup", "hold", "easy", "Nothing lines up. Hold what you own; no new buy."],
     // slow rules (thin market or too few daily prices), in the order they are tried
     "s-spike": ["Jump on few sales", "trim", "average", "Price jumped on few sales. Own it: list it now. Don't own it: don't chase."],
     "s-drop": ["Drop on few sales", "watch", null, "Price dropped on few sales. Check live listings before you believe it."],
     "s-down": ["Slow downtrend", "sell", "average", "Slow, steady decline. Own it: sell. Don't own it: stay out."],
-    "s-base": ["Flat near its low", "watch", "hard", "Flat near its low. A stack candidate once it starts to turn; not yet."],
+    "s-base": ["Flat near its low", "watch", "hard", "Flat near its low. Nothing has turned. Wait."],
     "s-dip": ["Slow dip in an uptrend", "buy", "hard", "Longer trend up, price back under its 30-day average. Small buy; exits are slow."],
-    "s-up": ["Slow uptrend", "hold", "easy", "Rising slowly. Hold; buy only on a dip."],
+    "s-up": ["Slow uptrend", "hold", "easy", "Rising slowly. Own it: hold."],
     "s-none": ["Quiet", "hold", "easy", "Quiet. Hold what you own; no new buy."],
   };
   const FAST = ["stretched", "knife", "breakdown", "turn", "dip", "breakout", "ride", "weak", "none"];
@@ -232,8 +237,8 @@
     });
     if (even != null) rungs.push({ k: "even", tag: "Break-even", what: "after fees, buying at market", price: even, up: (even / v - 1) * 100 });
     rungs.push({ k: "now", tag: "Market now", what: "", price: v });
-    under.forEach((l, i) => rungs.push({ k: `buy${i + 1}`, tag: `Buy ${i + 1}`, what: l.what, price: l.price, down: (1 - l.price / v) * 100 }));
-    rungs.push({ k: "cut", tag: "Cut", what: `${CUT_UNDER}% under ${under.length ? `Buy ${under.length}` : "the price"}`, price: cut, down: (1 - cut / v) * 100 });
+    under.forEach((l, i) => rungs.push({ k: `buy${i + 1}`, tag: `Support ${i + 1}`, what: l.what, price: l.price, down: (1 - l.price / v) * 100 }));
+    rungs.push({ k: "cut", tag: "Cut", what: `${CUT_UNDER}% under ${under.length ? `Support ${under.length}` : "the price"}`, price: cut, down: (1 - cut / v) * 100 });
     if (ctx.maxBuy) {
       const mb = ctx.maxBuy(v);
       if (mb > 0) rungs.push({ k: "flip", tag: "Max buy", what: `${ctx.roi}% profit selling at today's price`, price: mb, down: (1 - mb / v) * 100 });
@@ -278,6 +283,7 @@
       out.verdict = v.verdict;
       out.demoted = out.verdict === "fail" && call !== "hold" && call !== "watch";     // a buy, sell or trim rule that failed its backtest makes no call
     }
+    out.nobuy = call === "buy" && !out.demoted;      // experimental: chart rules make no buy call at all (M1)
     if (!f) { out.why = WHY.stale(); return out; }
     out.why = WHY[id](f).filter(Boolean);
     if (mode === "none") return out;
@@ -349,9 +355,8 @@
 
   /* ---------- the box ---------- */
   function html(p) {
-    const tier = p.tier && !p.demoted ? TIERS[p.tier] : null;
+    const tier = null;      // execution tiers are not shown (never defined)
     const chips = [
-      tier ? `<span class="chip" title="${esc(tier[1])}">Execution: ${tier[0]}</span>` : "",
       p.risk ? `<span class="chip sg-risk-${p.risk.level.toLowerCase()}">Risk: ${p.risk.level}</span>` : "",
       p.mode === "fast" ? `<span class="chip">Fast rules</span>` : p.mode === "slow" ? `<span class="chip">Slow rules</span>` : "",
     ].join("");
@@ -361,9 +366,11 @@
       : `−${r.down.toFixed(1)}%`;
     const rung = (r) => `<div class="sg-rung sg-${r.k.replace(/\d$/, "")}" data-k="${r.k}"><span class="sg-tag"><b>${r.tag}</b>${r.what ? `<small>${esc(r.what)}</small>` : ""}</span><span class="sg-px"><b>${money(r.price)}</b><small class="${r.k.startsWith("sell") && r.profit != null ? (r.profit > 0 ? "up" : "down") : ""}">${note(r)}</small></span></div>`;
     const vd = p.verdict && VERDICT[p.verdict] ? p.verdict : null;
-    const act = p.demoted ? `The rule behind this card (${p.name}: ${p.label}) failed its backtest${p.bt.byGame ? ` in ${p.bt.gameName}` : ""}, so Edge makes no call here. The levels below still describe the chart.` : p.act;
-    return `<div class="sg-head"><span class="lab">Strategy</span><span class="sg-beta${vd ? ` sg-v-${vd}` : ""}">v1 rules · ${vd ? VERDICT[vd][1] : "not backtested"}</span></div>
+    const act = p.demoted ? `The rule behind this card (${p.name}: ${p.label}) failed its backtest${p.bt.byGame ? ` in ${p.bt.gameName}` : ""}, so Edge makes no call here. The levels below still describe the chart.`
+      : p.nobuy ? `Chart rules make no buy calls: none held up in the backtest. For a buy, use the Deal check (sold prices, sales per month, net after every cost). The levels below only describe the chart.` : p.act;
+    return `<div class="sg-head"><span class="lab">Trend reading</span><span class="sg-beta sg-exp${vd ? ` sg-v-${vd}` : ""}">experimental · ${vd ? VERDICT[vd][1] : "not backtested"}</span></div>
       ${p.demoted ? `<div class="sg-call sg-watch"><b>No call</b><span>${esc(p.name)} failed its backtest</span></div>`
+        : p.nobuy ? `<div class="sg-call sg-watch"><b>No buy call</b><span>${esc(p.name)} · chart buy signals are experimental</span></div>`
         : `<div class="sg-call sg-${p.call}"><b>${esc(p.label)}</b><span>${esc(p.name)}</span></div>`}
       ${chips ? `<div class="chips">${chips}</div>` : ""}
       <p class="sg-act">${esc(act)}${tier ? ` <span class="sg-tier">${tier[0]}: ${esc(tier[1])}.</span>` : ""}</p>
@@ -372,7 +379,7 @@
       ${p.why.length ? `<span class="lab">Why</span><ul class="sg-list sg-why">${p.why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}
       ${p.ladder ? `<span class="lab">Price ladder</span><div class="sg-ladder">${p.ladder.rungs.map(rung).join("")}</div>${p.money ? `<p class="sg-money">${esc(p.money)}</p>` : ""}` : ""}
       ${p.risk ? `<span class="lab">Risk · ${p.risk.level} · ${p.risk.score} of 100</span>${p.risk.parts.length ? `<ul class="sg-list sg-rk">${p.risk.parts.map((x) => `<li>${esc(x.text)} <i>+${x.pts}</i></li>`).join("")}</ul>` : `<p class="sg-money">Nothing on the list applies.</p>`}` : ""}
-      <p class="sg-foot">${p.bt ? `Fixed rules on TCGplayer market prices. Backtest: every ${p.bt.all.step}th day from ${mon(p.bt.all.from)} to ${mon(p.bt.all.to)}, the price ${p.bt.all.horizon} days later against the average card on the same days, across all games and inside each game. Past results don't promise future ones.` : "Fixed rules on TCGplayer market prices, not backtested yet."} Market data, not financial advice. Check live listings and sold prices before you act.</p>`;
+      <p class="sg-foot"><b>Experimental.</b> A reading of the price chart, not a buy signal. ${p.bt ? `Fixed rules on TCGplayer market prices. Backtest: every ${p.bt.all.step}th day from ${mon(p.bt.all.from)} to ${mon(p.bt.all.to)}, the price ${p.bt.all.horizon} days later against the average card on the same days, across all games and inside each game. Past results don't promise future ones.` : "Fixed rules on TCGplayer market prices, not backtested yet."} Market data, not financial advice. Check live listings and sold prices before you act.</p>`;
   }
   function mount(root, p) {
     root.classList.add("sg");
