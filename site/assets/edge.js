@@ -23,6 +23,11 @@
   // owner's relay, kept in this page's memory only. Without a relay the panel says so and stays a PASS.
   const DEAL = part("edge-deal.js", "EdgeDeal");
   const PKMN = part("edge-pkmn.js", "EdgePkmn");
+  // the ledger (edge-ledger.js, M2): buys, sales, expenses, cash and inventory in two books, kept in the owner's Google
+  // Sheet through its web app (tools/ledger/Code.gs), with a copy and a queue of changes on this phone
+  const LEDGER = part("edge-ledger.js", "EdgeLedger");
+  let LG = null, LS = null, LEDGER_DRAFT = null, LEDGER_RESUME = null;
+  LEDGER.then((l) => { if (!l) return; LG = l; LS = l.Store(window.localStorage); ledgerSync(); });
   // how each strategy rule did in the backtest (a fixed file, rebuilt when the rules change); without it the box says "not backtested"
   const BACKTEST = fetch(`${BASE}assets/edge-backtest.json${VER}`).then((r) => r.ok ? r.json() : null).then((j) => j && j.v === 1 && j.rules ? j : null).catch(() => null);
   /* layout (shared with the market site): big pictures, grid view, 5 tabs; ?v2=0 or Mine > Settings brings back the old one */
@@ -114,7 +119,7 @@
   const DEF = { inv: [], watch: [], trade: { give: [], get: [] }, lot: [], lotExtra: 0, recent: [], board: [], sub: [], glog: [], pop: {},
     set: { platform: "ebay", roi: 20, shipCard: 100, shipCard50: 500, shipSealed: 800, shipSealed100: 1500, buyCard: 150, buySealed: 600, cash: 70, trade: 85, game: "pokemon",
       gradeShip: 1500, gco: "PSA", gtier: {}, o10: 40, o9: 45, oddsV: 2, useMyRates: false, useMix: true, boxShip: 4000,
-      buyerTax: 7.5, supCard: 50, supSealed: 150, taxIn: 0, minProfit: 500, holdRate: 1 } };
+      buyerTax: 7.5, supCard: 50, supSealed: 150, taxIn: 0, minProfit: 500, holdRate: 1, ledgerBook: "Business" } };
   const clone = (o) => JSON.parse(JSON.stringify(o));
   const load = () => {
     try {
@@ -194,6 +199,53 @@
     if (m.errors.length) bits.push(`not read: ${m.errors.join("; ")}`);
     if (m.undated + m.future + m.otherCurrency) bits.push(`${m.undated + m.future + m.otherCurrency} sales left out (no date, future date or not in US dollars)`);
     return { ok: true, data: res.data, note: `Read just now: ${bits.join(" · ")}. Kept on this page only.` };
+  }
+  /* ---------- ledger: the Sheet's web app address (set when the Sheet is made; an override can be typed in Settings) ---------- */
+  const LEDGER_URL = "", LKEY = "dys-edge-ledger-url";
+  const ledgerConn = () => {
+    let url = LEDGER_URL; try { url = localStorage.getItem(LKEY) || url; } catch {}
+    const c = pkmnConn(); return url && c ? { url, token: c.pass } : null;
+  };
+  const ledgerOn = () => !!LS && (LS.state.migrated || !S.inv.length);
+  // what an item is worth now, per unit: TCGplayer market (raw by condition, sealed as is), graded from the graded sold prices
+  const GTOP = { PSA: ["10", "9", "8"], CGC: ["10", "9"], BGS: ["9.5", "9"], TAG: ["10", "9"] };
+  const priceOf = (x) => {
+    if (!x.tcg) return null;
+    if (x.kind === "Graded") {
+      const i = (GTOP[x.grader] || []).indexOf(String(x.grade || "").trim()); if (i < 0) return null;
+      const gp = gradedOf(+x.tcg, x.grader); return gp ? [gp.p10, gp.p9, gp.p8][i] || null : null;
+    }
+    if (x.kind !== "Raw" && x.kind !== "Sealed") return null;
+    const r = IDX.get(keyOf(+x.tcg, x.n)) || IDX.get(String(x.tcg));
+    return r && r[4] ? (x.kind === "Sealed" ? r[4] : Math.round(r[4] * condX(x.cond || "NM", "c"))) : null;
+  };
+  // one sync at a time: send the queue (200 changes a trip), take back every table; quiet when offline or not set up
+  let LSYNC = null;
+  function ledgerSync() {
+    if (!LS || !LG) return Promise.resolve(null);
+    const c = ledgerConn(); if (!c) return Promise.resolve(null);
+    if (LSYNC) return LSYNC;
+    const send = async (body) => {
+      const R = LG.compute(LS.T, { priceOf, today: localDay() });
+      const r = await fetch(c.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ token: c.token, ...body, shown: LG.shownRows(R), summary: LG.summaryRows(R, new Date().toLocaleString("en-US")) }) });
+      if (!r.ok) return { ok: false, error: `HTTP ${r.status}` };
+      return r.json();
+    };
+    return (LSYNC = (async () => {
+      let res = null;
+      for (let i = 0; i < 6; i++) { res = await LS.sync(send); if (!res.ok || !res.left) break; }
+      return res;
+    })().finally(() => { LSYNC = null; }));
+  }
+  let LTIMER = 0;
+  const ledgerSoon = () => { clearTimeout(LTIMER); LTIMER = setTimeout(() => ledgerSync(), 1200); return Promise.resolve(); };
+  window.addEventListener("online", () => ledgerSync());
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") ledgerSync(); });
+  // what's held, for Inventory and Today: the ledger's items once it's in use, else the old list on this phone
+  function invRows() {
+    if (!ledgerOn()) return S.inv.map((x) => ({ ...x, each: (marketOf(x) || 0) * condX(x.cond, x.t) }));
+    return LG.compute(LS.T, { priceOf }).items.filter((x) => x.left && x.tcg).map((x) => ({ k: keyOf(+x.tcg, x.n), id: +x.tcg, g: +x.g, n: x.n, t: x.kind === "Sealed" ? "s" : "c",
+      qty: x.left, cost: x.costEach, cond: x.cond || "NM", graded: x.kind === "Graded" ? `${x.grader} ${x.grade}` : "", each: priceOf(x) || 0, lid: x.id, book: x.book }));
   }
   const flip = (p, lo, t) => { if (!p || !lo) return null; const cost = lo + shipIn(t), pr = net(p, t) - cost; return { pr, roi: pr / cost * 100, cost }; };
   function tierFor(gr, v) { const t = gr.tiers; for (let i = 0; i < t.length; i++) if (t[i][2] == null || v <= t[i][2]) return i; return t.length - 1; }
@@ -308,11 +360,11 @@
   }
   function portfolio() {
     let value = 0, cost = 0, n = 0;
-    for (const x of S.inv) { const m = marketOf(x); value += (m || 0) * condX(x.cond, x.t) * x.qty; cost += (x.cost || 0) * x.qty; n += x.qty; }
+    for (const x of invRows()) { value += x.each * x.qty; cost += (x.cost || 0) * x.qty; n += x.qty; }
     return { value, cost, pl: value - cost, n };
   }
   function drawPortfolio(el) {
-    if (!S.inv.length) { el.innerHTML = `<div class="empty"><b>Track what you own</b>Search a card, tap <b style="display:inline;font-size:inherit">Add to inventory</b>, and its value updates here every night.</div>`; return; }
+    if (!invRows().length) { el.innerHTML = `<div class="empty"><b>Track what you own</b>Search a card, tap <b style="display:inline;font-size:inherit">${LS ? "Bought it" : "Add to inventory"}</b>, and its value updates here every night.</div>`; return; }
     const p = portfolio();
     el.innerHTML = `<div class="sec-head"><h2>Your inventory</h2><a class="more" href="#mine">Open</a></div>
       <div class="tiles"><div class="tile"><span class="lab">Value</span><b>${money(p.value, true)}</b><small>${p.n} item${p.n === 1 ? "" : "s"}</small></div>
@@ -340,12 +392,13 @@
       <div class="searchbox"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
         <input id="q" class="field" type="search" placeholder="Card name, number or set" autocomplete="off" enterkeyhint="search" aria-label="Search cards and sealed" value="${esc(LAST_Q)}"></div>
       <div id="s-game"></div><div id="s-type"></div><div id="s-res"><p class="muted small">Loading every card and sealed product…</p></div>`;
-    if (PICK) $("#pick-done").onclick = () => { const back = PICK.back; PICK = null; location.hash = back; };
+    if (PICK) $("#pick-done").onclick = () => { const back = PICK.back; if (PICK.list === "ledger") { LEDGER_RESUME = PICK.form; SUB.mine = "ledger"; } PICK = null; location.hash = back; };
     gamePick($("#s-game"), () => run());
     seg($("#s-type"), [["all", "Everything"], ["c", "Cards"], ["s", "Sealed"]], S_TYPE, (k) => { S_TYPE = k; run(); });
     await loadIndex();
     const q = $("#q");
     const run = () => {
+      if (!$("#s-res")) return;                         // left Search before a delayed search ran
       LAST_Q = q.value; const s = q.value.trim().toLowerCase();
       if (!s) { drawRecent(); return; }
       const toks = s.split(/\s+/), out = [];
@@ -546,6 +599,10 @@
   }
   function pickAdd(id, g, n) {
     const r = IDX.get(keyOf(id, n)) || IDX.get(String(id));
+    if (PICK.list === "ledger") {
+      PICK.form.lines.push(LG.lineFromCard({ id, g, n, t: r ? r[3] : "c", price: 0, set: setName(g) }));
+      toast(`Added to this buy (${PICK.form.lines.length})`); return;
+    }
     const x = { k: keyOf(id, n), id, g, n, t: r ? r[3] : "c", qty: 1, cond: "NM", p: r ? r[4] : null };
     const list = PICK.list === "lot" ? S.lot : S.trade[PICK.list];
     const have = list.find((y) => y.k === x.k);
@@ -562,13 +619,14 @@
     sheet.hidden = false; document.body.style.overflow = "hidden";
     const card = $("#sheet-card");
     card.innerHTML = `<div class="grab"><span class="lab">Card details</span><button type="button" class="btn sm close">Close</button></div><p class="muted">Loading…</p>`;
-    const [{ it, set }, eb, , ta, daily, strat, backtest, deal, pkmn] = await Promise.all([detail(id, g, n), getJSON("ebay.json").catch(() => ({ cards: {} })), loadGraded(), TA, dailyFile(g), STRAT, BACKTEST, DEAL, PKMN]);
+    const [{ it, set }, eb, , ta, daily, strat, backtest, deal, pkmn] = await Promise.all([detail(id, g, n), getJSON("ebay.json").catch(() => ({ cards: {} })), loadGraded(), TA, dailyFile(g), STRAT, BACKTEST, DEAL, PKMN, LEDGER]);
     if (!it) { card.innerHTML = `<div class="grab"><span class="lab">Card details</span><button type="button" class="btn sm close">Close</button></div><div class="empty"><b>No price for this one yet</b>It may be too new or not sold recently.</div>`; return; }
     const x = { id: it.id, g, n: it.n, t: it.t, sn: set.n };
     S.recent = [x, ...S.recent.filter((y) => !(y.id === x.id && y.n === x.n))].slice(0, 12); save();
     const p = it.p, lo = it.lo, f = flip(p, lo, it.t), ch = it.ch || {};
     const e = eb.cards?.[it.id], ebAge = e ? daysAgo(e.at) : null;
     const inInv = S.inv.find((y) => y.k === keyOf(it.id, it.n)), watching = S.watch.find((y) => y.k === keyOf(it.id, it.n));
+    const held = LS ? LG.compute(LS.T).items.filter((y) => String(y.tcg) === String(it.id) && y.n === it.n).reduce((a, y) => a + y.left, 0) : 0;
     const no = (it.n.match(/ - ([\w/-]+)/) || [])[1];
     const simple = `<section class="sec chart panel"><span class="lab">Price history</span>${chart(it.s, set.dates)}</section>`;
     const platRows = Object.entries(FEES.sell).map(([k, pl]) => `<div><span>${k === "none" ? "Sell in person" : `Sell on ${esc(pl.label)}`}</span><span>${p ? money(net(p, it.t, k)) : "—"}</span></div>`).join("");
@@ -595,7 +653,7 @@
         ${e.p10 ? `<div><span>Cheapest PSA 10 (${e.p10[1]} listing${e.p10[1] === 1 ? "" : "s"})</span><span><a href="${esc(e.p10[2])}" target="_blank" rel="noopener">${money(e.p10[0])} ↗</a></span></div>` : ""}</div>
         <p class="muted small" style="margin:6px 0 0">Shipping included. Listings change fast: tap through for the live price.</p></section>` : ""}
       <section class="sec"><div class="btns">
-        <button type="button" class="btn primary" id="c-inv">${inInv ? `In inventory (${inInv.qty})` : "Add to inventory"}</button>
+        ${LS ? `<button type="button" class="btn primary" id="c-buy">${held ? `Bought it · you hold ${held}` : "Bought it"}</button>` : `<button type="button" class="btn primary" id="c-inv">${inInv ? `In inventory (${inInv.qty})` : "Add to inventory"}</button>`}
         <button type="button" class="btn" id="c-watch">${watching ? `Watching at ${money(watching.target)}` : "Watch price"}</button>
         <button type="button" class="btn" data-add="give">Trade: I give</button><button type="button" class="btn" data-add="get">Trade: I get</button>
         <button type="button" class="btn" data-add="lot">Add to lot offer</button>${it.t === "c" ? `<button type="button" class="btn" id="c-grade">${S.board.some((y) => y.k === keyOf(it.id, it.n)) ? "On grading board" : "Grade it?"}</button>` : ""}</div>
@@ -628,7 +686,13 @@
         pkmn && conn ? { load: (fresh) => pkmn.get(item, conn, fresh).then(soldNote) } : { off: true, note: pkmn ? "Sold prices aren't set up yet: add your PkmnPrices relay in Mine → Settings. Until then this stays a PASS." : "The sold-price reader didn't load." });
     } catch (err) { console.error(err); dbox.remove(); }
     const form = $("#c-form");
-    $("#c-inv").onclick = () => {
+    const cb = $("#c-buy"); if (cb) cb.onclick = () => {
+      // a buy for this card at the lowest listing (change it to what you paid); the Ledger opens with it filled in
+      LEDGER_DRAFT = LG.lineFromCard({ id: it.id, g, n: it.n, t: it.t, price: lo || p || 0, set: set.n });
+      SUB.mine = "ledger"; sheet.hidden = true; document.body.style.overflow = "";
+      if (location.hash === "#mine") route(); else location.hash = "mine";
+    };
+    if ($("#c-inv")) $("#c-inv").onclick = () => {
       const k = keyOf(it.id, it.n), have = S.inv.find((y) => y.k === k);
       form.innerHTML = `<form class="inline-form" id="f-inv"><div class="form">
           <label class="f">Quantity<input class="field" id="fi-q" type="number" inputmode="numeric" min="1" step="1" value="${have ? have.qty : 1}"></label>
@@ -1254,8 +1318,11 @@
   async function viewMine(v) {
     v.innerHTML = `<div id="m-seg"></div><div id="m-body"></div>`;
     await loadIndex();
-    const draw = () => { const el = fresh($("#m-body")); ({ inv: mineInv, watch: mineWatch, set: mineSettings }[SUB.mine] || mineInv)(el); };
-    seg($("#m-seg"), [["inv", "Inventory"], ["watch", "Watchlist"], ["set", "Settings"]], SUB.mine, (k) => { SUB.mine = k; draw(); });
+    await Promise.all([LEDGER, loadGraded()]);
+    if (SUB.mine === "ledger" && !LS) SUB.mine = "inv";
+    const draw = () => { const el = fresh($("#m-body")); ({ inv: mineInv, ledger: mineLedger, watch: mineWatch, set: mineSettings }[SUB.mine] || mineInv)(el); };
+    seg($("#m-seg"), [["inv", "Inventory"], ...(LS ? [["ledger", "Ledger"]] : []), ["watch", "Watchlist"], ["set", "Settings"]], SUB.mine, (k) => { SUB.mine = k; draw(); });
+    ledgerSync().then((r) => { if (r && r.ok && SUB.mine === "ledger" && LMOUNT) LMOUNT.redraw(); });
     draw();
   }
   /* "Sell, grade or keep?" for what the owner holds: today's real sold prices, this page only */
@@ -1263,27 +1330,32 @@
   const OWNL = { sell: ["good", "Sell clears your target"], grade: ["good", "Grading looks better"], hold: ["", "Keep for now"], unclear: ["warn", "Not enough sales"], unknown: ["", "No sold data"] };
   function mineInv(el) {
     const draw = () => {
-      if (!S.inv.length) { el.innerHTML = `<div class="empty"><b>Nothing here yet</b>Open any card from Search or Deals and tap Add to inventory. You'll see what it's worth and your profit every day.</div>`; return; }
+      const inv = invRows(), on = ledgerOn();
+      const moveNote = LS && !on ? `<div class="panel lg-move"><b>Your ledger is ready</b><p class="small muted" style="margin:4px 0 8px">Move these ${S.inv.length} items into it to track what you paid, what you sell and your profit, in your Google Sheet.</p><div class="btns"><button type="button" class="btn primary" id="inv-move">Open Ledger</button></div></div>` : "";
+      if (!inv.length) { el.innerHTML = `<div class="empty"><b>Nothing here yet</b>Open any card from Search or Deals and tap ${LS ? "Bought it" : "Add to inventory"}. You'll see what it's worth and your profit every day.</div>`; return; }
       const p = portfolio();
-      const rows = S.inv.map((x, i) => ({ x, i, m: marketOf(x) })).map((o) => ({ ...o, val: (o.m || 0) * condX(o.x.cond, o.x.t) * o.x.qty, cost: (o.x.cost || 0) * o.x.qty })).sort((a, b) => b.val - a.val);
+      const rows = inv.map((x, i) => ({ x, i, val: x.each * x.qty, cost: (x.cost || 0) * x.qty })).sort((a, b) => b.val - a.val);
       el.innerHTML = `<div class="tiles"><div class="tile"><span class="lab">Value</span><b>${money(p.value, true)}</b><small>${p.n} items</small></div>
         <div class="tile"><span class="lab">Cost</span><b>${money(p.cost, true)}</b><small>paid</small></div>
         <div class="tile"><span class="lab">Profit</span><b class="${cls(p.pl)}">${p.pl >= 0 ? "+" : ""}${money(p.pl, true)}</b><small>${p.cost ? pct(p.pl / p.cost * 100, 0) : "—"}</small></div></div>
         <section class="sec panel own-box"><span class="lab">Sell, grade or keep?</span>
           <p class="muted small" style="margin:0">Checks each item against real eBay sold prices (PkmnPrices, up to about 250 credits an item of your 20,000 a day). Facts at today's prices, not a forecast. Nothing is saved.</p>
-          <div class="btns"><button type="button" class="btn sm" id="own-go"${pkmnConn() ? "" : " disabled"}>${OWN.size ? "Check again" : `Check my ${S.inv.length} item${S.inv.length === 1 ? "" : "s"}`}</button></div>
+          <div class="btns"><button type="button" class="btn sm" id="own-go"${pkmnConn() ? "" : " disabled"}>${OWN.size ? "Check again" : `Check my ${inv.filter((x) => !x.graded).length} item${inv.filter((x) => !x.graded).length === 1 ? "" : "s"}`}</button></div>
           <p class="small muted" id="own-st" style="margin:0">${pkmnConn() ? "" : "Set up sold prices in Mine → Settings first."}</p></section>
         <div class="list">${rows.map(({ x, val, cost }) => { const o = OWN.get(x.k), L = o ? OWNL[o.label] || OWNL.unknown : null;
           return rowHTML(x, `<b>${money(Math.round(val))}</b><small class="${cls(val - cost)}">${cost ? signed(Math.round(val - cost)) : `${x.qty}×`}</small>`,
-          `<span class="why">${x.qty}× · ${x.t === "c" ? esc(x.cond) + " · " : ""}paid ${money(x.cost)} each${val && x.qty ? ` · sells for ${money(Math.round(net(Math.round(val / x.qty), x.t)))} each on ${esc(plat().label)}` : ""}</span>${o ? `<span class="why own-res"><span class="chip ${L[0]}">${L[1]}</span> ${esc(o.text)}</span>` : ""}`); }).join("")}</div>
-        <p class="muted small">Tap an item to change it. Values use today's market price for its condition.</p>`;
+          `<span class="why">${x.qty}× · ${x.graded ? esc(x.graded) + " · " : x.t === "c" ? esc(x.cond) + " · " : ""}${on && x.book === "Personal" ? "Personal · " : ""}paid ${money(x.cost)} each${val && x.qty ? ` · sells for ${money(Math.round(net(Math.round(val / x.qty), x.t)))} each on ${esc(plat().label)}` : ""}</span>${o ? `<span class="why own-res"><span class="chip ${L[0]}">${L[1]}</span> ${esc(o.text)}</span>` : ""}`); }).join("")}</div>
+        <p class="muted small">${on ? "Tap an item for its card. Buys, sales and costs are in Ledger." : "Tap an item to change it."} Values use today's market price for its condition${on ? "; graded items use graded sold prices where Edge has them" : ""}.</p>`;
+      el.insertAdjacentHTML("afterbegin", moveNote);
+      const mv = $("#inv-move", el); if (mv) mv.onclick = () => { SUB.mine = "ledger"; route(); };
       const go = $("#own-go", el);
       if (go) go.onclick = async () => {
         const conn = pkmnConn(), [deal, pkmn] = await Promise.all([DEAL, PKMN]), st = $("#own-st", el);
         if (!conn || !deal || !pkmn) { st.textContent = "Sold prices aren't set up yet (Mine → Settings)."; return; }
         go.disabled = true; let credits = 0, i = 0;
-        for (const x of S.inv) {
-          st.textContent = `Checking ${++i} of ${S.inv.length}…`;
+        const todo = inv.filter((x) => !x.graded);
+        for (const x of todo) {
+          st.textContent = `Checking ${++i} of ${todo.length}…`;
           try {
             const d = await detail(x.id, x.g, x.n), it = d.it;
             if (!it) { OWN.set(x.k, { label: "unknown", text: "No market price for this item right now." }); continue; }
@@ -1292,10 +1364,23 @@
             OWN.set(x.k, res.ok ? deal.own(item, res.data, { cost: x.cost || 0, cond: x.cond || "NM" }, dealCfg(it.p)) : { label: "unknown", text: soldNote(res).note });
           } catch (err) { console.error(err); OWN.set(x.k, { label: "unknown", text: "Couldn't check this one." }); }
         }
-        draw(); const s2 = $("#own-st", el); if (s2) s2.textContent = `Checked ${S.inv.length} item${S.inv.length === 1 ? "" : "s"} just now · ${credits} credits.`;
+        draw(); const s2 = $("#own-st", el); if (s2) s2.textContent = `Checked ${todo.length} item${todo.length === 1 ? "" : "s"} just now · ${credits} credits.`;
       };
     };
     draw();
+  }
+  let LMOUNT = null;
+  function mineLedger(el) {
+    const resume = LEDGER_RESUME, draft = LEDGER_DRAFT; LEDGER_RESUME = LEDGER_DRAFT = null;
+    LMOUNT = LG.mount(el, { store: LS, defBook: S.set.ledgerBook || "Business", resume, draft,
+      h: { money, signed, esc, img: (id) => img(id, 200), cleanN, localDay, fmtDay, cents, dollars, toast, cls, pct },
+      priceOf, conn: ledgerConn, sync: () => { ledgerSoon(); return Promise.resolve(); },
+      feeEst: (k, p, t) => { const pl = FEES.sell[k]; if (!pl || !p) return 0; const v = Math.round(p * (1 + S.set.buyerTax / 100)); return Math.round(v - netSale(pl, v)); },
+      shipEst: (p, t) => shipOut(p, t, "ebay"), supplies: (t) => t === "s" ? S.set.supSealed : S.set.supCard,
+      pick: (f) => { PICK = { list: "ledger", label: "this buy", back: "mine", form: f }; location.hash = "search"; },
+      oldInv: () => S.inv.map((x) => ({ ...x, sn: x.sn || setName(x.g) })), clearOldInv: () => { S.inv = []; save(); },
+      openCard: (id, g, n) => openCard(id, g, n),
+      download: (name, text) => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type: "text/csv" })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); } });
   }
   async function mineWatch(el) {
     if (!S.watch.length) { el.innerHTML = `<div class="empty"><b>No watched cards</b>Open a card and tap Watch price. When the lowest listing or market price hits your number, it shows up on Today.</div>`; return; }
@@ -1328,6 +1413,12 @@
           <div class="btns full"><button class="btn primary" type="submit">Save</button></div></form></details>
         ${pkmnConn() ? `<div class="btns"><button class="btn" type="button" id="rl-t">Test</button><button class="btn ghost danger" type="button" id="rl-x">Remove from this phone</button></div>` : ""}
         <p class="small" id="rl-st" style="margin:0"></p></section>
+      ${LS ? `<section class="sec panel"><h2>Ledger (Google Sheet)</h2>
+        <p class="muted small" style="margin:0">Your buys, sales, expenses and cash are saved on this phone and sent to your Google Sheet, which is the record. It uses the same pairing as sold prices.</p>
+        <p class="small" id="lg-st" style="margin:0"></p>
+        <div class="form"><label class="f full">New buys go in<select class="select" id="lg-def">${["Business", "Personal"].map((b) => `<option${(s.ledgerBook || "Business") === b ? " selected" : ""}>${b}</option>`).join("")}</select></label></div>
+        <div class="btns">${ledgerConn() ? `<button type="button" class="btn" id="lg-now">Sync now</button>` : ""}${LS.state.sheet ? `<a class="btn ghost" href="${esc(LS.state.sheet)}" target="_blank" rel="noopener">Open Sheet ↗</a>` : ""}</div>
+        <details><summary class="small muted">Sheet web app address</summary><form class="btns" id="lg-uf"><input class="field" id="lg-u" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec" value="${esc((() => { try { return localStorage.getItem(LKEY) || ""; } catch { return ""; } })())}" style="flex:1 1 220px"><button class="btn" type="submit">Save</button></form></details></section>` : ""}
       <form class="sec panel" id="st-f"><h2>Your numbers</h2>
       <div class="form"><label class="f full">I usually sell on${platSelect("st-plat", s.platform)}</label>
         <label class="f">Target profit %<input class="field" id="st-roi" type="number" inputmode="numeric" min="0" max="500" value="${s.roi}"></label>
@@ -1395,6 +1486,22 @@
         st.className = `small ${r.ok ? "up" : "down"}`; st.textContent = r.ok ? "Connected: PkmnPrices answered (1 credit)." : r.status === 401 ? "The relay refused the passphrase." : `The relay answered HTTP ${r.status}.`;
       } catch { st.className = "small down"; st.textContent = "Couldn't reach the relay."; }
     };
+    if (LS) {
+      const ls = $("#lg-st"), st0 = LS.state, c = ledgerConn();
+      const show = () => { ls.className = `small ${!c ? "muted" : LS.queue || st0.err ? "warn" : "up"}`;
+        ls.textContent = !c ? (pkmnConn() ? "Not connected to a Sheet yet. Everything stays on this phone until it is." : "Pair this phone above first; then it can reach your Sheet.")
+          : LS.queue ? `${LS.queue} change${LS.queue === 1 ? "" : "s"} waiting${LS.state.err ? ` (${LS.state.err === "offline" ? "no connection" : LS.state.err === "denied" ? "the Sheet doesn't know this phone yet" : LS.state.err})` : ""}.`
+          : LS.state.err ? `Last sync failed: ${LS.state.err === "denied" ? "the Sheet doesn't know this phone yet" : LS.state.err}.` : `Connected${LS.state.pulled ? `, synced ${new Date(LS.state.pulled).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}.`; };
+      show();
+      $("#lg-def").onchange = (e) => { S.set.ledgerBook = e.target.value; save(); toast("Saved"); };
+      const now = $("#lg-now"); if (now) now.onclick = async () => { ls.className = "small muted"; ls.textContent = "Syncing…"; await ledgerSync(); show(); };
+      $("#lg-uf").onsubmit = (e) => {
+        e.preventDefault(); const u = $("#lg-u").value.trim();
+        if (u && !/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(u)) { ls.className = "small down"; ls.textContent = "That isn't a Google Apps Script web app address (https://script.google.com/macros/s/…/exec)."; return; }
+        try { if (u) localStorage.setItem(LKEY, u); else localStorage.removeItem(LKEY); } catch {}
+        toast(u ? "Saved on this phone" : "Cleared"); mineSettings(el); ledgerSync().then(() => { if ($("#lg-st")) mineSettings(el); });
+      };
+    }
     const rx = $("#rl-x"); if (rx) rx.onclick = () => { try { localStorage.removeItem(RKEY); } catch {} toast("Removed from this phone"); mineSettings(el); };
     $("#st-f").onsubmit = (e) => {
       e.preventDefault();
@@ -1407,7 +1514,7 @@
       save(); toast("Settings saved");
     };
     $("#bk-save").onclick = () => {
-      const blob = new Blob([JSON.stringify({ app: "dys-edge", v: 1, saved: new Date().toISOString(), data: S }, null, 1)], { type: "application/json" });
+      const blob = new Blob([JSON.stringify({ app: "dys-edge", v: 1, saved: new Date().toISOString(), data: S, ...(LS ? { ledger: LS.state } : {}) }, null, 1)], { type: "application/json" });
       const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `dys-edge-backup-${new Date().toISOString().slice(0, 10)}.json`;
       document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
     };
@@ -1418,8 +1525,8 @@
       $("#bk-out").innerHTML = `<div class="inline-form"><span>Replace what's on this phone with the backup from ${esc(fmtDay((d.saved || "").slice(0, 10)))} (${(d.data.inv || []).length} inventory items, ${(d.data.watch || []).length} watched)?</span>
         <div class="btns"><button type="button" class="btn primary" id="bk-yes">Replace</button><button type="button" class="btn ghost" id="bk-no">Cancel</button></div></div>`;
       $("#bk-yes").onclick = () => {
-        try { localStorage.setItem(KEY, JSON.stringify(d.data)); } catch { $("#bk-out").innerHTML = `<p class="down small">This browser won't save data. Open the app outside private browsing and try again.</p>`; return; }
-        S = load(); toast("Backup restored"); route();
+        try { localStorage.setItem(KEY, JSON.stringify(d.data)); if (d.ledger && d.ledger.v === 1 && LG) localStorage.setItem("dys-edge-ledger", JSON.stringify(d.ledger)); } catch { $("#bk-out").innerHTML = `<p class="down small">This browser won't save data. Open the app outside private browsing and try again.</p>`; return; }
+        S = load(); if (d.ledger && LG) LS = LG.Store(window.localStorage); toast("Backup restored"); route(); ledgerSync();
       };
       $("#bk-no").onclick = () => { $("#bk-out").innerHTML = ""; e.target.value = ""; };
     };

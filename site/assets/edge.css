@@ -436,3 +436,29 @@ a.row{text-decoration:none;color:inherit}
 .dl-more[open]>summary::after{content:"Hide"}
 .dl-more[open]{display:flex;flex-direction:column;gap:10px}
 .own-res{display:block;margin-top:4px}
+/* Ledger (M2): Mine → Ledger */
+#m-body>.seg+.lg-books,.lg-books{margin-top:8px}
+.lg-sync{margin:8px 0 0;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.lg-sync a{color:var(--accent-2)}
+#lg-body{display:flex;flex-direction:column;gap:12px;margin-top:10px;min-width:0}
+.lg-acts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.lg-acts .btn{padding:10px 6px}
+.lg-h{margin:6px 0 0;font-size:14px}
+.lg-form{display:flex;flex-direction:column;gap:12px;min-width:0}
+.lg-line{display:flex;flex-direction:column;gap:10px}
+.lg-lh{display:flex;align-items:center;gap:10px;min-width:0}
+.lg-lh img{width:34px;height:47px;object-fit:contain;border-radius:4px;background:var(--surface-2);flex:none}
+.lg-lh b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lg-total{margin:0;font-size:15px}
+.lg-total b{font:700 18px var(--display);font-variant-numeric:tabular-nums}
+.lg-kv{display:flex;flex-direction:column}
+.lg-kv div{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.lg-kv div:first-child{border-top:0}
+.lg-kv span:first-child{color:var(--ink-2)}
+.lg-kv span:last-child,.lg-kv b:last-child{font-variant-numeric:tabular-nums;text-align:right}
+.row.lg-ev{grid-template-columns:44px minmax(0,1fr) auto;cursor:default}
+.lg-day{font:600 11.5px/1.2 var(--font);color:var(--ink-3);text-align:center}
+.lg-ev .rt .btn{padding:4px 8px;font-size:12px}
+.lg-move{border-color:var(--accent-2)}
+.lg-confirm{margin-bottom:10px}
+.lg-row .ph{display:block}
