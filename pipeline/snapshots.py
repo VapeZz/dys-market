@@ -206,6 +206,8 @@ def prune(today):
         else:
             keep = False
         if not keep:
+            if os.path.exists(_sealed(day)):
+                continue
             for p in (_plain(day), _sealed(day)):
                 if os.path.exists(p):
                     os.remove(p)
