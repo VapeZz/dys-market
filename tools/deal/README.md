@@ -10,14 +10,16 @@ use the Pro plan within its published terms; no licensing inquiry).
 
 **Status:** isolated development. Not pushed, not deployed. Real data needs the relay below.
 
-## The relay (not deployed; needs Keo's go)
-PkmnPrices' API sends no CORS header (checked Nov 16 from market.driveyourstyle.net: "No 'Access-Control-Allow-Origin'
-header"), so a phone page can't call it, and the key can't sit in a public page. `relay-worker.js` is a Cloudflare
-Worker (free plan) that holds the key and forwards only the five read-only calls the Deal check uses, only for
-`market.driveyourstyle.net`, only with the owner's passphrase. Setup (Keo, about 10 minutes):
-1. Free Cloudflare account → Workers → Create → paste `relay-worker.js` → Deploy.
-2. Worker → Settings → Variables → add secrets `PKMNPRICES_KEY` (the Pro key) and `EDGE_PASS` (a long random phrase).
-3. Edge → Mine → Settings → Sold prices: the worker's https address and the passphrase → Save → Test.
+## The relay (deployed Nov 16, 2026)
+`dys-edge-relay` on Keo's free Cloudflare account (signed up with Google, keo.llaneza@gmail.com):
+https://dys-edge-relay.keo-llaneza.workers.dev. Code: `relay-worker.js` (tests: `node tests/relay_worker.test.mjs`).
+PkmnPrices' API sends no CORS header (checked Nov 16), so a phone page can't call it, and the key can't sit in a
+public page. The relay holds the key and forwards only the five read-only calls the Deal check uses, only for
+`market.driveyourstyle.net`, and only for a paired device or the owner's passphrase. Workers Logs are off.
+- `PKMNPRICES_KEY` (secret): Keo types it in the Cloudflare dashboard himself. Never in code, chat or GitHub.
+- `EDGE_DEVICE_HASHES` (plain): SHA-256 of each paired device's random token. The token is made in that browser and
+  stays in its storage (`dys-edge-relay`); only the hash goes to Cloudflare. Paired: skibidi's built-in browser.
+- `EDGE_PASS` (optional secret): a passphrase Keo can set and type once in Edge on his phone.
 
 ## Files
 | File | What it does |
