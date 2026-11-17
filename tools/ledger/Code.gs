@@ -145,8 +145,12 @@ function toCell_(v, typ) {
   if (v == null || v === '') return '';
   if (typ === 'm') return Math.round(Number(v) || 0) / 100;
   if (typ === 'n') return Number(v) || 0;
-  return String(v);
+  var s = String(v);
+  // Sheets reads text starting with = + - @ as a formula even in a plain-text cell (seen live Nov 16: "#ERROR!"),
+  // so such text gets a leading apostrophe, which Sheets keeps as "this is text"; it is taken off again on reading
+  return /^[=+\-@']/.test(s) ? "'" + s : s;
 }
+function fromText_(v) { var s = String(v == null ? '' : v); return /^'[=+\-@']/.test(s) ? s.slice(1) : s; }
 function readAll_(ss) {
   var tz = ss.getSpreadsheetTimeZone() || 'America/Los_Angeles', all = {};
   for (var t in SCHEMA) {
@@ -161,7 +165,7 @@ function readAll_(ss) {
         if (typ === 'm') o[key] = v === '' || v == null ? 0 : Math.round(Number(v) * 100) || 0;
         else if (typ === 'n') o[key] = v === '' || v == null ? 0 : Number(v) || 0;
         else if (typ === 'd') o[key] = v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : String(v == null ? '' : v).slice(0, 10);
-        else o[key] = v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : String(v == null ? '' : v);
+        else o[key] = v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : fromText_(v);
       }
       if (o.id) rows.push(o);
     }

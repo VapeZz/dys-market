@@ -44,7 +44,7 @@ async (url, ledgerJs) => {
   const r1 = await st.sync(send);
   ok(r1.ok && r1.sent === 12 && st.queue === 0, `12 synthetic changes sent and confirmed (${r1.sent})`);
   const R = L.compute(mine(st.T), { year: "2026" }), b = R.tot.Business, p = R.tot.Personal;
-  ok(b.cash === 100000 - 38931 + 9281 - 2499 - 7500 - 2000, `Business cash $${b.cash / 100} (expect 584.51)`);
+  ok(b.cash === 100000 - 38931 + 9281 - 2499 - 7500 - 2000, `Business cash $${b.cash / 100} (expect 583.51)`);
   ok(p.cash === 50000 - 22175 + 2000, `Personal cash $${p.cash / 100} (expect 298.25)`);
   ok(R.tot.All.cash === b.cash + p.cash, "both books add up");
   ok(b.realized === 9281 - 5562 && p.realized === 0, `profit stays in its book (Business +$${b.realized / 100}, Personal $0)`);
@@ -59,6 +59,9 @@ async (url, ledgerJs) => {
   const g = mine(fresh.T).items.find((x) => x.name === "TEST graded"), box = mine(fresh.T).items.find((x) => x.kind === "Sealed");
   ok(g && g.cert === "0012345678" && g.day === "2026-10-01" && g.grade === "10", "text stays text in the Sheet (cert with leading zeros, the date, the grade)");
   ok(box && box.name === '=TEST box "x", y', "a name starting with = is kept as text, not run as a formula");
+  const odd = ["+1 TEST", "-5 TEST off", "@TEST", "'TEST quoted", "TEST plain"], oid = id("i");
+  const orr = await post({ token, ops: odd.map((nm, i) => ({ opId: L.newId("o"), table: "items", row: { id: `${oid}-${i}`, day: "2026-11-16", book: "Personal", kind: "Other", name: nm, qty: 1, price: 0, note: nm, upd: ++t } })) });
+  ok(odd.every((nm, i) => { const x = orr.tables.items.find((r) => r.id === `${oid}-${i}`); return x && x.name === nm && x.note === nm; }), "names and notes starting with + - @ or ' come back exactly as typed");
 
   // 4. no duplicates: an answer lost and the same changes sent again, a form saved twice, two devices at once
   const extra = id("s"), op = { opId: L.newId("o"), table: "sales", row: { id: extra, day: "2026-11-16", item: buy.items[2].id, book: "Business", qty: 1, plat: "Card show", price: 1, upd: ++t, note: "TEST" } };

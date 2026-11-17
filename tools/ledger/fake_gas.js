@@ -5,10 +5,14 @@ const fs = require("fs"), path = require("path"), vm = require("vm"), crypto = r
 // Like Sheets: a cell formatted as plain text ("@") keeps a string as typed; any other cell reads a string the way
 // a person's typing is read (a leading "=" makes a formula, a date-looking string becomes a date, a number-looking
 // one a number). Formats are kept per cell.
+// Seen on the real Sheet (Nov 16): text starting with "=" becomes a formula even in a plain-text cell, and a broken one
+// reads back as "#ERROR!". A leading apostrophe marks text; this emulator keeps it in the cell either way, so the
+// script must work whether or not Sheets hands the apostrophe back.
 function enter(v, f) {
-  if (typeof v !== "string" || f === "@") return v;
-  if (/^=/.test(v)) return "#FORMULA:" + v;
-  if (/^'/.test(v)) return v.slice(1);
+  if (typeof v !== "string") return v;
+  if (/^=/.test(v)) return "#ERROR!";
+  if (f === "@") return v;
+  if (/^'/.test(v)) return v;
   if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return new Date(v + "T00:00:00Z");
   if (/^-?\d+(\.\d+)?$/.test(v)) return Number(v);
   return v;
