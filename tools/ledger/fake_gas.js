@@ -6,29 +6,29 @@ const fs = require("fs"), path = require("path"), vm = require("vm"), crypto = r
 // a person's typing is read (a leading "=" makes a formula, a date-looking string becomes a date, a number-looking
 // one a number). Formats are kept per cell.
 // Seen on the real Sheet (Nov 16): text starting with "=" becomes a formula even in a plain-text cell, and a broken one
-// reads back as "#ERROR!". A leading apostrophe marks text; this emulator keeps it in the cell either way, so the
-// script must work whether or not Sheets hands the apostrophe back.
+// reads back as "#ERROR!"; a leading apostrophe makes it text, and reading the cell gives the text WITHOUT the apostrophe.
+// enter() returns [value as read back, formula behind the cell].
 function enter(v, f) {
-  if (typeof v !== "string") return v;
-  if (/^=/.test(v)) return "#ERROR!";
-  if (f === "@") return v;
-  if (/^'/.test(v)) return v;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return new Date(v + "T00:00:00Z");
-  if (/^-?\d+(\.\d+)?$/.test(v)) return Number(v);
-  return v;
+  if (typeof v !== "string") return [v, ""];
+  if (/^'/.test(v)) return [v.slice(1), ""];
+  if (/^=/.test(v)) return [/^=SUM\(/.test(v) ? 0 : "#ERROR!", v];
+  if (f === "@") return [v, ""];
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return [new Date(v + "T00:00:00Z"), ""];
+  if (/^-?\d+(\.\d+)?$/.test(v)) return [Number(v), ""];
+  return [v, ""];
 }
 function Sheet(name, rows = 1000, cols = 26) {
   const g = Array.from({ length: rows }, () => new Array(cols).fill(""));
-  const fmt = {};          // "r,c" → format
+  const fmt = {}, fml = {};          // "r,c" → format, formula
   const sh = {
     name, grid: g, fmt, frozen: 0,
     getName: () => name, getMaxRows: () => g.length, getMaxColumns: () => g[0].length,
     getLastRow: () => { for (let r = g.length - 1; r >= 0; r--) if (g[r].some((v) => v !== "")) return r + 1; return 0; },
     getLastColumn: () => { let m = 0; for (const row of g) for (let c = row.length - 1; c >= m; c--) if (row[c] !== "") { m = c + 1; break; } return m; },
     setFrozenRows: (n) => { sh.frozen = n; },
-    clear: () => { for (const row of g) row.fill(""); for (const k in fmt) delete fmt[k]; },
+    clear: () => { for (const row of g) row.fill(""); for (const k in fmt) delete fmt[k]; for (const k in fml) delete fml[k]; },
     // a person typing into a cell (for tests of hand edits)
-    type: (r, c, v) => { g[r - 1][c - 1] = enter(v, fmt[`${r},${c}`]); },
+    type: (r, c, v) => { const [x, fx] = enter(v, fmt[`${r},${c}`]); g[r - 1][c - 1] = x; fml[`${r},${c}`] = fx; },
     getRange(r, c, nr = 1, nc = 1) {
       if (r < 1 || c < 1 || nr < 1 || nc < 1) throw new Error(`bad range ${r},${c},${nr},${nc}`);
       while (g.length < r + nr - 1) g.push(new Array(g[0].length).fill(""));
@@ -37,8 +37,9 @@ function Sheet(name, rows = 1000, cols = 26) {
         getValues: () => g.slice(r - 1, r - 1 + nr).map((row) => row.slice(c - 1, c - 1 + nc).map((v) => v instanceof Date ? new Date(v) : v)),
         setValues: (vals) => {
           if (vals.length !== nr || vals.some((x) => x.length !== nc)) throw new Error(`setValues: ${vals.length}x${vals[0] && vals[0].length} into ${nr}x${nc}`);
-          vals.forEach((row, i) => row.forEach((v, j) => { g[r - 1 + i][c - 1 + j] = enter(v, fmt[`${r + i},${c + j}`]); })); return rg;
+          vals.forEach((row, i) => row.forEach((v, j) => { const [x, fx] = enter(v, fmt[`${r + i},${c + j}`]); g[r - 1 + i][c - 1 + j] = x; fml[`${r + i},${c + j}`] = fx; })); return rg;
         },
+        getFormulas: () => Array.from({ length: nr }, (_, i) => Array.from({ length: nc }, (_, j) => fml[`${r + i},${c + j}`] || "")),
         setNumberFormat: (f) => { for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) fmt[`${r + i},${c + j}`] = f; return rg; },
         setFontWeight: () => rg
       };

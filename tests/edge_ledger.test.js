@@ -211,6 +211,17 @@ test("web app: a newer change wins, an older one is skipped, a replay is applied
   assert.strictEqual(r.tables.items[0].price, 100, "a change without a column leaves that column alone");
   const log = g.ss.getSheetByName("Log"); assert.strictEqual(log.getLastRow(), 1 + 3);
 });
+test("web app: text starting with = survives later changes to its row; a formula the owner adds is kept", () => {
+  const g = app();
+  g.post({ token: TOK, ops: [op("items", { id: "x", name: "=Pikachu \"promo\", 1/1", note: "+1 for the sleeve", qty: 1, price: 100, upd: 1 })] });
+  const sh = g.ss.getSheetByName("Items"), w = sh.grid[0].filter((v) => v !== "").length;
+  sh.grid[0][w] = "My total"; sh.type(2, w + 1, "=SUM(1,2)");            // the owner's own column with a formula
+  let r = g.post({ token: TOK, ops: [op("items", { id: "x", status: "Listed", upd: 2 })] });
+  r = g.post({ token: TOK, ops: [op("items", { id: "x", void: 1, upd: 3 })] });
+  const x = r.tables.items[0];
+  assert.strictEqual(x.name, '=Pikachu "promo", 1/1'); assert.strictEqual(x.note, "+1 for the sleeve"); assert.strictEqual(x.status, "Listed");
+  assert.strictEqual(sh.getRange(2, w + 1).getFormulas()[0][0], "=SUM(1,2)", "the owner's formula is still a formula");
+});
 test("web app: columns are found by header after hand edits; a typed date reads back as a day", () => {
   const g = app();
   g.post({ token: TOK, ops: [op("sales", { id: "s1", day: "2026-11-01", item: "i1", book: "Business", qty: 1, plat: "eBay", price: 5000, upd: 1 })] });

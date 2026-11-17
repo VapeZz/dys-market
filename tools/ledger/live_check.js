@@ -56,12 +56,16 @@ async (url, ledgerJs) => {
   const fresh = L.Store(mem(), "zt2", () => ++t); const r2 = await fresh.sync(send);
   const R2 = L.compute(mine(fresh.T), { year: "2026" });
   ok(r2.ok && JSON.stringify(R2.tot) === JSON.stringify(R.tot), "recovery: a phone with no copy gets the same books back from the Sheet");
-  const g = mine(fresh.T).items.find((x) => x.name === "TEST graded"), box = mine(fresh.T).items.find((x) => x.kind === "Sealed");
+  const g = mine(fresh.T).items.find((x) => x.id === pb.items[0].id), box = mine(fresh.T).items.find((x) => x.id === buy.items[2].id);
   ok(g && g.cert === "0012345678" && g.day === "2026-10-01" && g.grade === "10", "text stays text in the Sheet (cert with leading zeros, the date, the grade)");
   ok(box && box.name === '=TEST box "x", y', "a name starting with = is kept as text, not run as a formula");
   const odd = ["+1 TEST", "-5 TEST off", "@TEST", "'TEST quoted", "TEST plain"], oid = id("i");
   const orr = await post({ token, ops: odd.map((nm, i) => ({ opId: L.newId("o"), table: "items", row: { id: `${oid}-${i}`, day: "2026-11-16", book: "Personal", kind: "Other", name: nm, qty: 1, price: 0, note: nm, upd: ++t } })) });
   ok(odd.every((nm, i) => { const x = orr.tables.items.find((r) => r.id === `${oid}-${i}`); return x && x.name === nm && x.note === nm; }), "names and notes starting with + - @ or ' come back exactly as typed");
+
+  // a later change to that row (marking it listed) must not turn the name back into a formula
+  const relist = await post({ token, ops: [{ opId: L.newId("o"), table: "items", row: { id: buy.items[2].id, status: "Listed", upd: ++t } }] });
+  ok(relist.tables.items.find((x) => x.id === buy.items[2].id)?.name === '=TEST box "x", y', "the name survives a later change to its row");
 
   // 4. no duplicates: an answer lost and the same changes sent again, a form saved twice, two devices at once
   const extra = id("s"), op = { opId: L.newId("o"), table: "sales", row: { id: extra, day: "2026-11-16", item: buy.items[2].id, book: "Business", qty: 1, plat: "Card show", price: 1, upd: ++t, note: "TEST" } };

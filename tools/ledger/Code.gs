@@ -64,7 +64,7 @@ function handle_(req, ss, now) {
       applied += res.applied; skipped += res.skipped;
       for (var j = 0; j < byTable[t].length; j++) { var o = byTable[t][j]; log.push([o.opId, when, dev.slice(0, 8), t, String(o.row.id), res.what[j]]); }
     }
-    if (log.length) { var L = ss.getSheetByName(LOG.tab), at = L.getLastRow() + 1; L.getRange(at, 1, log.length, LOG.head.length).setNumberFormat('@').setValues(log); }
+    if (log.length) { var L = ss.getSheetByName(LOG.tab), at = L.getLastRow() + 1; L.getRange(at, 1, log.length, LOG.head.length).setNumberFormat('@').setValues(log.map(function (r) { return r.map(asText_); })); }
     if (req.shown && typeof req.shown === 'object') shown_(ss, req.shown);
     if (Array.isArray(req.summary) && req.summary.length) summary_(ss, req.summary);
     return { ok: true, tables: readAll_(ss), applied: applied, skipped: skipped, sheet: ss.getUrl(), at: now.toISOString() };
@@ -115,23 +115,29 @@ function cols_(sh, s) {
 /* upsert by ID; a row is replaced only by a change at least as new as the one in the Sheet */
 function writeRows_(ss, t, ops) {
   var s = SCHEMA[t], sh = ss.getSheetByName(s.tab), c = cols_(sh, s), width = c.head.length, n = sh.getLastRow() - 1;
-  var data = n > 0 ? sh.getRange(2, 1, n, width).getValues() : [], idAt = c.at.id, updAt = c.at.upd, index = {};
+  var rng = n > 0 ? sh.getRange(2, 1, n, width) : null;
+  // values as Sheets shows them, and any formula behind a cell (kept: a formula the owner added stays a formula)
+  var data = rng ? rng.getValues() : [], forms = rng ? rng.getFormulas() : [], idAt = c.at.id, updAt = c.at.upd, index = {};
   for (var r = 0; r < data.length; r++) index[String(data[r][idAt])] = r;
-  var what = [], applied = 0, skipped = 0, changed = {}, added = [];
+  var what = [], applied = 0, skipped = 0, changed = {}, firstNew = data.length;
   for (var i = 0; i < ops.length; i++) {
     var row = ops[i].row, id = String(row.id), r0 = index[id], cur = r0 == null ? null : data[r0];
     if (cur && Number(cur[updAt] || 0) > Number(row.upd || 0)) { what.push('older than the Sheet: not applied'); skipped++; continue; }
-    var line = cur ? cur.slice() : new Array(width).fill('');
+    var line = cur ? cur.slice() : new Array(width).fill(''), fl = cur ? forms[r0].slice() : new Array(width).fill('');
     for (var k = 0; k < s.cols.length; k++) {
       var key = s.cols[k][0], typ = s.cols[k][2], col = c.at[key];
       if (col < 0 || !(key in row)) continue;
-      line[col] = toCell_(row[key], typ);
+      line[col] = toCell_(row[key], typ); fl[col] = '';
     }
-    if (cur) { data[r0] = line; changed[r0] = 1; } else { index[id] = data.length + added.length; added.push(line); }
+    if (cur) { data[r0] = line; forms[r0] = fl; changed[r0] = 1; } else { index[id] = data.length; data.push(line); forms.push(fl); }
     what.push(row['void'] ? 'deleted' : cur ? 'updated' : 'added'); applied++;
   }
-  for (var r1 in changed) { formats_(sh, s, c, Number(r1) + 2, 1); sh.getRange(Number(r1) + 2, 1, 1, width).setValues([data[r1]]); }
-  if (added.length) { var at = sh.getLastRow() + 1; formats_(sh, s, c, at, added.length); sh.getRange(at, 1, added.length, width).setValues(added); }
+  var out = function (r) { return data[r].map(function (v, k) { return forms[r][k] ? forms[r][k] : asText_(v); }); };
+  for (var r1 in changed) { var ri = Number(r1); if (ri >= firstNew) continue; formats_(sh, s, c, ri + 2, 1); sh.getRange(ri + 2, 1, 1, width).setValues([out(ri)]); }
+  if (data.length > firstNew) {
+    var block = []; for (var r2 = firstNew; r2 < data.length; r2++) block.push(out(r2));
+    formats_(sh, s, c, firstNew + 2, block.length); sh.getRange(firstNew + 2, 1, block.length, width).setValues(block);
+  }
   return { applied: applied, skipped: skipped, what: what };
 }
 /* plain text for text and day columns before writing, so Sheets keeps "2026-11-16", "0012" and "=..." exactly as typed */
@@ -145,12 +151,11 @@ function toCell_(v, typ) {
   if (v == null || v === '') return '';
   if (typ === 'm') return Math.round(Number(v) || 0) / 100;
   if (typ === 'n') return Number(v) || 0;
-  var s = String(v);
-  // Sheets reads text starting with = + - @ as a formula even in a plain-text cell (seen live Nov 16: "#ERROR!"),
-  // so such text gets a leading apostrophe, which Sheets keeps as "this is text"; it is taken off again on reading
-  return /^[=+\-@']/.test(s) ? "'" + s : s;
+  return String(v);
 }
-function fromText_(v) { var s = String(v == null ? '' : v); return /^'[=+\-@']/.test(s) ? s.slice(1) : s; }
+// Sheets reads text starting with = + - @ as a formula even in a plain-text cell (seen live Nov 16: "#ERROR!"). A leading
+// apostrophe makes it text; Sheets hides that apostrophe when the cell is read, so every write adds it again.
+function asText_(v) { return typeof v === 'string' && /^[=+\-@']/.test(v) ? "'" + v : v; }
 function readAll_(ss) {
   var tz = ss.getSpreadsheetTimeZone() || 'America/Los_Angeles', all = {};
   for (var t in SCHEMA) {
@@ -165,7 +170,7 @@ function readAll_(ss) {
         if (typ === 'm') o[key] = v === '' || v == null ? 0 : Math.round(Number(v) * 100) || 0;
         else if (typ === 'n') o[key] = v === '' || v == null ? 0 : Number(v) || 0;
         else if (typ === 'd') o[key] = v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : String(v == null ? '' : v).slice(0, 10);
-        else o[key] = v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : fromText_(v);
+        else o[key] = v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : String(v == null ? '' : v);
       }
       if (o.id) rows.push(o);
     }
@@ -186,7 +191,7 @@ function shown_(ss, shown) {
     for (var k = 0; k < keys.length; k++) {
       var col = c.at[keys[k]]; if (col < 0) continue;
       var typ = null; for (var q = 0; q < s.cols.length; q++) if (s.cols[q][0] === keys[k]) typ = s.cols[q][2];
-      var vals = ids.map(function (r) { var v = by[String(r[0])]; return [v ? toCell_(v[k + 1], typ) : ''] ; });
+      var vals = ids.map(function (r) { var v = by[String(r[0])]; return [v ? asText_(toCell_(v[k + 1], typ)) : ''] ; });
       sh.getRange(2, col + 1, n, 1).setValues(vals);
     }
   }
@@ -195,7 +200,7 @@ function summary_(ss, rows) {
   var sh = ss.getSheetByName('Summary'), w = 0;
   rows = rows.slice(0, 40).map(function (r) { return Array.isArray(r) ? r.slice(0, 6) : []; });
   for (var i = 0; i < rows.length; i++) w = Math.max(w, rows[i].length);
-  rows = rows.map(function (r) { while (r.length < w) r.push(''); return r.map(function (v) { return typeof v === 'number' || typeof v === 'string' ? v : ''; }); });
+  rows = rows.map(function (r) { while (r.length < w) r.push(''); return r.map(function (v) { return typeof v === 'number' ? v : typeof v === 'string' ? asText_(v) : ''; }); });
   sh.clear();
   if (!w) return;
   sh.getRange(1, 1, rows.length, w).setValues(rows);
