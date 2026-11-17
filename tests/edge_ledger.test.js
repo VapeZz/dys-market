@@ -306,4 +306,17 @@ test("recovery: a phone that lost its copy gets everything back from the Sheet",
   assert.deepStrictEqual(y.tot, x.tot); assert.deepStrictEqual(y.items.map((i) => i.cost), x.items.map((i) => i.cost));
 });
 
+test("grades: 1 to 10 with halves; editing a grade keeps the item's cost and adds nothing", () => {
+  assert.deepStrictEqual(["10", "9.5", "1", "9", " 8 "].map(L.okGrade), [true, true, true, true, true]);
+  assert.deepStrictEqual(["", "0", "10.5", "11", "PSA 10", "9.3"].map(L.okGrade), [false, false, false, false, false, false]);
+  let t = 1; const st = L.Store(mem(), "k", () => t++, rnd);
+  st.put("buys", { id: "b", day: "2026-11-16", book: "Personal", where: "Card show", pay: "Cash" });
+  st.put("items", { id: "i", buy: "b", day: "2026-11-16", book: "Personal", kind: "Graded", name: "Pikachu", grader: "PSA", grade: "", qty: 1, price: 7000 });
+  const before = L.compute(st.T, { year: "2026" });
+  st.put("items", { ...st.T.items[0], grade: "10", cert: "123" });
+  const after = L.compute(st.T, { year: "2026" });
+  assert.strictEqual(st.T.items.length, 1); assert.strictEqual(st.T.costs.length, 0); assert.strictEqual(st.T.buys.length, 1);
+  assert.strictEqual(after.items[0].cost, 7000); assert.deepStrictEqual(after.tot, before.tot);
+});
+
 Promise.all(pending).then(() => { console.log(`${n} ledger checks passed${process.exitCode ? " (with failures above)" : ""}`); });

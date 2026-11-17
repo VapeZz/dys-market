@@ -216,6 +216,8 @@
   const lineFromCard = (c) => ({ kind: c.t === "s" ? "Sealed" : "Raw", tcg: c.id, g: c.g, n: c.n, name: c.n, set: c.set || "", qty: 1, cond: "NM", price: Math.max(0, int(c.price)) });
   // a moved inventory row's ledger ID comes from the row itself, so moving it twice gives the same item, not two
   const migId = (o) => { let h = 0x811c9dc5; for (const ch of `${o.k}|${o.at || ""}|${o.cost}`) { h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return `iv${h.toString(36)}${String(o.id).slice(-4)}`; };
+  // a grade as graders give it: 1 to 10, halves allowed (9.5)
+  const okGrade = (g) => /^(10|[1-9](\.5)?)$/.test(String(g || "").trim());
   const netOf = (s) => int(s.price) + int(s.shipIn) - int(s.fees) - int(s.shipOut) - int(s.supplies) - int(s.other);
 
   /* ---------- screens (Mine → Ledger) ---------- */
@@ -318,14 +320,14 @@
     const book$ = (v) => `<label class="f">Book<select class="select" id="lf-book">${opt(BOOKS, v || ctx.defBook || "Business")}</select></label>`;
     function drawForm() {
       const f = form;
-      ({ buy: buyForm, sell: sellForm, cost: costForm, cash: cashForm, item: itemPanel, grade: gradeForm, back: backForm }[f.kind])(f);
+      ({ buy: buyForm, sell: sellForm, cost: costForm, cash: cashForm, item: itemPanel, grade: gradeForm, back: backForm, editgrade: editGradeForm }[f.kind])(f);
     }
     function lineHTML(l, i) {
       return `<div class="panel lg-line" data-line="${i}"><div class="lg-lh">${l.tcg ? img(l.tcg) : ""}<b>${esc(cleanN(l.name) || "New item")}</b><button type="button" class="btn sm ghost danger" data-rm="${i}">Remove</button></div>
         <div class="form">${l.tcg ? "" : `<label class="f full">Name<input class="field" data-k="name" value="${esc(l.name || "")}" placeholder="What is it?"></label>`}
           <label class="f">Type<select class="select" data-k="kind">${opt(KINDS, l.kind)}</select></label>
           ${l.kind === "Raw" ? `<label class="f">Condition<select class="select" data-k="cond">${opt(["NM", "LP", "MP", "HP", "DMG"], l.cond || "NM")}</select></label>`
-            : l.kind === "Graded" ? `<label class="f">Grader<select class="select" data-k="grader">${opt(["PSA", "CGC", "BGS", "TAG", "SGC"], l.grader || "PSA")}</select></label><label class="f">Grade<input class="field" data-k="grade" inputmode="decimal" value="${esc(l.grade || "")}" placeholder="10"></label><label class="f">Cert #<input class="field" data-k="cert" inputmode="numeric" value="${esc(l.cert || "")}"></label>` : `<span></span>`}
+            : l.kind === "Graded" ? `<label class="f">Grader<select class="select" data-k="grader">${opt(["PSA", "CGC", "BGS", "TAG", "SGC"], l.grader || "PSA")}</select></label><label class="f">Grade<input class="field" data-k="grade" inputmode="decimal" value="${esc(l.grade || "")}"></label><label class="f">Cert #<input class="field" data-k="cert" inputmode="numeric" value="${esc(l.cert || "")}"></label>` : `<span></span>`}
           <label class="f">Qty<input class="field" data-k="qty" type="number" inputmode="numeric" min="1" step="1" value="${l.qty || 1}"></label>
           <label class="f">Price each $<input class="field" data-k="price" type="number" inputmode="decimal" min="0" step="0.01" value="${l.price ? dollars(l.price) : ""}" placeholder="0"></label></div></div>`;
     }
@@ -362,6 +364,7 @@
         e.preventDefault(); keep();
         if (!f.lines.length) return;
         if (f.lines.some((l) => !l.name)) { toast("Every item needs a name"); return; }
+        if (f.lines.some((l) => l.kind === "Graded" && !okGrade(l.grade))) { toast("Enter the grade for each graded card (like 10 or 9.5)"); return; }
         if (f.saved) return; f.saved = true;
         f.buyId ||= newId("b"); f.lines.forEach((l) => { l.id ||= newId("i"); });
         const { buy, items } = buyRows(f), paid = items.reduce((s, x) => s + x.price * x.qty, 0) + buy.tax + buy.ship + buy.fees;
@@ -454,6 +457,7 @@
       root.innerHTML = `<div class="sec-head"><h2>${esc(cleanN(x.name))}</h2><button type="button" class="more" data-a="close">Back</button></div>
         <div class="list">${itemLine(x, x.value != null ? `<b>${money(x.value)}</b><small class="${cls(x.gain)}">${signed(x.gain)}</small>` : `<b>${money(x.costLeft)}</b><small class="muted">no price</small>`)}</div>
         <div class="panel lg-kv"><div><span>Book</span><span>${esc(x.book)}</span></div><div><span>Bought</span><span>${esc(fmtDay(x.day))} ${esc(yearOf(x.day))}</span></div>
+          ${x.kind === "Graded" ? `<div><span>Grade</span><span>${esc([x.grader, x.grade || "not entered"].join(" "))} · ${costs.some((c) => c.kind === "Grading") ? "you sent it for grading" : "bought graded"}</span></div>` : ""}
           <div><span>Qty</span><span>${x.qty}${x.sold ? ` · ${x.sold} sold · ${x.left} left` : ""}</span></div>
           <div><span>Price paid</span><span>${money(x.base)}</span></div>${x.extra ? `<div><span>Share of tax, shipping, fees</span><span>${money(x.extra)}</span></div>` : ""}
           ${costs.map((c) => `<div><span>${esc(c.kind)} ${esc(fmtDay(c.day))}</span><span>${money(int(c.amount))}</span></div>`).join("")}
@@ -465,6 +469,7 @@
           ${x.status === "At grading" ? `<button type="button" class="btn" data-a="back">Back from grading</button>` : ""}
           ${x.left && x.status !== "At grading" ? `<button type="button" class="btn" data-a="list">${x.status === "Listed" ? "Not listed" : "Mark listed"}</button>` : ""}
           ${x.left ? `<button type="button" class="btn" data-a="move">Move to ${x.book === "Business" ? "Personal" : "Business"}</button>` : ""}
+          ${x.kind === "Graded" ? `<button type="button" class="btn" data-a="editgrade">Edit grade</button>` : ""}
           ${x.tcg ? `<button type="button" class="btn ghost" data-a="card">Open card</button>` : ""}
           ${!sales.length ? `<button type="button" class="btn ghost danger" data-a="delitem">Delete</button>` : ""}</div>
         ${x.book === "Business" || !x.left ? "" : `<p class="small muted">Moving an item into Business keeps its cost; your tax preparer may want its value on the day you move it.</p>`}`;
@@ -477,6 +482,7 @@
         else if (a === "back") open("back", { item: x.id });
         else if (a === "list") { st.put("items", { ...raw, status: x.status === "Listed" ? "" : "Listed" }); ctx.sync(); draw(); }
         else if (a === "move") { const to = x.book === "Business" ? "Personal" : "Business"; st.put("items", { ...raw, book: to, note: [raw.note, `Moved to ${to} ${localDay()}`].filter(Boolean).join(" · ") }); toast(`Moved to ${to}`); ctx.sync(); draw(); }
+        else if (a === "editgrade") open("editgrade", { item: x.id });
         else if (a === "card") ctx.openCard(+x.tcg, +x.g, x.n);
         else if (a === "delitem") { if (!confirmIn(root, `Delete ${cleanN(x.name)} from the ledger?`, () => { st.remove("items", x.id); for (const c of st.T.costs.filter((c) => c.item === x.id && !c.void)) st.remove("costs", c.id); toast("Deleted"); form = null; view = "items"; draw(); ctx.sync(); })) return; }
       };
@@ -498,17 +504,35 @@
         toast("Marked at grading"); open("item", { item: x.id }); ctx.sync();
       };
     }
+    // fix a graded item's grader, grade or cert: the same row is updated; its price, cost and purchase are left alone
+    function editGradeForm(f) {
+      const x = rawItem(f.item);
+      root.innerHTML = `<form class="lg-form" id="lf"><div class="sec-head"><h2>Edit grade</h2><button type="button" class="more" data-a="close">Cancel</button></div>
+        <p class="small muted" style="margin:0">${esc(cleanN(x.name))}. Only the grade details change; what you paid stays ${money(int(x.price))}.</p>
+        <div class="form"><label class="f">Grader<select class="select" id="lf-gr">${opt(["PSA", "CGC", "BGS", "TAG", "SGC"], x.grader || "PSA")}</select></label>
+          <label class="f">Grade<input class="field" id="lf-grade" inputmode="decimal" value="${esc(x.grade || "")}"></label>
+          <label class="f full">Cert # (optional)<input class="field" id="lf-cert" inputmode="numeric" value="${esc(x.cert || "")}"></label></div>
+        <div class="btns"><button type="submit" class="btn primary">Save grade</button></div></form>`;
+      fc = (e) => { if (e.target.closest("[data-a=close]")) open("item", { item: x.id }); };
+      $("#lf").onsubmit = (e) => {
+        e.preventDefault();
+        const grade = $("#lf-grade").value.trim(); if (!okGrade(grade)) { toast("Enter the grade (like 10 or 9.5)"); return; }
+        if (f.saved) return; f.saved = true;
+        st.put("items", { ...rawItem(x.id), grader: $("#lf-gr").value, grade, cert: $("#lf-cert").value.trim() });
+        toast(`Grade saved: ${$("#lf-gr").value} ${grade}`); open("item", { item: x.id }); ctx.sync();
+      };
+    }
     function backForm(f) {
       const x = rawItem(f.item);
       root.innerHTML = `<form class="lg-form" id="lf"><div class="sec-head"><h2>Back from grading</h2><button type="button" class="more" data-a="close">Cancel</button></div>
         <div class="form"><label class="f">Grader<select class="select" id="lf-gr">${opt(["PSA", "CGC", "BGS", "TAG", "SGC"], x.grader || "PSA")}</select></label>
-          <label class="f">Grade<input class="field" id="lf-grade" inputmode="decimal" placeholder="10"></label>
+          <label class="f">Grade<input class="field" id="lf-grade" inputmode="decimal"></label>
           <label class="f full">Cert #<input class="field" id="lf-cert" inputmode="numeric"></label>${money$("lf-up", "Upcharge or extra fees", 0, true)}</div>
         <div class="btns"><button type="submit" class="btn primary">Save</button></div></form>`;
       fc = (e) => { if (e.target.closest("[data-a=close]")) open("item", { item: x.id }); };
       $("#lf").onsubmit = (e) => {
         e.preventDefault();
-        const grade = $("#lf-grade").value.trim(); if (!grade) { toast("Enter the grade"); return; }
+        const grade = $("#lf-grade").value.trim(); if (!okGrade(grade)) { toast("Enter the grade (like 10 or 9.5)"); return; }
         st.put("items", { ...x, kind: "Graded", grader: $("#lf-gr").value, grade, cert: $("#lf-cert").value.trim(), cond: "", status: "" });
         const up = cents($("#lf-up").value); if (up) st.put("costs", { id: f.upId, day: localDay(), book: x.book, item: x.id, kind: "Grading", amount: up, note: "Upcharge / extra" });
         toast(`Graded ${$("#lf-gr").value} ${grade}`); open("item", { item: x.id }); ctx.sync();
@@ -561,7 +585,7 @@
   }
 
   const api = { v: VERSION, TABLES, BOOKS, WHERE, PAY, KINDS, STATUS, PLATS, PLAT_FEES, COST_KINDS, CASH_KINDS, MONEY, LONG_DAYS,
-    allocate, compute, exportYear, summaryRows, shownRows, Store, buyRows, lineFromCard, migId, netOf, mount, newId, blank, csv };
+    allocate, compute, exportYear, summaryRows, shownRows, Store, buyRows, lineFromCard, migId, okGrade, netOf, mount, newId, blank, csv };
   if (typeof window !== "undefined") window.EdgeLedger = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();
