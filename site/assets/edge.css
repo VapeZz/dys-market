@@ -409,6 +409,9 @@ a.row{text-decoration:none;color:inherit}
 .dl-call span{font-size:14px;font-weight:600;color:var(--ink-2)}
 .dl-call.dl-buy{border-color:color-mix(in srgb,var(--up) 55%,transparent);background:color-mix(in srgb,var(--up) 10%,var(--surface))}
 .dl-call.dl-buy b{color:var(--dl-up)}
+.dl-call.dl-warn{border-color:color-mix(in srgb,var(--warn) 55%,transparent);background:color-mix(in srgb,var(--warn) 9%,var(--surface))}
+.dl-call.dl-warn b{color:var(--dl-warn)}
+.gs .btns{margin:0}.gs-costs .form{margin-top:4px}
 .dl .chip.dl-conf-A,.dl .chip.dl-conf-B{background:color-mix(in srgb,var(--up) 16%,transparent);color:var(--dl-up)}
 .dl .chip.dl-conf-C{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--dl-warn)}
 .dl .chip.dl-conf-D{background:color-mix(in srgb,var(--down) 15%,transparent);color:var(--dl-down)}

@@ -464,7 +464,10 @@
           <div><b>Cost</b><b>${money(x.cost)}${x.qty > 1 ? ` · ${money(x.costEach)} each` : ""}</b></div>
           ${sales.map((s) => `<div><span>Sold ${esc(fmtDay(s.day))} on ${esc(s.plat)}${s.qty > 1 ? ` ×${s.qty}` : ""}</span><span class="${cls(s.profit)}">${money(s.net)} · ${signed(s.profit)}</span></div>`).join("")}
           ${x.cert ? `<div><span>Cert</span><span>${esc(x.cert)}</span></div>` : ""}${x.note ? `<div><span>Note</span><span>${esc(x.note)}</span></div>` : ""}</div>
-        <div class="btns">${x.left ? `<button type="button" class="btn primary" data-a="sell1">Sell</button>` : ""}
+        ${x.kind === "Graded" && x.left && x.tcg && ctx.checkSold ? `<section class="sec panel lg-sold"><span class="lab">What it sells for</span>
+          <p class="small muted" style="margin:0">Real eBay sold prices for ${esc([x.grader, x.grade].join(" "))} copies of this exact card only, against the ${money(x.costEach)} you paid.</p>
+          <div class="btns"><button type="button" class="btn primary" data-a="sold">Check sold prices</button></div><div id="lg-sold-box"></div></section>` : ""}
+        <div class="btns">${x.left ? `<button type="button" class="btn${x.kind === "Graded" && ctx.checkSold ? "" : " primary"}" data-a="sell1">Sell</button>` : ""}
           ${x.left && x.kind === "Raw" && x.status !== "At grading" ? `<button type="button" class="btn" data-a="tograde">Send to grading</button>` : ""}
           ${x.status === "At grading" ? `<button type="button" class="btn" data-a="back">Back from grading</button>` : ""}
           ${x.left && x.status !== "At grading" ? `<button type="button" class="btn" data-a="list">${x.status === "Listed" ? "Not listed" : "Mark listed"}</button>` : ""}
@@ -483,6 +486,7 @@
         else if (a === "list") { st.put("items", { ...raw, status: x.status === "Listed" ? "" : "Listed" }); ctx.sync(); draw(); }
         else if (a === "move") { const to = x.book === "Business" ? "Personal" : "Business"; st.put("items", { ...raw, book: to, note: [raw.note, `Moved to ${to} ${localDay()}`].filter(Boolean).join(" · ") }); toast(`Moved to ${to}`); ctx.sync(); draw(); }
         else if (a === "editgrade") open("editgrade", { item: x.id });
+        else if (a === "sold") { const b = e.target.closest("[data-a]"); b.closest(".btns").remove(); ctx.checkSold(x, $("#lg-sold-box")); }
         else if (a === "card") ctx.openCard(+x.tcg, +x.g, x.n);
         else if (a === "delitem") { if (!confirmIn(root, `Delete ${cleanN(x.name)} from the ledger?`, () => { st.remove("items", x.id); for (const c of st.T.costs.filter((c) => c.item === x.id && !c.void)) st.remove("costs", c.id); toast("Deleted"); form = null; view = "items"; draw(); ctx.sync(); })) return; }
       };

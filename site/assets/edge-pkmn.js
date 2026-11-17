@@ -38,12 +38,12 @@
     return { status: r.status, body, credits };
   }
 
-  /* the sold rows for one grade, newest first, until WINDOW days back or MAX_PAGES */
-  async function sales(cfg, base, grade, day, meta, variant) {
-    const out = [];
+  /* the sold rows for one grade, newest first, until WINDOW days back or MAX_PAGES (opt: { query, pages, keep(row) }) */
+  async function sales(cfg, base, grade, day, meta, variant, opt = {}) {
+    const out = [], pages = opt.pages || MAX_PAGES[grade] || 2;
     let cursor = null;
-    for (let page = 0; page < (MAX_PAGES[grade] || 2); page++) {
-      const r = await call(cfg, `${base}/listings/ebay`, { limit: PAGE, sort: "date_desc", cursor, ...(QUERIES[grade] || {}) });
+    for (let page = 0; page < pages; page++) {
+      const r = await call(cfg, `${base}/listings/ebay`, { limit: PAGE, sort: "date_desc", cursor, ...(opt.query || QUERIES[grade] || {}) });
       meta.calls++; meta.credits += r.credits;
       if (r.status !== 200) { meta.errors.push(`${grade}: ${r.status === 0 ? "no connection" : `HTTP ${r.status}`}`); break; }
       const rows = (r.body && r.body.data) || [];
@@ -56,13 +56,15 @@
         if (cur !== "USD" || !(px > 0)) { meta.otherCurrency++; continue; }
         // a sale of another printing of the same card (Normal vs Reverse Holofoil...) is not this item's sale
         if (variant && x.variant && x.variant !== variant) { meta.otherPrinting++; continue; }
+        if (opt.keep && !opt.keep(x, meta)) continue;
         const exact = x.attribution === "exact" && (!variant || x.variant === variant) ? 1 : 0;
         if (d > day - WINDOW) out.push([d, Math.round(px * 100), grade, exact]);
       }
       const pg = (r.body && r.body.pagination) || {};
       cursor = pg.next_cursor || null;
+      meta.oldestRead = Math.min(meta.oldestRead ?? day, oldest);
       if (!pg.has_more || !cursor || oldest <= day - WINDOW) break;
-      if (page === (MAX_PAGES[grade] || 2) - 1) meta.capped.push(grade);   // more sales inside 90 days than were read
+      if (page === pages - 1) meta.capped.push(grade);   // more sales inside 90 days than were read
     }
     return out;
   }
@@ -112,6 +114,48 @@
     return { ok: true, data: { asOf: day, source: SOURCE, comps: comps.sort((a, b) => a[0] - b[0]), pop, popAsOf: pop ? pop.asOf : null, capped: meta.capped.slice(), meta }, meta };
   }
 
+  /* ---------- one grade of one card (the Ledger's "Check sold prices" for a graded item) ---------- */
+  // graders and grades PkmnPrices filters on (graded=true&grader=&grade=); others are answered "unsupported", never guessed
+  const GRADERS = ["PSA"];
+  const GRADED_PAGES = 8;                            // at most 160 rows (credits) for the one grade asked
+  const okGrade = (g) => /^(10|[1-9](\.5)?)$/.test(String(g || "").trim());
+  // a title that names another grade or grader, or a lot of several cards, is not a sale of this slab
+  const SLAB = /\b(PSA|CGC|BGS|BECKETT|TAG|SGC|ACE)\s*(?:GEM\s*(?:MINT|MT)\s*|MINT\s*|NM-?MT\s*|PRISTINE\s*)?(10|[1-9](?:\.5)?)\b/gi;
+  const LOT = /\b(lot|bundle|bulk)\b|\b\d+\s*(?:x\s*)?(?:cards|slabs)\b|\bset of\b/i;
+  function titleCheck(title, grader, grade) {
+    const t = String(title || "");
+    if (!t) return "ok";
+    if (LOT.test(t)) return "lot";
+    for (const m of t.matchAll(SLAB)) {
+      const g = m[1].toUpperCase() === "BECKETT" ? "BGS" : m[1].toUpperCase();
+      if (g !== grader || m[2] !== String(grade)) return "other";
+    }
+    return "ok";
+  }
+  async function findCard(item, cfg, meta) {
+    const r = await call(cfg, "/v1/cards", { tcg_player_id: item.id });
+    meta.calls++; meta.credits += r.credits;
+    if (r.status !== 200) return { reason: r.status === 0 ? "network" : r.status === 401 || r.status === 403 ? "denied" : "error", status: r.status };
+    const found = (r.body && r.body.data) || [];
+    if (found.length > 1) meta.errors.push(`${found.length} matches for this TCGplayer id; none used`);
+    return found.length === 1 ? { base: `/v1/cards/${encodeURIComponent(found[0].id)}`, pid: found[0].id } : { reason: "not-found" };
+  }
+  /* sold prices for one grader and grade of one card: { id (TCGplayer product), n (name) }, { grader, grade } */
+  async function lookupGrade(item, slab, cfg) {
+    const day = cfg.today ?? Math.floor(Date.now() / DAY);
+    const grader = String(slab.grader || "").toUpperCase(), grade = String(slab.grade || "").trim(), label = `${grader} ${grade}`;
+    const meta = { calls: 0, credits: 0, errors: [], undated: 0, future: 0, otherCurrency: 0, otherPrinting: 0, otherGrade: 0, lot: 0, capped: [], found: false, oldestRead: null };
+    if (!cfg.relay) return { ok: false, reason: "not-set-up", meta };
+    if (!GRADERS.includes(grader) || !okGrade(grade)) return { ok: false, reason: "unsupported", label, meta };
+    const c = await findCard(item, cfg, meta);
+    if (!c.base) return { ok: false, reason: c.reason, status: c.status, meta };
+    meta.found = true;
+    const keep = (x, m) => { const t = titleCheck(x.title, grader, grade); if (t === "ok") return true; if (t === "lot") m.lot++; else m.otherGrade++; return false; };
+    const comps = await sales(cfg, c.base, label, day, meta, variantOf(item.n), { query: { graded: "true", grader, grade }, pages: GRADED_PAGES, keep });
+    if (meta.errors.length && !comps.length && !meta.oldestRead) return { ok: false, reason: "error", meta };
+    return { ok: true, data: { asOf: day, source: SOURCE, label, comps: comps.sort((a, b) => a[0] - b[0]), capped: meta.capped.slice(), oldestRead: meta.capped.length ? meta.oldestRead : null, meta }, meta };
+  }
+
   /* memory-only cache for this page: one lookup per item per page load unless asked again */
   const mem = new Map();
   async function get(item, cfg, fresh = false) {
@@ -124,7 +168,18 @@
     return r;
   }
 
-  const api = { v: VERSION, lookup, get, popOf, variantOf, dayOf, K: { PAGE, MAX_PAGES, WINDOW }, SOURCE, _mem: mem };
+  const memG = new Map();
+  async function getGrade(item, slab, cfg, fresh = false) {
+    const k = `${item.id}|${variantOf(item.n)}|${String(slab.grader || "").toUpperCase()} ${String(slab.grade || "").trim()}`;
+    if (!fresh && memG.has(k)) return memG.get(k);
+    const p = lookupGrade(item, slab, cfg);
+    memG.set(k, p);
+    const r = await p;
+    if (!r.ok) memG.delete(k);
+    return r;
+  }
+
+  const api = { v: VERSION, lookup, get, lookupGrade, getGrade, titleCheck, GRADERS, popOf, variantOf, dayOf, K: { PAGE, MAX_PAGES, WINDOW, GRADED_PAGES }, SOURCE, _mem: mem, _memG: memG };
   if (typeof window !== "undefined") window.EdgePkmn = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();

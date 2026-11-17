@@ -23,6 +23,8 @@
   // owner's relay, kept in this page's memory only. Without a relay the panel says so and stays a PASS.
   const DEAL = part("edge-deal.js", "EdgeDeal");
   const PKMN = part("edge-pkmn.js", "EdgePkmn");
+  // sold prices for a graded card the owner holds (edge-graded.js): that exact grader and grade only, never raw or other grades
+  const GRADED = part("edge-graded.js", "EdgeGraded");
   // the ledger (edge-ledger.js, M2): buys, sales, expenses, cash and inventory in two books, kept in the owner's Google
   // Sheet through its web app (tools/ledger/Code.gs), with a copy and a queue of changes on this phone
   const LEDGER = part("edge-ledger.js", "EdgeLedger");
@@ -199,6 +201,39 @@
     if (m.errors.length) bits.push(`not read: ${m.errors.join("; ")}`);
     if (m.undated + m.future + m.otherCurrency) bits.push(`${m.undated + m.future + m.otherCurrency} sales left out (no date, future date or not in US dollars)`);
     return { ok: true, data: res.data, note: `Read just now: ${bits.join(" · ")}. Kept on this page only.` };
+  }
+  /* ---------- graded sold-price check: selling costs (Edge's eBay fee file and Settings, or the owner's saved overrides) ---------- */
+  function gradedBase() {
+    const pl = FEES.sell.ebay, p0 = pl.parts[0] || [13.25, 0, null], p1 = pl.parts[1] || [0];
+    return { feePct: p0[0], topFrom: p0[2] ?? null, topPct: p1[0] || 0, perOrder: pl.flat || 0, buyerTax: S.set.buyerTax, ship: null, supplies: S.set.supCard,
+      shipAuto: (x) => shipOut(x, "c", "ebay"), breaks: [5000] };
+  }
+  const gradedSell = () => ({ ...gradedBase(), ...(S.set.gradedSell || {}) });
+  const gradedSave = (o) => { S.set.gradedSell = o ? { ...o } : null; save(); };
+  const gradedOpts = () => ({ today: Math.floor(Date.now() / 864e5), roi: S.set.roi, minProfit: S.set.minProfit });
+  // a ledger or inventory row → what lookupGrade needs, and the holding
+  const slabOf = (x) => ({ grader: String(x.grader || "").toUpperCase(), grade: String(x.grade || "").trim() });
+  const GSOLD_WHY = { unsupported: "Edge can read sold prices for PSA grades only right now, so there's no reliable value for this grade yet." };
+  function gradedNote(res) {
+    if (!res.ok) return { ok: false, note: GSOLD_WHY[res.reason] || SOLD_WHY[res.reason] || "Couldn't get sold prices." };
+    const m = res.meta, bits = [`${m.calls} call${m.calls === 1 ? "" : "s"}, ${m.credits} credit${m.credits === 1 ? "" : "s"}`];
+    if (m.capped.length) bits.push("more sales exist than were read (the newest 160)");
+    const out = m.otherGrade + m.lot + m.otherPrinting;
+    if (out) bits.push(`${out} left out (${[m.otherGrade && `${m.otherGrade} titled as another grade`, m.lot && `${m.lot} lots`, m.otherPrinting && `${m.otherPrinting} another printing`].filter(Boolean).join(", ")})`);
+    if (m.errors.length) bits.push(`not read: ${m.errors.join("; ")}`);
+    return { ok: true, data: res.data, note: `${bits.join(" · ")}. Kept on this page only.` };
+  }
+  async function checkSold(x, box) {
+    const [g, pkmn] = await Promise.all([GRADED, PKMN]), conn = pkmnConn();
+    if (!box) return;
+    if (!g || !pkmn) { box.innerHTML = `<p class="small muted">The sold-price check didn't load. Reload and try again.</p>`; return; }
+    const item = { id: +x.tcg, n: x.n || x.name }, slab = slabOf(x), label = `${slab.grader} ${slab.grade}`;
+    const holding = { cost: x.costEach || 0, label };
+    const load = (fresh) => pkmn.getGrade(item, slab, conn, fresh).then(gradedNote);
+    const opts = { holding, sell: gradedSell(), base: gradedBase(), ...gradedOpts(), save: gradedSave };
+    if (!conn) { g.mount(box, { ...opts, note: "Sold prices aren't set up on this device yet (Mine → Settings → Pair this phone)." }); return; }
+    const first = await load(false);
+    g.mount(box, { ...opts, load, data: first.ok ? first.data : null, note: first.note, readAt: first.ok ? "just now" : null });
   }
   /* ---------- ledger: the Sheet's web app address (set when the Sheet is made; an override can be typed in Settings) ---------- */
   const LEDGER_URL = "https://script.google.com/macros/s/AKfycby2YPa5O2iq_IJOBz_BNcJPKayUdLM3u1Oq-_KZ7FUl_SOALNdiHfkiaQFLTfxdt9BOjw/exec", LKEY = "dys-edge-ledger-url";   // the ledger Sheet's web app (bound to "DYS Edge Ledger"; only paired devices are accepted)
@@ -626,7 +661,8 @@
     const p = it.p, lo = it.lo, f = flip(p, lo, it.t), ch = it.ch || {};
     const e = eb.cards?.[it.id], ebAge = e ? daysAgo(e.at) : null;
     const inInv = S.inv.find((y) => y.k === keyOf(it.id, it.n)), watching = S.watch.find((y) => y.k === keyOf(it.id, it.n));
-    const held = LS ? LG.compute(LS.T).items.filter((y) => String(y.tcg) === String(it.id) && y.n === it.n).reduce((a, y) => a + y.left, 0) : 0;
+    const mine = LS ? LG.compute(LS.T).items.filter((y) => String(y.tcg) === String(it.id) && y.n === it.n && y.left) : [];
+    const held = mine.reduce((a, y) => a + y.left, 0), slabs = mine.filter((y) => y.kind === "Graded" && y.grade).map((y) => `${y.grader} ${y.grade}`);
     const no = (it.n.match(/ - ([\w/-]+)/) || [])[1];
     const simple = `<section class="sec chart panel"><span class="lab">Price history</span>${chart(it.s, set.dates)}</section>`;
     const platRows = Object.entries(FEES.sell).map(([k, pl]) => `<div><span>${k === "none" ? "Sell in person" : `Sell on ${esc(pl.label)}`}</span><span>${p ? money(net(p, it.t, k)) : "—"}</span></div>`).join("");
@@ -639,6 +675,7 @@
       <div class="prices"><div class="tile"><span class="lab">Lowest listing</span><b>${money(lo)}</b><small class="${lo && p ? cls(p - lo) : ""}">${lo && p ? `${pct((lo - p) / p * 100, 0)} vs market` : "on TCGplayer"}</small></div>
         <div class="tile"><span class="lab">Max buy</span><b>${money(maxBuy(p, it.t))}</b><small>for ${S.set.roi}% profit</small></div>
         <div class="tile"><span class="lab">Flip now</span><b class="${f ? cls(f.pr) : ""}">${f ? signed(f.pr) : "—"}</b><small>${f ? `${f.roi.toFixed(0)}% buying the lowest` : "no listing"}</small></div></div>
+      ${slabs.length ? `<p class="small muted panel" style="margin:0">You hold this card as ${esc([...new Set(slabs)].join(", "))}. The Deal check below is for buying a raw copy; for your graded copy, open it in Mine → Ledger and tap Check sold prices.</p>` : ""}
       ${deal ? `<section class="sec panel" id="c-deal"></section>` : ""}
       ${ta && strat ? `<section class="sec" id="c-strat" hidden></section>` : ""}
       ${ta ? `<section class="sec ta" id="c-ta"></section>` : simple}
@@ -1340,9 +1377,9 @@
         <div class="tile"><span class="lab">Profit</span><b class="${cls(p.pl)}">${p.pl >= 0 ? "+" : ""}${money(p.pl, true)}</b><small>${p.cost ? pct(p.pl / p.cost * 100, 0) : "—"}</small></div></div>
         <section class="sec panel own-box"><span class="lab">Sell, grade or keep?</span>
           <p class="muted small" style="margin:0">Checks each item against real eBay sold prices (PkmnPrices, up to about 250 credits an item of your 20,000 a day). Facts at today's prices, not a forecast. Nothing is saved.</p>
-          <div class="btns"><button type="button" class="btn sm" id="own-go"${pkmnConn() ? "" : " disabled"}>${OWN.size ? "Check again" : `Check my ${inv.filter((x) => !x.graded).length} item${inv.filter((x) => !x.graded).length === 1 ? "" : "s"}`}</button></div>
+          <div class="btns"><button type="button" class="btn sm" id="own-go"${pkmnConn() ? "" : " disabled"}>${OWN.size ? "Check again" : `Check my ${inv.length} item${inv.length === 1 ? "" : "s"}`}</button></div>
           <p class="small muted" id="own-st" style="margin:0">${pkmnConn() ? "" : "Set up sold prices in Mine → Settings first."}</p></section>
-        <div class="list">${rows.map(({ x, val, cost }) => { const o = OWN.get(x.k), L = o ? OWNL[o.label] || OWNL.unknown : null;
+        <div class="list">${rows.map(({ x, val, cost }) => { const o = OWN.get(x.lid || x.k), L = o ? OWNL[o.label] || OWNL.unknown : null;
           return rowHTML(x, `<b>${money(Math.round(val))}</b><small class="${cls(val - cost)}">${cost ? signed(Math.round(val - cost)) : `${x.qty}×`}</small>`,
           `<span class="why">${x.qty}× · ${x.graded ? esc(x.graded) + " · " : x.t === "c" ? esc(x.cond) + " · " : ""}${on && x.book === "Personal" ? "Personal · " : ""}paid ${money(x.cost)} each${val && x.qty ? ` · sells for ${money(Math.round(net(Math.round(val / x.qty), x.t)))} each on ${esc(plat().label)}` : ""}</span>${o ? `<span class="why own-res"><span class="chip ${L[0]}">${L[1]}</span> ${esc(o.text)}</span>` : ""}`); }).join("")}</div>
         <p class="muted small">${on ? "Tap an item for its card. Buys, sales and costs are in Ledger." : "Tap an item to change it."} Values use today's market price for its condition${on ? "; graded items use graded sold prices where Edge has them" : ""}.</p>`;
@@ -1350,19 +1387,30 @@
       const mv = $("#inv-move", el); if (mv) mv.onclick = () => { SUB.mine = "ledger"; route(); };
       const go = $("#own-go", el);
       if (go) go.onclick = async () => {
-        const conn = pkmnConn(), [deal, pkmn] = await Promise.all([DEAL, PKMN]), st = $("#own-st", el);
-        if (!conn || !deal || !pkmn) { st.textContent = "Sold prices aren't set up yet (Mine → Settings)."; return; }
+        const conn = pkmnConn(), [deal, pkmn, gr] = await Promise.all([DEAL, PKMN, GRADED]), st = $("#own-st", el);
+        if (!conn || !deal || !pkmn || !gr) { st.textContent = "Sold prices aren't set up yet (Mine → Settings)."; return; }
         go.disabled = true; let credits = 0, i = 0;
-        const todo = inv.filter((x) => !x.graded);
+        const todo = inv;
         for (const x of todo) {
           st.textContent = `Checking ${++i} of ${todo.length}…`;
+          // a graded item: that grader and grade's sold prices only (the raw Deal check below doesn't apply to a slab)
+          if (x.graded) {
+            try {
+              const [grader, grade] = x.graded.split(" "), res = await pkmn.getGrade({ id: x.id, n: x.n }, { grader, grade }, conn, true);
+              credits += res.meta ? res.meta.credits : 0;
+              if (!res.ok) { OWN.set(x.lid || x.k, { label: res.reason === "unsupported" ? "unclear" : "unknown", text: gradedNote(res).note }); continue; }
+              const r = gr.evaluate(res.data, { cost: x.cost || 0, label: x.graded }, gradedSell(), gradedOpts());
+              OWN.set(x.lid || x.k, { label: { sell: "sell", hold: "hold", insufficient: "unclear" }[r.verdict], text: gr.line(r) });
+            } catch (err) { console.error(err); OWN.set(x.lid || x.k, { label: "unknown", text: "Couldn't check this one." }); }
+            continue;
+          }
           try {
             const d = await detail(x.id, x.g, x.n), it = d.it;
-            if (!it) { OWN.set(x.k, { label: "unknown", text: "No market price for this item right now." }); continue; }
+            if (!it) { OWN.set(x.lid || x.k, { label: "unknown", text: "No market price for this item right now." }); continue; }
             const item = { id: it.id, n: it.n, name: it.n, t: it.t, tcg: it.p, tcgDay: dayNum(d.set.dates?.[d.set.dates.length - 1]) };
             const res = await pkmn.get(item, conn, true); credits += res.meta ? res.meta.credits : 0;
-            OWN.set(x.k, res.ok ? deal.own(item, res.data, { cost: x.cost || 0, cond: x.cond || "NM" }, dealCfg(it.p)) : { label: "unknown", text: soldNote(res).note });
-          } catch (err) { console.error(err); OWN.set(x.k, { label: "unknown", text: "Couldn't check this one." }); }
+            OWN.set(x.lid || x.k, res.ok ? deal.own(item, res.data, { cost: x.cost || 0, cond: x.cond || "NM" }, dealCfg(it.p)) : { label: "unknown", text: soldNote(res).note });
+          } catch (err) { console.error(err); OWN.set(x.lid || x.k, { label: "unknown", text: "Couldn't check this one." }); }
         }
         draw(); const s2 = $("#own-st", el); if (s2) s2.textContent = `Checked ${todo.length} item${todo.length === 1 ? "" : "s"} just now · ${credits} credits.`;
       };
@@ -1389,6 +1437,7 @@
       archiveOldInv: () => { try { if (!localStorage.getItem("dys-edge-inv-before-ledger")) localStorage.setItem("dys-edge-inv-before-ledger", JSON.stringify({ saved: new Date().toISOString(), inv: S.inv })); return true; } catch { return false; } },
       backup: saveBackup,
       openCard: (id, g, n) => openCard(id, g, n),
+      checkSold,
       download: (name, text) => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type: "text/csv" })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); } });
   }
   async function mineWatch(el) {
