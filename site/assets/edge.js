@@ -201,7 +201,7 @@
     return { ok: true, data: res.data, note: `Read just now: ${bits.join(" · ")}. Kept on this page only.` };
   }
   /* ---------- ledger: the Sheet's web app address (set when the Sheet is made; an override can be typed in Settings) ---------- */
-  const LEDGER_URL = "", LKEY = "dys-edge-ledger-url";
+  const LEDGER_URL = "https://script.google.com/macros/s/AKfycby2YPa5O2iq_IJOBz_BNcJPKayUdLM3u1Oq-_KZ7FUl_SOALNdiHfkiaQFLTfxdt9BOjw/exec", LKEY = "dys-edge-ledger-url";   // the ledger Sheet's web app (bound to "DYS Edge Ledger"; only paired devices are accepted)
   const ledgerConn = () => {
     let url = LEDGER_URL; try { url = localStorage.getItem(LKEY) || url; } catch {}
     const c = pkmnConn(); return url && c ? { url, token: c.pass } : null;
