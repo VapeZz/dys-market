@@ -1,0 +1,86 @@
+M3 Step 2 results, 2025 development + 2026 holdout (hypothetical; TCGplayer listings and market prices)
+counts {'flip|2025': [53, 3180], 'ride|2025': [53, 3167], 'dip|2025': [53, 493], 'under|2025': [53, 4240], 'flip|2026': [36, 2160], 'ride|2026': [36, 2160], 'dip|2026': [36, 276], 'under|2026': [36, 2880]}
+flip   all E1 h 7 cases  2160 items  840 hit  75.3 cons  74.3 loss   0.6 med    30.04 p10   15.5 miss 12 PASS
+flip   all E1 h14 cases  2160 items  836 hit  74.9 cons  73.6 loss   2.0 med    29.83 p10   15.2 miss 17 PASS
+flip   all E1 h30 cases  2160 items  826 hit  76.0 cons  73.7 loss   2.8 med    30.61 p10   15.1 miss 27 PASS
+flip   all E2 h 7 cases  2160 items  840 hit  53.0 cons  52.3 loss  11.4 med    11.12 p10    0.1 miss 12 -
+flip   all E2 h14 cases  2160 items  836 hit  52.0 cons  51.1 loss  12.6 med    11.12 p10   -0.1 miss 17 -
+flip   all E2 h30 cases  2160 items  826 hit  53.1 cons  51.5 loss  13.5 med    11.94 p10   -0.2 miss 27 -
+flip   all E3 h 7 cases  2160 items  840 hit  94.9 cons  93.7 loss   0.3 med    41.09 p10   24.6 miss 12 PASS
+flip   all E3 h14 cases  2160 items  836 hit  93.0 cons  91.4 loss   1.4 med    40.38 p10   24.2 miss 17 PASS
+flip   all E3 h30 cases  2160 items  826 hit  91.0 cons  88.3 loss   1.9 med    41.66 p10   23.9 miss 27 PASS
+flip   all E4 h 7 cases  2160 items  840 hit  68.7 cons  67.8 loss   0.8 med    23.65 p10   10.7 miss 12 -
+flip   all E4 h14 cases  2160 items  836 hit  69.0 cons  67.7 loss   2.5 med    23.17 p10   10.4 miss 17 -
+flip   all E4 h30 cases  2160 items  826 hit  70.8 cons  68.7 loss   3.9 med    23.75 p10   10.1 miss 27 -
+flip   buy E1 h 7 cases   129 items   75 hit  81.5 cons  81.5 loss   0.0 med    37.24 p10   19.0 miss 0 -
+flip   buy E1 h14 cases   129 items   75 hit  77.8 cons  77.8 loss   1.3 med    38.11 p10   18.1 miss 0 -
+flip   buy E1 h30 cases   129 items   75 hit  82.6 cons  82.6 loss   1.3 med    39.28 p10   17.0 miss 0 -
+flip   buy E2 h 7 cases   129 items   75 hit   2.3 cons   2.3 loss   4.0 med    14.05 p10    3.3 miss 0 -
+flip   buy E2 h14 cases   129 items   75 hit   6.3 cons   6.3 loss   8.0 med    14.49 p10    2.8 miss 0 -
+flip   buy E2 h30 cases   129 items   75 hit  18.8 cons  18.8 loss   9.3 med    17.33 p10    2.1 miss 0 -
+flip   buy E3 h 7 cases   129 items   75 hit  98.7 cons  98.7 loss   0.0 med    49.64 p10   27.6 miss 0 -
+flip   buy E3 h14 cases   129 items   75 hit  94.0 cons  94.0 loss   1.3 med    50.71 p10   26.8 miss 0 -
+flip   buy E3 h30 cases   129 items   75 hit  95.3 cons  95.3 loss   1.3 med    52.80 p10   25.6 miss 0 -
+flip   buy E4 h 7 cases   129 items   75 hit  35.4 cons  35.4 loss   0.0 med    27.35 p10   13.4 miss 0 -
+flip   buy E4 h14 cases   129 items   75 hit  45.3 cons  45.3 loss   2.7 med    28.80 p10   12.7 miss 0 -
+flip   buy E4 h30 cases   129 items   75 hit  57.6 cons  57.6 loss   3.3 med    31.96 p10   11.7 miss 0 -
+ride   all E1 h 7 cases  2160 items 1435 hit   0.1 cons   0.1 loss  99.2 med    -5.31 p10  -35.2 miss 1 -
+ride   all E1 h14 cases  2160 items 1434 hit   0.5 cons   0.5 loss  98.1 med    -5.12 p10  -35.5 miss 2 -
+ride   all E1 h30 cases  2160 items 1435 hit   0.9 cons   0.9 loss  94.4 med    -4.76 p10  -37.1 miss 1 -
+ride   all E2 h 7 cases  2160 items 1435 hit   0.0 cons   0.0 loss  99.9 med    -8.07 p10  -48.6 miss 1 -
+ride   all E2 h14 cases  2160 items 1434 hit   0.1 cons   0.1 loss  99.3 med    -7.78 p10  -48.6 miss 2 -
+ride   all E2 h30 cases  2160 items 1435 hit   0.5 cons   0.5 loss  98.2 med    -7.44 p10  -49.4 miss 1 -
+ride   all E3 h 7 cases  2160 items 1435 hit   0.3 cons   0.3 loss  97.6 med    -3.31 p10  -22.5 miss 1 -
+ride   all E3 h14 cases  2160 items 1434 hit   0.8 cons   0.8 loss  93.9 med    -3.06 p10  -23.0 miss 2 -
+ride   all E3 h30 cases  2160 items 1435 hit   2.5 cons   2.5 loss  86.0 med    -2.64 p10  -25.0 miss 1 -
+ride   all E4 h 7 cases  2160 items 1435 hit   0.0 cons   0.0 loss  99.4 med    -5.32 p10  -31.1 miss 1 -
+ride   all E4 h14 cases  2160 items 1434 hit   0.3 cons   0.3 loss  98.4 med    -5.08 p10  -31.6 miss 2 -
+ride   all E4 h30 cases  2160 items 1435 hit   0.9 cons   0.9 loss  95.2 med    -4.69 p10  -33.3 miss 1 -
+ride   buy E1 h 7 cases  2149 items 1430 hit   0.1 cons   0.1 loss  99.2 med    -5.31 p10  -35.2 miss 1 -
+ride   buy E1 h14 cases  2149 items 1429 hit   0.5 cons   0.5 loss  98.1 med    -5.13 p10  -35.5 miss 2 -
+ride   buy E1 h30 cases  2149 items 1430 hit   0.9 cons   0.9 loss  94.5 med    -4.76 p10  -37.1 miss 1 -
+ride   buy E2 h 7 cases  2149 items 1430 hit   0.0 cons   0.0 loss  99.9 med    -8.07 p10  -48.6 miss 1 -
+ride   buy E2 h14 cases  2149 items 1429 hit   0.1 cons   0.1 loss  99.3 med    -7.78 p10  -48.6 miss 2 -
+ride   buy E2 h30 cases  2149 items 1430 hit   0.5 cons   0.5 loss  98.3 med    -7.44 p10  -49.4 miss 1 -
+ride   buy E3 h 7 cases  2149 items 1430 hit   0.3 cons   0.3 loss  97.6 med    -3.31 p10  -22.5 miss 1 -
+ride   buy E3 h14 cases  2149 items 1429 hit   0.8 cons   0.8 loss  93.9 med    -3.06 p10  -23.0 miss 2 -
+ride   buy E3 h30 cases  2149 items 1430 hit   2.5 cons   2.5 loss  85.9 med    -2.64 p10  -25.0 miss 1 -
+ride   buy E4 h 7 cases  2149 items 1430 hit   0.0 cons   0.0 loss  99.4 med    -5.33 p10  -31.1 miss 1 -
+ride   buy E4 h14 cases  2149 items 1429 hit   0.3 cons   0.3 loss  98.4 med    -5.08 p10  -31.6 miss 2 -
+ride   buy E4 h30 cases  2149 items 1430 hit   0.9 cons   0.9 loss  95.3 med    -4.69 p10  -33.3 miss 1 -
+dip    all E1 h 7 cases   276 items  225 hit   0.9 cons   0.9 loss  98.7 med    -6.22 p10  -38.5 miss 1 -
+dip    all E1 h14 cases   276 items  225 hit   1.3 cons   1.3 loss  98.2 med    -6.11 p10  -42.1 miss 1 -
+dip    all E1 h30 cases   276 items  225 hit   1.8 cons   1.8 loss  96.7 med    -6.68 p10  -47.1 miss 1 -
+dip    all E2 h 7 cases   276 items  225 hit   0.4 cons   0.4 loss  99.1 med    -9.37 p10  -50.9 miss 1 -
+dip    all E2 h14 cases   276 items  225 hit   0.9 cons   0.9 loss  98.7 med    -9.33 p10  -54.5 miss 1 -
+dip    all E2 h30 cases   276 items  225 hit   1.3 cons   1.3 loss  98.0 med    -9.59 p10  -58.3 miss 1 -
+dip    all E3 h 7 cases   276 items  225 hit   0.9 cons   0.9 loss  98.2 med    -4.15 p10  -25.1 miss 1 -
+dip    all E3 h14 cases   276 items  225 hit   1.3 cons   1.3 loss  96.7 med    -4.18 p10  -28.2 miss 1 -
+dip    all E3 h30 cases   276 items  225 hit   2.0 cons   2.0 loss  93.6 med    -4.52 p10  -33.8 miss 1 -
+dip    all E4 h 7 cases   276 items  225 hit   0.4 cons   0.4 loss  98.7 med    -6.51 p10  -33.4 miss 1 -
+dip    all E4 h14 cases   276 items  225 hit   0.9 cons   0.9 loss  98.7 med    -6.55 p10  -36.2 miss 1 -
+dip    all E4 h30 cases   276 items  225 hit   1.8 cons   1.8 loss  96.7 med    -6.76 p10  -41.2 miss 1 -
+dip    buy E1 h 7 cases   154 items  126 hit   0.0 cons   0.0 loss 100.0 med    -6.04 p10  -39.7 miss 1 -
+dip    buy E1 h14 cases   154 items  126 hit   0.0 cons   0.0 loss 100.0 med    -6.05 p10  -43.3 miss 1 -
+dip    buy E1 h30 cases   154 items  126 hit   0.0 cons   0.0 loss  97.6 med    -6.51 p10  -48.4 miss 1 -
+dip    buy E2 h 7 cases   154 items  126 hit   0.0 cons   0.0 loss 100.0 med    -8.64 p10  -51.8 miss 1 -
+dip    buy E2 h14 cases   154 items  126 hit   0.0 cons   0.0 loss 100.0 med    -8.95 p10  -54.5 miss 1 -
+dip    buy E2 h30 cases   154 items  126 hit   0.0 cons   0.0 loss 100.0 med    -9.43 p10  -59.5 miss 1 -
+dip    buy E3 h 7 cases   154 items  126 hit   0.0 cons   0.0 loss 100.0 med    -3.98 p10  -25.7 miss 1 -
+dip    buy E3 h14 cases   154 items  126 hit   0.0 cons   0.0 loss  97.6 med    -3.98 p10  -28.5 miss 1 -
+dip    buy E3 h30 cases   154 items  126 hit   0.0 cons   0.0 loss  93.8 med    -4.41 p10  -35.7 miss 1 -
+dip    buy E4 h 7 cases   154 items  126 hit   0.0 cons   0.0 loss 100.0 med    -6.09 p10  -33.9 miss 1 -
+dip    buy E4 h14 cases   154 items  126 hit   0.0 cons   0.0 loss 100.0 med    -5.98 p10  -36.5 miss 1 -
+dip    buy E4 h30 cases   154 items  126 hit   0.0 cons   0.0 loss  97.6 med    -6.58 p10  -42.8 miss 1 -
+under  all E1 h 7 cases  2880 items  374 hit  84.5 cons  80.5 loss   3.1 med   148.50 p10   17.2 miss 71 PASS
+under  all E1 h14 cases  2880 items  371 hit  82.8 cons  77.9 loss   5.6 med   148.38 p10   15.9 miss 97 PASS
+under  all E1 h30 cases  2880 items  369 hit  81.5 cons  75.7 loss   8.7 med   149.19 p10   14.7 miss 139 PASS
+under  all E2 h 7 cases  2880 items  374 hit  70.9 cons  67.6 loss  11.4 med    99.22 p10    2.9 miss 71 -
+under  all E2 h14 cases  2880 items  371 hit  69.8 cons  65.6 loss  13.2 med    99.59 p10    1.7 miss 97 -
+under  all E2 h30 cases  2880 items  369 hit  68.8 cons  64.1 loss  14.6 med   100.54 p10    0.6 miss 139 -
+under  all E3 h 7 cases  2880 items  374 hit  88.1 cons  83.7 loss   2.3 med   170.35 p10   22.9 miss 71 PASS
+under  all E3 h14 cases  2880 items  371 hit  86.4 cons  81.0 loss   4.0 med   169.66 p10   21.7 miss 97 PASS
+under  all E3 h30 cases  2880 items  369 hit  85.2 cons  79.0 loss   7.3 med   170.61 p10   19.8 miss 139 PASS
+under  all E4 h 7 cases  2880 items  374 hit  77.2 cons  73.5 loss   6.6 med   120.52 p10    9.2 miss 71 PASS
+under  all E4 h14 cases  2880 items  371 hit  76.1 cons  71.5 loss   9.2 med   121.01 p10    8.1 miss 97 PASS
+under  all E4 h30 cases  2880 items  369 hit  74.7 cons  69.5 loss  11.4 med   123.47 p10    6.5 miss 139 -

@@ -1,0 +1,24 @@
+list | day | card (set) | raw market / low / mid on the day | low next day | market +30d | buy | local 90% profit +30d | matches replay
+flip | 2025-05-21 | Moltres & Zapdos & Articuno GX (Holofoil) [Holofoil] (Hidden Fates, 2019) | $34.06 / $20.82 / $39.17 | $20.98 | $29.63 | $22.32 | $4.35 | True
+flip | 2025-09-03 | Mew EX (120 Full Art) (Holofoil) [Holofoil] (Dragons Exalted, 2012) | $531.99 / $395.00 / $400.00 | $395.00 | $531.99 | $396.50 | $82.29 | True
+flip | 2026-08-26 | M Charizard EX (Holofoil) [Holofoil] (XY - Evolutions, 2016) | $41.40 / $22.00 / $44.99 | $22.00 | $39.39 | $23.50 | $11.95 | True
+flip | 2025-04-02 | Giovanni (18) (1st Edition Holofoil) [1st Edition Holofoil] (Gym Challenge, 2000) | $78.78 / $39.99 / $44.02 | $48.04 | $85.98 | $41.49 | $35.89 | True
+flip | 2025-11-05 | Lugia V (Alternate Full Art) (Holofoil) [Holofoil] (SWSH12: Silver Tempest, 2022) | $443.58 / $329.99 / $464.99 | $329.99 | $375.02 | $331.49 | $6.03 | True
+flip | 2026-07-01 | Umbreon & Darkrai GX - SM241 (Holofoil) [Holofoil] (SM Promos, 2016) | $273.97 / $172.21 / $289.00 | $172.21 | $245.75 | $173.71 | $47.47 | True
+flip | 2025-06-11 | Articuno (2) (1st Edition Holofoil) [Unlimited Holofoil] (Fossil, 1999) | $55.08 / $25.00 / $52.35 | $25.00 | $52.96 | $26.50 | $21.16 | True
+under | 2025-01-15 | Neo Destiny Theme Deck - "Light" [Normal] (Neo Destiny, 2002) | $406.00 / $299.96 / $399.95 | $299.96 | $406.00 | $305.96 | $59.44 | True
+under | 2025-10-22 | Umbreon (H29) (Holofoil) [Holofoil] (Aquapolis, 2003) | $630.99 / $299.97 / $649.99 | $1000.00 | $630.99 | $301.47 | $266.42 | True
+under | 2025-10-15 | Dragonite (9) (Holofoil) [Reverse Holofoil] (Expedition, 2002) | $250.00 / $99.00 / $100.00 | $100.99 | $250.00 | $100.50 | $124.50 | True
+under | 2025-02-19 | Blaziken ex (Holofoil) [Holofoil] (EX Team Magma vs Team Aqua, 2004) | $205.09 / $70.73 / $70.73 | $70.73 | $205.09 | $72.23 | $112.35 | True
+under | 2025-03-12 | Sylveon VMAX (Alternate Art Secret) (Holofoil) [Holofoil] (SWSH07: Evolving Skies, 2021) | $424.27 / $280.00 / $488.99 | $280.00 | $426.37 | $281.50 | $102.23 | True
+under | 2025-03-26 | Dragonair (1st Edition) [1st Edition] (Base Set (Shadowless), 1999) | $299.95 / $183.46 / $204.49 | $183.46 | $299.95 | $184.96 | $85.00 | True
+under | 2025-08-13 | Giratina V (Alternate Full Art) (Holofoil) [Holofoil] (SWSH11: Lost Origin, 2022) | $530.50 / $400.00 / $645.00 | $400.00 | $573.43 | $401.50 | $114.59 | True
+ride | 2026-03-25 | Armarouge - 203/198 (Holofoil) [Holofoil] (SV01: Scarlet & Violet Base Set, 2023) | $14.34 / $11.10 / $14.92 | $11.10 | $16.46 | $15.84 | $-1.03 | True
+ride | 2026-07-08 | Snorlax (Holofoil) [Holofoil] (SM - Unbroken Bonds, 2019) | $76.66 / $75.00 / $84.50 | $69.99 | $81.79 | $78.16 | $-4.55 | True
+ride | 2026-03-04 | Shrouded Fable Elite Trainer Box [Normal] (SV: Shrouded Fable, 2024) | $80.92 / $77.98 / $95.23 | $77.98 | $88.42 | $86.92 | $-7.34 | True
+ride | 2026-01-28 | Chansey (Holofoil) [Holofoil] (Base Set, 1999) | $37.25 / $16.55 / $31.70 | $16.55 | $41.68 | $38.75 | $-1.24 | True
+dip | 2025-06-25 | Jessie & James (Full Art) (Holofoil) [Holofoil] (Hidden Fates, 2019) | $38.68 / $38.03 / $53.06 | $38.03 | $47.60 | $40.18 | $2.66 | True
+dip | 2025-06-18 | Cornerstone Mask Ogerpon ex - 160/131 (Holofoil) [Holofoil] (SV: Prismatic Evolutions, 2025) | $18.46 / $16.91 / $23.01 | $16.91 | $18.42 | $19.96 | $-3.38 | True
+dip | 2025-10-29 | Amarys - 170/131 (Holofoil) [Holofoil] (SV: Prismatic Evolutions, 2025) | $14.37 / $9.77 / $20.86 | $9.77 | $12.65 | $15.87 | $-4.49 | True
+dip | 2026-07-15 | Temporal Forces Elite Trainer Box [Walking Wake] [Normal] (SV05: Temporal Forces, 2024) | $111.14 / $109.50 / $136.25 | $108.00 | $132.27 | $117.14 | $1.90 | True
+all match: True
