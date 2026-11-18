@@ -1,0 +1,350 @@
+# M3 Step 4A: Near Mint Deal Finder, one dry run (design: project doc 15). Read-only.
+# Stage 0 uses our own public site data (built from free tcgcsv prices); PkmnPrices answers stay in memory.
+# The log prints counts only; the per-listing report is encrypted to a key only Claude's session holds.
+import base64, json, os, random, re, statistics, sys, time, urllib.error, urllib.parse, urllib.request
+from datetime import date, datetime, timedelta, timezone
+
+SITE = "https://market.driveyourstyle.net"
+API = "https://api.pkmnprices.com"
+CAP_TOTAL, STAGE1_BUDGET, COMPARE_BUDGET, MIN_LEFT = 5000, 3200, 400, 8000
+TAX, SHIP_IN_EST, BUY_CAP = 0.08375, 1.50, 75.0
+NOW = datetime.now(timezone.utc)
+TODAY = NOW.date()
+
+PRINTINGS = ["1st Edition Holofoil", "1st Edition Normal", "1st Edition", "Unlimited Holofoil", "Unlimited",
+             "Reverse Holofoil", "Holofoil", "Normal"]
+SKIP = re.compile(r"code card|jumbo|oversize|prerelease|\[staff\]|world championships|\bdeck\b.*\bcard\b", re.I)
+FOREIGN = re.compile(r"\b(chinese|japanese|japan|korean|korea|italian|italiano|french|fran[cç]ais|german|deutsch|spanish|espa[nñ]ol|portuguese|thai|indonesian|simplified|traditional|jpn?|cn|chn|kr|kor|ita|fr|ger|de|esp?)\b", re.I)
+GRADED = re.compile(r"\b(psa|bgs|cgc|sgc|beckett|graded|slab(bed)?|bvg)\b|\btag ?\d", re.I)
+FAKE = re.compile(r"\b(proxy|proxies|custom art|fan ?art|orica|replica|fake|metal card|not real)\b", re.I)
+LOT = re.compile(r"\b(lot|bundle|playset|set of \d+)\b", re.I)
+PLAYED = re.compile(r"\b(lp|mp|dmg|damaged|played|creased?|bent|scratch(ed|es)?|heavily|moderately|lightly|poor|good condition)\b", re.I)
+REPRINT = re.compile(r"\b(celebrations?|30th|classic collection|anniversary|jumbo|oversized?|mcdonald'?s|trick or trade|reprint)\b", re.I)
+
+
+class Api:
+    """PkmnPrices client with a hard credit cap; answers stay in this process's memory."""
+    def __init__(self, key, opener=None):
+        self.key, self.opener = key, opener
+        self.credits, self.calls, self.empty_calls, self.empty_credits = 0, 0, 0, 0
+        self.by_stage, self.errors, self.headers0 = {}, [], None
+
+    def get(self, path, q, max_rows, stage):
+        if self.credits + max_rows > CAP_TOTAL:
+            raise Budget("total cap")
+        url = API + path + ("?" + urllib.parse.urlencode(q) if q else "")
+        for attempt in (1, 2):
+            try:
+                if self.opener:
+                    status, h, body = self.opener(url)
+                else:
+                    req = urllib.request.Request(url, headers={"X-API-Key": self.key, "Accept": "application/json", "User-Agent": "dys-edge-nm-dryrun"})
+                    try:
+                        with urllib.request.urlopen(req, timeout=60) as r:
+                            status, h, body = r.status, {k.lower(): v for k, v in r.headers.items()}, json.loads(r.read())
+                    except urllib.error.HTTPError as e:
+                        status, h, body = e.code, {k.lower(): v for k, v in e.headers.items()}, None
+            except Exception as e:  # network
+                status, h, body = 0, {}, None
+            charged = int(h.get("x-credits-charged", "0") or 0)
+            self.credits += charged; self.calls += 1
+            self.by_stage[stage] = self.by_stage.get(stage, 0) + charged
+            if self.headers0 is None and status == 200: self.headers0 = h
+            if not self.opener: time.sleep(1.05)          # 60 requests a minute
+            if status == 429:
+                if (body or {}).get("error", {}).get("limit_type") == "daily" or attempt == 2:
+                    raise Budget("daily limit (429)")
+                time.sleep(30); continue
+            if status in (0, 500, 502, 503, 504) and attempt == 1:
+                time.sleep(5); continue
+            if status != 200:
+                self.errors.append(f"{stage}:{status}")
+                return None, charged
+            rows = body.get("data") if isinstance(body, dict) and isinstance(body.get("data"), list) else None
+            if rows is not None and not rows:
+                self.empty_calls += 1; self.empty_credits += charged
+            return body, charged
+        return None, 0
+
+
+SET_FAILS = []
+
+
+class Budget(Exception):
+    pass
+
+
+def fetch_json(url, opener=None):
+    if opener: return opener(url)
+    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "dys-edge-nm-dryrun"}), timeout=60) as r:
+        return json.loads(r.read())
+
+
+def printing_of(name):
+    m = re.search(r"\(([^()]*)\)\s*$", name or "")
+    return m.group(1) if m and m.group(1) in PRINTINGS else None
+
+
+def changes(series, n=15):
+    v = [x for x in (series or [])[-n:] if x]
+    return sum(1 for a, b in zip(v, v[1:]) if a != b)
+
+
+def tcg_net(m):
+    return m * (1 - 0.1325) - 0.30 - (5.0 if m >= 50 else 1.0)
+
+
+def max_listing_price(m):
+    back = tcg_net(m)
+    allowed = min(back - 5.0, back / 1.20, BUY_CAP)
+    return round((allowed - SHIP_IN_EST) / (1 + TAX), 2)
+
+
+def ebay_net(price):
+    base = round(price * 1.075, 2)
+    fee = 0.40 + 0.1325 * min(base, 7500) + 0.0235 * max(base - 7500, 0)
+    return price - fee - (5.0 if price >= 50 else 1.0) - 0.50
+
+
+def age_h(ts):
+    if not ts: return None
+    t = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+    if t.tzinfo is None: t = t.replace(tzinfo=timezone.utc)
+    return round((NOW - t).total_seconds() / 3600, 1)
+
+
+def seller_sales(v):
+    s = re.sub(r"[^\d]", "", str(v or ""))
+    return int(s) if s else 0
+
+
+def num_key(x):
+    x = str(x or "").upper().strip()
+    head = x.split("/")[0]
+    m = re.match(r"^([A-Z]*)0*(\d+)([A-Z]*)$", head)
+    return (m.group(1), int(m.group(2)), m.group(3)) if m else head
+
+
+def shortlist(site_opener=None):
+    meta = fetch_json(f"{SITE}/data/meta.json", site_opener)
+    sets = [s for s in fetch_json(f"{SITE}/data/sets.json", site_opener) if s.get("k") == "pokemon"]
+    out, seen = [], 0
+    for s in sets:
+        if not s.get("pub") or s["pub"] > (TODAY - timedelta(days=30)).isoformat(): continue
+        try: d = fetch_json(f"{SITE}/data/set/{s['id']}.json", site_opener)
+        except Exception: SET_FAILS.append(s["id"]); continue
+        if not site_opener: time.sleep(0.05)
+        for i in d.get("items", []):
+            if i.get("t") != "c": continue
+            seen += 1
+            p = (i.get("p") or 0) / 100
+            if not (12 <= p <= 110) or SKIP.search(i.get("n", "")) or not i.get("no"): continue
+            if changes(i.get("s")) < 3: continue
+            if not i.get("md") or i["md"] < 0.85 * i["p"]: continue
+            out.append({"tcg": i["id"], "name": i["n"], "set": d.get("n") or s.get("n"), "no": i.get("no"), "r": i.get("r"),
+                        "pr": printing_of(i["n"]) or "Normal", "m": p, "lo": (i.get("lo") or 0) / 100, "md": i["md"] / 100})
+    return meta.get("updated"), seen, out
+
+
+def title_flags(t):
+    t = t or ""
+    return [k for k, rx in (("foreign", FOREIGN), ("graded", GRADED), ("fake", FAKE), ("lot", LOT), ("played", PLAYED)) if rx.search(t)]
+
+
+def evaluate_card(api, c, pk_card, listings, stage):
+    """Stage 2 for one shortlisted card with at least one NM listing under the max price."""
+    rep = {"card": c, "listings": [], "card_checks": {}}
+    reasons_card = []
+    # identity
+    if (pk_card.get("number") is None) or num_key(pk_card.get("number")) != num_key(c["no"]):
+        reasons_card.append(("REJECT", "card number doesn't match"))
+    if (pk_card.get("set") or {}).get("name", "").lower().strip() != (c["set"] or "").lower().strip():
+        reasons_card.append(("UNCERTAIN", "set name differs between sources"))
+    det, _ = api.get(f"/v1/cards/{pk_card['id']}", {"currency": "usd"}, 1, stage)
+    nm = None
+    if det:
+        ps = [p for p in det.get("prices", []) if p.get("source") == "tcgplayer" and p.get("condition") == "Near Mint"]
+        variants = sorted({p.get("variant") for p in ps})
+        if c["pr"]:
+            nm = next((p for p in ps if p.get("variant") == c["pr"]), None)
+        elif len(variants) == 1:
+            nm = ps[0]
+        rep["card_checks"]["nm_printings"] = variants
+    if not nm:
+        reasons_card.append(("UNCERTAIN", "no Near Mint price for this printing"))
+        nm_price = None
+    else:
+        nm_price = nm.get("market_price")
+        rep["card_checks"]["nm_price_vs_ours_pct"] = round((nm_price / c["m"] - 1) * 100, 1) if nm_price else None
+        rep["card_checks"]["nm_price_age_h"] = age_h(nm.get("created_at"))
+        if not nm_price or abs(nm_price / c["m"] - 1) > 0.05: reasons_card.append(("UNCERTAIN", "Near Mint price differs >5% from ours"))
+        a = age_h(nm.get("created_at"))
+        if a is None or a > 36: reasons_card.append(("UNCERTAIN", "Near Mint price older than 36 h"))
+    # completed sales (eBay, raw, this printing)
+    q = {"period": "30d", "graded": "false", "limit": 30}
+    if c["pr"]: q["variant"] = c["pr"]
+    vol, _ = api.get(f"/v1/cards/{pk_card['id']}/sales/volume", q, 30, stage)
+    vrows = (vol or {}).get("data") or []
+    sales30 = sum(r.get("sales") or 0 for r in vrows); days30 = len({r.get("date") for r in vrows if r.get("sales")})
+    q = {"graded": "false", "period": "30d", "limit": 20, "seller_country": "US"}
+    if c["pr"]: q["variant"] = c["pr"]
+    comps, _ = api.get(f"/v1/cards/{pk_card['id']}/listings/ebay", q, 20, stage)
+    keep = []
+    for s in (comps or {}).get("data") or []:
+        t = s.get("title") or ""
+        if s.get("attribution") != "exact" or s.get("currency") != "USD": continue
+        if REPRINT.search(t) or FOREIGN.search(t) or GRADED.search(t) or LOT.search(t) or PLAYED.search(t) or FAKE.search(t): continue
+        keep.append(float(s["price"]))
+    med = statistics.median(keep) if keep else None
+    rep["card_checks"].update({"ebay_raw_sales_30d": sales30, "ebay_days_with_sales_30d": days30,
+                               "ebay_comps_read": len((comps or {}).get("data") or []), "ebay_comps_kept": len(keep),
+                               "ebay_filtered_median": round(med, 2) if med else None})
+    if sales30 < 8 or days30 < 5: reasons_card.append(("UNCERTAIN", "not enough recent sales (eBay raw)"))
+    ref = nm_price or c["m"]
+    if len(keep) < 5: reasons_card.append(("UNCERTAIN", "fewer than 5 clean eBay sales"))
+    elif abs(med / ref - 1) > 0.25: reasons_card.append(("UNCERTAIN", "eBay sales don't match the Near Mint price"))
+    # each listing
+    for L in listings:
+        reasons = list(reasons_card)
+        title = L.get("custom_title") or ""
+        custom = L.get("listing_type") == "custom"
+        if L.get("condition") != "Near Mint": reasons.append(("REJECT", "not Near Mint"))
+        if c["pr"] and L.get("printing") != c["pr"]: reasons.append(("REJECT", "printing doesn't match"))
+        if not c["pr"]: reasons.append(("UNCERTAIN", "printing unknown in our data"))
+        fl = title_flags(title)
+        if fl: reasons.append(("REJECT", "title says " + "/".join(fl)))
+        if custom and not title: reasons.append(("UNCERTAIN", "photo listing with no title"))
+        if custom and title and not fl:
+            base = re.sub(r"\s*\(.*$", "", c["name"]).split(" - ")[0].split()[0].lower()
+            nk = num_key(c["no"])
+            if base not in title.lower() and str(nk[1] if isinstance(nk, tuple) else nk) not in title:
+                reasons.append(("UNCERTAIN", "title doesn't name the card"))
+        if (L.get("seller_rating") or 0) < 98 or seller_sales(L.get("seller_sales")) < 100:
+            reasons.append(("UNCERTAIN", "seller below 98% / 100 sales"))
+        if L.get("shipping_price") is None: reasons.append(("UNCERTAIN", "shipping missing"))
+        sa = age_h(L.get("snapshot_at"))
+        if sa is None or sa > 30: reasons.append(("UNCERTAIN", "listing snapshot older than 30 h"))
+        price, ship = float(L.get("price") or 0), float(L.get("shipping_price") or 0)
+        if price < 0.35 * ref: reasons.append(("UNCERTAIN", "under 35% of market (too good to be true)"))
+        cost = round(price * (1 + TAX) + ship, 2)
+        p_tcg = round(tcg_net(ref) - cost, 2); roi = round(p_tcg / cost * 100, 1) if cost else None
+        e_net = round(ebay_net(med) - cost, 2) if med else None
+        if cost > BUY_CAP: reasons.append(("REJECT", "all-in over $75"))
+        if p_tcg < 5 or (roi or 0) < 20: reasons.append(("REJECT", "under $5 / 20% at the Near Mint price"))
+        if e_net is not None and e_net < 0: reasons.append(("REJECT", "loss at the filtered eBay median"))
+        label = "REJECT" if any(r[0] == "REJECT" for r in reasons) else ("UNCERTAIN" if reasons else "CANDIDATE")
+        rep["listings"].append({"listing_id": L.get("listing_id"), "price": price, "shipping": ship, "quantity": L.get("quantity"),
+                                "type": L.get("listing_type"), "title": title, "seller": L.get("seller_name"),
+                                "seller_rating": L.get("seller_rating"), "seller_sales": L.get("seller_sales"),
+                                "snapshot_age_h": age_h(L.get("snapshot_at")), "all_in": cost, "max_listing_price": c["pmax"],
+                                "profit_tcgplayer_est": p_tcg, "roi_tcgplayer_est": roi, "profit_ebay_est": e_net,
+                                "local90_hypothetical": round(0.9 * ref - cost, 2), "label": label,
+                                "reasons": [r[1] for r in reasons]})
+    return rep
+
+
+def run(key, api_opener=None, site_opener=None, seed=None):
+    api = Api(key, api_opener)
+    rep = {"started": NOW.isoformat(), "notes": []}
+    data_day, seen, short = shortlist(site_opener)
+    rep.update({"data_day": data_day, "singles_seen": seen, "shortlist": len(short), "set_fetch_failures": len(SET_FAILS)})
+    stale = data_day is None or date.fromisoformat(data_day) < TODAY - timedelta(days=2)
+    rep["data_stale"] = stale
+    if stale: rep["notes"].append("site prices older than 2 days: no run"); return api, rep
+    rnd = random.Random(seed or TODAY.isoformat()); rnd.shuffle(short)
+    screened, hits, results, stage1 = 0, 0, [], {"lookups": 0, "lookup_misses": 0, "listing_calls": 0, "listing_empty": 0}
+    try:
+        for c in short:
+            c["pmax"] = max_listing_price(c["m"])
+            if c["pmax"] <= 0: continue
+            if api.by_stage.get("stage1", 0) + 4 > STAGE1_BUDGET: rep["notes"].append("stage 1 budget reached"); break
+            found, _ = api.get("/v1/cards", {"tcg_player_id": c["tcg"], "language": "English", "per_page": 2}, 2, "stage1")
+            stage1["lookups"] += 1
+            if api.headers0 and "left_at_start" not in rep:
+                rep["left_at_start"] = int(api.headers0.get("x-credits-remaining", "0") or 0) + api.credits
+                rep["prepaid_balance_header"] = "x-credits-balance" in api.headers0
+                if rep["left_at_start"] < MIN_LEFT: rep["notes"].append("fewer than 8,000 credits left: stopped"); break
+            rows = (found or {}).get("data") or []
+            if len(rows) != 1: stage1["lookup_misses"] += 1; continue
+            q = {"condition": "Near Mint", "language": "English", "max_price": c["pmax"], "sort": "total_asc", "limit": 3}
+            if c["pr"]: q["printing"] = c["pr"]
+            L, _ = api.get(f"/v1/cards/{rows[0]['id']}/listings/tcgplayer", q, 3, "stage1")
+            stage1["listing_calls"] += 1; screened += 1
+            lr = (L or {}).get("data") or []
+            if not lr: stage1["listing_empty"] += 1; continue
+            hits += 1
+            results.append(evaluate_card(api, c, rows[0], lr, "stage2"))
+    except Budget as b:
+        rep["notes"].append(f"stopped: {b}")
+    # old lists: today's Flips and Under market (Pokémon, lowest listing $75 or less), run through the same checks
+    old = []
+    try:
+        sc = fetch_json(f"{SITE}/data/scout.json", site_opener); bu = fetch_json(f"{SITE}/data/buyer.json", site_opener)
+        picks = [("Flips", x) for x in sc.get("picks", []) if x.get("k") == "pokemon" and x.get("plan") == "flip"] + \
+                [("Under market", x) for x in bu.get("under", []) if x.get("k") == "pokemon"]
+        rep["old_lists"] = {"flips": sum(1 for l, _ in picks if l == "Flips"), "under": sum(1 for l, _ in picks if l == "Under market"),
+                            "within_75": sum(1 for _, x in picks if x["lo"] <= 7500)}
+        start = api.credits
+        for lst, x in picks:
+            if x["lo"] > 7500: continue
+            if api.credits - start + 15 > COMPARE_BUDGET: rep["notes"].append("comparison budget reached"); break
+            f, _ = api.get("/v1/cards", {"tcg_player_id": x["id"], "language": "English", "per_page": 2}, 2, "compare")
+            rows = (f or {}).get("data") or []
+            pr = printing_of(x["n"]) or "Normal"
+            entry = {"list": lst, "tcg": x["id"], "name": x["n"], "set": x.get("sn"), "no": x.get("no"), "old_market": x["p"] / 100, "old_lowest": x["lo"] / 100}
+            if len(rows) == 1:
+                q = {"condition": "Near Mint", "language": "English", "sort": "total_asc", "limit": 5}
+                if pr: q["printing"] = pr
+                L, _ = api.get(f"/v1/cards/{rows[0]['id']}/listings/tcgplayer", q, 5, "compare")
+                lr = (L or {}).get("data") or []
+                clean = [l for l in lr if not title_flags(l.get("custom_title"))]
+                entry["nm_listings_read"] = len(lr); entry["foreign_or_flagged_among_cheapest_nm"] = len(lr) - len(clean)
+                if clean:
+                    b = clean[0]; cost = round(float(b["price"]) * (1 + TAX) + float(b.get("shipping_price") or 0), 2)
+                    p = round(tcg_net(x["p"] / 100) - cost, 2)
+                    entry.update({"cheapest_clean_nm_price": float(b["price"]), "cheapest_clean_nm_shipping": float(b.get("shipping_price") or 0),
+                                  "all_in": cost, "old_lowest_below_nm_pct": round((1 - (x["lo"] / 100) / (float(b["price"]) + float(b.get("shipping_price") or 0))) * 100, 1),
+                                  "profit_tcgplayer_est": p, "meets_target": cost <= BUY_CAP and p >= 5 and p / cost >= 0.20})
+            old.append(entry)
+    except Budget as b:
+        rep["notes"].append(f"comparison stopped: {b}")
+    except Exception as e:
+        rep["notes"].append(f"comparison error: {type(e).__name__}")
+    labels = [l["label"] for r in results for l in r["listings"]]
+    rep.update({"screened": screened, "cards_with_nm_under_max": hits, "stage1": stage1, "results": results, "old": old,
+                "labels": {k: labels.count(k) for k in ("CANDIDATE", "UNCERTAIN", "REJECT")},
+                "cards_with_candidate": sum(1 for r in results if any(l["label"] == "CANDIDATE" for l in r["listings"])),
+                "credits": api.credits, "calls": api.calls, "credits_by_stage": api.by_stage,
+                "empty_listing_calls": api.empty_calls, "credits_on_empty_answers": api.empty_credits, "api_errors": api.errors[:20]})
+    return api, rep
+
+
+def summary_line(rep):
+    keys = ["set_fetch_failures", "data_day", "data_stale", "singles_seen", "shortlist", "screened", "cards_with_nm_under_max", "cards_with_candidate", "labels",
+            "stage1", "credits", "calls", "credits_by_stage", "empty_listing_calls", "credits_on_empty_answers", "left_at_start",
+            "prepaid_balance_header", "notes", "old_lists"]
+    s = {k: rep.get(k) for k in keys}
+    s["api_error_count"] = len(rep.get("api_errors") or [])
+    s["old_checked"] = len(rep.get("old") or []); s["old_meeting_target"] = sum(1 for o in rep.get("old") or [] if o.get("meets_target"))
+    return s
+
+
+def seal(rep, pub_pem):
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import padding
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    pub = serialization.load_pem_public_key(pub_pem.encode())
+    k, n = os.urandom(32), os.urandom(12)
+    ct = AESGCM(k).encrypt(n, json.dumps(rep, default=str).encode(), None)
+    ek = pub.encrypt(k, padding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None))
+    return base64.b64encode(ek + n + ct).decode()
+
+
+if __name__ == "__main__":
+    key = os.environ.get("PKMNPRICES_KEY") or sys.exit("no key")
+    api, rep = run(key)
+    print("SUMMARY " + json.dumps(summary_line(rep), sort_keys=True))
+    blob = seal(rep, os.environ["REPORT_PUBLIC_KEY"])
+    print("SEALED-BEGIN")
+    for i in range(0, len(blob), 4000): print(blob[i:i + 4000])
+    print("SEALED-END")
