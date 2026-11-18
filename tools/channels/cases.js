@@ -16,6 +16,6 @@ for (let i = 0; i < 500; i++) {
   const prices = rnd() < 0.3 ? { [pick(["fb", "offerup", "show", "ebay", "vinted"])]: Math.round(rnd() * 40000) } : {};
   const o = { cost, ref, item: { kind: pick(["raw", "graded", "sealed"]), name: pick(["Booster Box", "Elite Trainer Box", "Card"]) }, saved, prices, roi: pick([20, 10, 30]), minProfit: pick([500, 0]), shipAuto: (p) => p >= 5000 ? 500 : 100, breaks: [5000] };
   const r = C.compare(o);
-  out.push({ o: { ...o, shipAuto: undefined }, js: { best: r.best, rows: r.rows.map((x) => ({ k: x.k, price: x.price, net: x.at && x.at.net, tax: x.at && x.at.tax, pay: x.at && x.at.pay, fee: x.at && x.at.fee, profit: x.profit, clears: x.clears, breakEven: x.breakEven, target: x.target, matchEbay: x.matchEbay, ok: x.elig.ok })) } });
+  out.push({ o: { ...o, shipAuto: undefined }, js: { best: r.best, rows: r.rows.map((x) => ({ k: x.k, price: x.price, net: x.at && x.at.net, tax: x.at && x.at.tax, pay: x.at && x.at.pay, fee: x.at && x.at.fee, profit: x.profit, clears: x.clears, state: x.state, breakEven: x.breakEven, target: x.target, matchEbay: x.matchEbay, ok: x.elig.ok })) } });
 }
 process.stdout.write(JSON.stringify(out));

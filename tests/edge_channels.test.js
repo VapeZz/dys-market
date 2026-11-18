@@ -87,4 +87,29 @@ test("panel words: estimates, break-even and realized profit kept apart; no buy 
   assert.ok(!/\bBUY\b|\bSELL candidate\b|\bHOLD\b/.test(h));
   assert.ok(/Checked Nov 17, 2026/.test(h));
 });
+test("states: LOSS under $0, BREAK-EVEN at $0, PROFITABLE BELOW TARGET under 20%, MEETS TARGET at 20% or more", () => {
+  const st = (price, o = {}) => row(C.compare({ ...base, ...o, prices: { fb: price } }), "fb");
+  // $70 cost, Facebook cash sale with no costs: profit = price − $70
+  assert.strictEqual(st(6999).state, "loss");
+  assert.strictEqual(st(7000).state, "even");
+  assert.strictEqual(st(7001).state, "below");
+  assert.strictEqual(st(8399).state, "below");          // 19.99%
+  assert.strictEqual(st(8400).state, "meets");          // exactly 20%
+  assert.strictEqual(st(9500).state, "meets");
+  // ROI at or over 20% but under the $5 minimum profit: still below target, and the panel says why
+  const cheap = row(C.compare({ ...base, cost: 1000, prices: { fb: 1300 } }), "fb");
+  assert.strictEqual(cheap.state, "below"); assert.ok(cheap.roi >= 20);
+  const h = C.html(C.compare({ ...base, cost: 1000, prices: { fb: 1300 } }));
+  assert.ok(/under your \$5\.00 minimum profit/.test(h));
+  assert.strictEqual(C.stateOf(-1, 7000, 20, 500), "loss"); assert.strictEqual(C.stateOf(null, 7000, 20, 500), null);
+  // each label appears in the panel for its state
+  const all = C.html(C.compare({ ...base, prices: { fb: 6000, offerup: 7500, show: 9000, vinted: 7050 } }));
+  for (const s of ["LOSS", "PROFITABLE, BELOW TARGET", "MEETS TARGET", "BREAK-EVEN"]) assert.ok(all.includes(`>${s}<`), s);
+});
+test("Best estimate = the highest estimated profit (not speed or likelihood), among options the card may be listed on", () => {
+  const r = C.compare({ ...base, item: { kind: "raw" }, prices: { ebay: 15000, fb: 9000 } });
+  const top = r.rows.filter((x) => x.profit != null && x.elig.ok).reduce((a, b) => (b.profit > a.profit ? b : a));
+  assert.strictEqual(r.best, top.k); assert.strictEqual(r.best, "ebay");     // shipped eBay wins on profit here
+  assert.ok(/highest estimated profit; it doesn't mean the fastest or most likely sale/.test(C.html(r)));
+});
 console.log(`${n} channel comparison tests passed`);

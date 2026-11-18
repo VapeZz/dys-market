@@ -61,6 +61,7 @@ for i, cs in enumerate(cases):
         profit = n - cost if n is not None else None
         rows[k] = dict(k=k, price=price, net=n, tax=t, pay=pay, fee=fee, profit=profit,
                        clears=profit is not None and profit >= mp and profit * 100 >= cost * roi,
+                       state=None if profit is None else "loss" if profit < 0 else "even" if profit == 0 else "meets" if (profit >= mp and profit * 100 >= cost * roi) else "below",
                        breakEven=lowest(c, lambda x: x >= cost), target=lowest(c, lambda x: x - cost >= mp and (x - cost) * 100 >= cost * roi),
                        ok=elig(k, o["item"]), c=c)
     for k, r in rows.items():
@@ -70,7 +71,7 @@ for i, cs in enumerate(cases):
     errs = [] if best == js["best"] else [("best", best, js["best"])]
     for jr_ in js["rows"]:
         r = rows[jr_["k"]]
-        for f in ["price", "net", "tax", "pay", "fee", "profit", "clears", "breakEven", "target", "matchEbay", "ok"]:
+        for f in ["price", "net", "tax", "pay", "fee", "profit", "clears", "state", "breakEven", "target", "matchEbay", "ok"]:
             if r[f] != jr_[f]: errs.append((jr_["k"], f, r[f], jr_[f]))
     if errs:
         bad += 1

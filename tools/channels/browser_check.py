@@ -99,6 +99,37 @@ def edit(page, sel, k, field, value):
     page.dispatch_event(f"{row} .ch-in[data-f={field}]", "change")
 
 
+def states(page, sel):
+    return page.eval_on_selector_all(f"{sel} .ch-row", "rows => rows.map(r => [r.dataset.k, (r.querySelector('.ch-state') || {}).textContent || null, (r.querySelector('.ch-state') || {dataset: {}}).dataset.state || null])")
+
+
+def best_is_max(page, sel, tag):
+    """the row marked Best estimate has the highest estimated profit among rows without a rules warning"""
+    rows = page.eval_on_selector_all(f"{sel} .ch-row", """rows => rows.map(r => ({ k: r.dataset.k, best: /Best estimate/.test(r.querySelector('.ch-top').textContent),
+        rules: /Check rules/.test(r.querySelector('.ch-top').textContent), p: r.querySelectorAll('.ch-nums b')[2].textContent }))""")
+    val = lambda t: None if t in ("—", "") else float(t.replace("−", "-").replace("+", "").replace("$", "").replace(",", ""))
+    ok_rows = [r for r in rows if not r["rules"] and val(r["p"]) is not None]
+    top = max(val(r["p"]) for r in ok_rows)
+    marked = [r for r in rows if r["best"]]
+    ok(len(marked) == 1 and val(marked[0]["p"]) == top and not marked[0]["rules"], f"{tag}: Best estimate = highest estimated profit {rows}")
+
+
+def three_states(page, sel, cost_c, tag):
+    """LOSS, PROFITABLE BELOW TARGET and MEETS TARGET on the three local options, from typed prices around the cost"""
+    edit(page, sel, "fb", "price", f"{(cost_c - 100) / 100:.2f}")
+    edit(page, sel, "offerup", "price", f"{(cost_c * 1.10) / 100:.2f}")
+    edit(page, sel, "show", "price", f"{(cost_c * 1.25 + 100) / 100:.2f}")
+    st = {k: (label, key) for k, label, key in states(page, sel)}
+    ok(st["fb"] == ("LOSS", "loss"), f"{tag}: LOSS {st['fb']}")
+    ok(st["offerup"] == ("PROFITABLE, BELOW TARGET", "below"), f"{tag}: PROFITABLE, BELOW TARGET {st['offerup']}")
+    ok(st["show"] == ("MEETS TARGET", "meets"), f"{tag}: MEETS TARGET {st['show']}")
+    ok("target 20%" in page.inner_text(f"{sel} .ch-row[data-k=offerup] .ch-sub"), f"{tag}: below-target row says the target")
+    ok("−" in page.inner_text(f"{sel} .ch-row[data-k=fb] .ch-nums b.down"), f"{tag}: loss shown in red as negative")
+    foot = page.inner_text(f"{sel} .dl-foot")
+    ok("highest estimated profit" in foot and "doesn't mean the fastest or most likely sale" in foot, f"{tag}: Best estimate explained")
+    best_is_max(page, sel, tag)
+
+
 def run(page, width, theme):
     tag = f"{width}px {theme}"
     page.set_viewport_size({"width": width, "height": 860})
@@ -128,6 +159,11 @@ def run(page, width, theme):
     for s in ["Estimated profit", "Break-even", "Realized profit", "Ledger → Sell", "Price (est.)"]:
         ok(s in t, f"{tag}: wording {s!r}")
     no_junk(page, f"{tag} PSA comparison")
+    st = {k: lab for k, lab, _ in states(page, S)}
+    ok(st["ebay"] == "LOSS" and st["fb"] == "PROFITABLE, BELOW TARGET" and st["vinted"] == "LOSS", f"{tag}: PSA default states {st}")
+    best_is_max(page, S, f"{tag} PSA default")
+    three_states(page, S, 7000, f"{tag} PSA check")
+    page.click(f"{S} .ch-reset")
 
     # 2. the PSA panel's own selling costs feed the eBay row
     page.click("#lg-sold-box .gs-costs summary")
@@ -157,7 +193,7 @@ def run(page, width, theme):
     # 5. a typed price is for this card; save and reset defaults
     edit(page, S, "offerup", "price", "95")
     ok(nums(page, S, "offerup") == ["$95.00", "$95.00", "+$25.00"] and "Price (est.)" not in page.inner_text(f"{S} .ch-row[data-k=offerup]"), f"{tag}: typed price")
-    ok("Clears 20%" in page.inner_text(f"{S} .ch-row[data-k=offerup]") and "Best estimate" in page.inner_text(f"{S} .ch-row[data-k=offerup]"), f"{tag}: typed price clears and is best")
+    ok("MEETS TARGET" in page.inner_text(f"{S} .ch-row[data-k=offerup]") and "Best estimate" in page.inner_text(f"{S} .ch-row[data-k=offerup]"), f"{tag}: typed price meets target and is best")
     page.click(f"{S} .ch-save")
     saved = page.evaluate("() => JSON.parse(localStorage.getItem('dys-edge-v1')).set.channels")
     ok(saved and saved["show"]["booth"] == 5000 and saved["show"]["boothSales"] == 5 and saved["fb"]["pay"] == "card" and "price" not in json.dumps(saved), f"{tag}: costs saved, prices not {saved}")
@@ -199,6 +235,11 @@ def run(page, width, theme):
     page.dispatch_event("#c-deal .dl-ask", "change")
     ok("Your cost: $50" in page.inner_text("#c-ch"), f"{tag}: comparison follows the Deal check price ({page.inner_text('#c-ch')[:260]!r})")
     ok(page.inner_text("#c-deal .dl-call") != "", f"{tag}: Deal check still shows its call")
+    page.eval_on_selector("#c-deal .dl-more", "d => d.open = true")
+    dc = re.search(r"Your cost \(price[^\n]*\n−\$([\d,.]+)", page.inner_text("#c-deal .dl-more"))
+    cost_c = round(float(dc.group(1).replace(",", "")) * 100)
+    three_states(page, "#c-ch", cost_c, f"{tag} Deal check")
+    page.click("#c-ch .ch-reset")
     no_junk(page, f"{tag} Deal comparison")
     page.click("#sheet-card .close")
 

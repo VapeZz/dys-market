@@ -101,6 +101,17 @@
     return { ok: true, text: "Allowed: Vinted lists single trading cards under Trading cards." };
   }
 
+  /* ---------- the state of one estimate ---------- */
+  // LOSS: estimated profit under $0 · BREAK-EVEN: exactly $0 · PROFITABLE, BELOW TARGET: positive but under the ROI target
+  // (or under the minimum profit in Settings) · MEETS TARGET: ROI at or above the target and at least the minimum profit
+  const STATES = { loss: "LOSS", even: "BREAK-EVEN", below: "PROFITABLE, BELOW TARGET", meets: "MEETS TARGET" };
+  function stateOf(profit, cost, roi, minProfit) {
+    if (profit == null) return null;
+    if (profit < 0) return "loss";
+    if (profit === 0) return "even";
+    return profit >= minProfit && profit * 100 >= cost * roi ? "meets" : "below";
+  }
+
   /* ---------- the comparison ---------- */
   // o: { cost, ref (eBay sold reference, cents or null), item: { kind, name }, saved: { fb: {...} }, prices: { fb: cents } (this card only),
   //      ebay: { feePct, feeFlat, buyerTax, ship, sup } (from the panel above it, if any), roi, minProfit, shipAuto, breaks }
@@ -113,7 +124,7 @@
       const profit = at ? at.net - cost : null;
       const elig = eligibility(b.k, o.item);
       return { k: b.k, ch, typed, price, at, profit, roi: profit != null && cost > 0 ? profit / cost * 100 : null, elig,
-        clears: profit != null && profit >= minProfit && profit * 100 >= cost * roi,
+        clears: profit != null && profit >= minProfit && profit * 100 >= cost * roi, state: stateOf(profit, cost, roi, minProfit),
         breakEven: lowestPrice(ch, (n) => n >= cost, ctx),
         target: lowestPrice(ch, (n) => n - cost >= minProfit && (n - cost) * 100 >= cost * roi, ctx) };
     });
@@ -127,7 +138,8 @@
   const d$ = (c) => c == null ? "" : (c / 100).toFixed(2);
   function rowHtml(r, res, open) {
     const c = r.ch, at = r.at, best = res.best === r.k;
-    const status = r.profit == null ? "" : r.clears ? `<span class="chip good">Clears ${res.roi}%</span>` : r.profit >= 0 ? `<span class="chip">Under ${res.roi}%</span>` : `<span class="chip bad">Loss</span>`;
+    const why = r.state === "below" && r.roi != null && r.roi >= res.roi ? ` (under your ${money(res.minProfit)} minimum profit)` : r.state === "below" ? ` (ROI ${pct(r.roi)}, target ${res.roi}%)` : "";
+    const status = !r.state ? "" : `<span class="chip ${{ loss: "bad", even: "", below: "hot", meets: "good" }[r.state]} ch-state" data-state="${r.state}">${STATES[r.state]}</span>${why ? `<span>${esc(why.trim())}</span>` : ""}`;
     const field = (k, label, v, step = "0.01") => `<label class="f">${label}<input class="field ch-in" data-f="${k}" type="number" inputmode="decimal" min="0" step="${step}" value="${v}"></label>`;
     const lines = at ? [
       at.fee ? `<div><span>${c.tiered ? `Platform fee (${c.feePct}% on price + ${c.buyerTax || 0}% buyer tax, + ${money(c.feeFlat)})` : "Platform fee"}</span><span>−${money(at.fee)}</span></div>` : "",
@@ -141,7 +153,7 @@
       `<div><span><b>Estimated profit</b></span><span><b class="${r.profit > 0 ? "up" : r.profit < 0 ? "down" : ""}">${signed(r.profit)}</b> <small>${pct(r.roi)}</small></span></div>`,
       at.tax ? `<div><span>Sales tax the buyer pays you (passed on, not profit)</span><span>${money(at.tax)}</span></div>` : ""].join("") : "";
     return `<div class="ch-row${best ? " ch-best" : ""}" data-k="${r.k}">
-      <div class="ch-top"><b>${esc(c.name)}</b><small>${esc(c.how)}</small>${best ? `<span class="chip good">Best estimate</span>` : ""}${r.elig.verify ? `<span class="chip hot">Check rules</span>` : ""}</div>
+      <div class="ch-top"><b>${esc(c.name)}</b><small>${esc(c.how)}</small>${best ? `<span class="chip good" title="Highest estimated profit of the options shown">Best estimate</span>` : ""}${r.elig.verify ? `<span class="chip hot">Check rules</span>` : ""}</div>
       ${r.elig.text ? `<p class="small ${r.elig.verify ? "ch-warn" : "muted"}">${esc(r.elig.text)}</p>` : ""}
       <div class="ch-nums"><span><small>Price${r.typed ? "" : " (est.)"}</small><b>${money(r.price)}</b></span><span><small>You'd keep</small><b>${at ? money(at.net) : "—"}</b></span>
         <span><small>Est. profit</small><b class="${r.profit > 0 ? "up" : r.profit < 0 ? "down" : ""}">${signed(r.profit)}</b></span></div>
@@ -167,7 +179,7 @@
       <div class="ch-list">${res.rows.map((r) => rowHtml(r, res, state.open && state.open[r.k])).join("")}</div>
       ${state.note ? `<p class="dl-note">${esc(state.note)}</p>` : ""}
       <div class="btns"><button type="button" class="btn sm ch-save">Save costs as my defaults</button><button type="button" class="btn sm ghost ch-reset">Use Edge's defaults</button></div>
-      <p class="dl-foot"><b>Estimated profit</b> is what a sale at that price would leave after the costs shown, minus your cost. <b>Break-even</b> is the lowest price that gets your cost back. <b>Realized profit</b> is only what you record in Ledger → Sell after a real sale. Prices change and local buyers negotiate. Not financial or tax advice.</p>`;
+      <p class="dl-foot"><b>MEETS TARGET</b>: estimated ROI of ${res.roi}% or more (and at least ${money(res.minProfit)}). <b>PROFITABLE, BELOW TARGET</b>: a profit, but under that. <b>LOSS</b>: you'd get back less than your cost. <b>Best estimate</b> marks the option with the highest estimated profit; it doesn't mean the fastest or most likely sale. <b>Estimated profit</b> is what a sale at that price would leave after the costs shown, minus your cost. <b>Break-even</b> is the lowest price that gets your cost back. <b>Realized profit</b> is only what you record in Ledger → Sell after a real sale. Prices change and local buyers negotiate. Not financial or tax advice.</p>`;
   }
 
   /* opts: compare()'s inputs plus { refLabel, save(saved | null), base } → { update(partial), result } */
@@ -201,7 +213,7 @@
     return { update(p) { o = { ...o, ...p }; if (p.refLabel) state.refLabel = p.refLabel; return draw(); }, get result() { return last; } };
   }
 
-  const api = { v: VERSION, CHANNELS, PAY, POLICY, CHECKED, setup, platformFee, costsAt, netAt, lowestPrice, eligibility, compare, html, mount };
+  const api = { v: VERSION, CHANNELS, PAY, POLICY, CHECKED, STATES, stateOf, setup, platformFee, costsAt, netAt, lowestPrice, eligibility, compare, html, mount };
   if (typeof window !== "undefined") window.EdgeChannels = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();
