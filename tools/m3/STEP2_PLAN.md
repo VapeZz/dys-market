@@ -54,3 +54,9 @@ AND in the 2026 holdout. Otherwise it FAILS.
 ## After the holdout
 No rule, threshold, exit or list is changed after looking at 2026. Any idea that comes from the results is a
 proposal for Keo, tested later on new data.
+
+## Amendment before the holdout (Nov 17, after the 2025 run; diagnostics only)
+The 2025 run showed most Under market items had a market price that hadn't moved in 14 days, and most Flips were
+35-55% under market (the app's own "check condition" zone). Added diagnostics only: results for items whose market
+was unchanged for 14 days, and a condition check (lowest listing at least 70% of the median listing, or not).
+No list, rule, exit, cost, target or pass criterion changed. 2025 results are in step2_dev2025.txt.
