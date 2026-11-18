@@ -475,3 +475,5 @@ a.row{text-decoration:none;color:inherit}
 .ch-sub{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;font-size:12px;color:var(--ink-2)}
 .ch-row p{margin:0}.ch-warn{color:var(--warn)}
 .ch .btns{margin:0}.lg-ch{margin-top:10px}
+/* inventory value without a price (unknown, not $0) */
+.inv-np{font-size:13px;color:var(--ink-2)}.inv-src{color:var(--ink-2)}.inv-unpriced{margin:6px 0 0}

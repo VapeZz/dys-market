@@ -238,11 +238,13 @@
     if (!g || !pkmn) { box.innerHTML = `<p class="small muted">The sold-price check didn't load. Reload and try again.</p>`; return; }
     const item = { id: +x.tcg, n: x.n || x.name }, slab = slabOf(x), label = `${slab.grader} ${slab.grade}`;
     const holding = { cost: x.costEach || 0, label };
-    const load = (fresh) => pkmn.getGrade(item, slab, conn, fresh).then(gradedNote);
+    let s0 = false;   // set once sold prices are on the panel (the first draw, before any are loaded, doesn't count)
+    const load = (fresh) => pkmn.getGrade(item, slab, conn, fresh).then(gradedNote).then((res) => { s0 = !!res.ok; return res; });
     let cbox = null, cm = null;
     const chan = await CHAN;
     if (chan && box.parentNode) { cbox = document.createElement("div"); cbox.className = "lg-ch"; box.after(cbox); }
     const after = (r, sell) => {
+      if (s0 && r.s) noteSold(+x.tcg, x.n, label, r);
       if (!cbox) return;
       const p = { cost: holding.cost, ref: r.typical ?? null, refLabel: r.typical != null ? `${label} typical sold price, ${r.s && r.s.full30 ? "last 30 days" : "newest sales"}` : null,
         ebay: { feePct: sell.feePct, topFrom: sell.topFrom ?? 750000, topPct: sell.topPct || 0, feeFlat: sell.perOrder || 0, buyerTax: sell.buyerTax, ship: sell.ship, sup: sell.supplies || 0 } };
@@ -294,11 +296,36 @@
   const ledgerSoon = () => { clearTimeout(LTIMER); LTIMER = setTimeout(() => ledgerSync(), 1200); return Promise.resolve(); };
   window.addEventListener("online", () => ledgerSync());
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") ledgerSync(); });
+  /* PSA sold-price values for this page visit only: the exact card and grade's eBay sold median from a PSA check that
+     already ran (Ledger → Check sold prices, or Sell, grade or keep?). Kept in this variable alone: never written to the
+     phone's storage, the backup file or the Sheet (the Sheet's values come from priceOf, which never reads it), and never
+     fetched for this: no extra PkmnPrices calls. Gone on reload, by design (PkmnPrices data isn't stored). */
+  const SOLDV = new Map();
+  const soldKey = (tcg, n, label) => `${tcg}|${n}|${String(label).toUpperCase().trim()}`;
+  function noteSold(tcg, n, label, r) {
+    const k = soldKey(tcg, n, label);
+    // only a check with enough fresh, consistent sales of that exact grade (the PSA check's own evidence rules) values a card
+    if (!r || r.typical == null || r.verdict === "insufficient") { SOLDV.delete(k); return; }
+    SOLDV.set(k, { each: r.typical, label, n30: r.s.n30, capped: r.s.capped, newest: r.s.newest, at: Date.now() });
+  }
+  const clock = (ms) => new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const dayOf = (d) => new Date(d * 864e5).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  // value per unit (cents, or null when Edge has no price: never 0 for "unknown") and where it came from
+  function valueOf(x) {
+    if (x.kind === "Graded") {
+      const label = `${x.grader} ${x.grade}`, sv = SOLDV.get(soldKey(+x.tcg, x.n, label));
+      if (sv) return { each: sv.each, src: `${label} eBay sold median, ${sv.n30}${sv.capped ? "+" : ""} sales in 30 days (newest ${dayOf(sv.newest)}) · checked ${clock(sv.at)}, this visit only`, kind: "sold" };
+      const p = priceOf(x), gp = p != null ? gradedOf(+x.tcg, x.grader) : null;
+      return p != null ? { each: p, src: `${label} graded price list (PokemonPriceTracker)${gp && gp.at ? `, ${fmtDay(String(gp.at).slice(0, 10))}` : ""}`, kind: "list" } : { each: null, src: "", kind: "none" };
+    }
+    const p = priceOf(x);
+    return p != null ? { each: p, src: `TCGplayer market${x.kind === "Raw" && (x.cond || "NM") !== "NM" ? ` (${x.cond})` : ""}${META && META.updated ? `, ${fmtDay(META.updated)}` : ""}`, kind: "market" } : { each: null, src: "", kind: "none" };
+  }
   // what's held, for Inventory and Today: the ledger's items once it's in use, else the old list on this phone
   function invRows() {
-    if (!ledgerOn()) return S.inv.map((x) => ({ ...x, each: (marketOf(x) || 0) * condX(x.cond, x.t) }));
-    return LG.compute(LS.T, { priceOf }).items.filter((x) => x.left && x.tcg).map((x) => ({ k: keyOf(+x.tcg, x.n), id: +x.tcg, g: +x.g, n: x.n, t: x.kind === "Sealed" ? "s" : "c",
-      qty: x.left, cost: x.costEach, cond: x.cond || "NM", graded: x.kind === "Graded" ? `${x.grader} ${x.grade}` : "", each: priceOf(x) || 0, lid: x.id, book: x.book }));
+    if (!ledgerOn()) return S.inv.map((x) => { const m = marketOf(x); return { ...x, each: m == null ? null : m * condX(x.cond, x.t), src: m == null ? "" : `TCGplayer market${META && META.updated ? `, ${fmtDay(META.updated)}` : ""}` }; });
+    return LG.compute(LS.T, { priceOf }).items.filter((x) => x.left && x.tcg).map((x) => { const v = valueOf(x); return { k: keyOf(+x.tcg, x.n), id: +x.tcg, g: +x.g, n: x.n, t: x.kind === "Sealed" ? "s" : "c",
+      qty: x.left, cost: x.costEach, cond: x.cond || "NM", graded: x.kind === "Graded" ? `${x.grader} ${x.grade}` : "", each: v.each, src: v.src, srcKind: v.kind, lid: x.id, book: x.book }; });
   }
   const flip = (p, lo, t) => { if (!p || !lo) return null; const cost = lo + shipIn(t), pr = net(p, t) - cost; return { pr, roi: pr / cost * 100, cost }; };
   function tierFor(gr, v) { const t = gr.tiers; for (let i = 0; i < t.length; i++) if (t[i][2] == null || v <= t[i][2]) return i; return t.length - 1; }
@@ -412,17 +439,26 @@
     drawAlerts($("#t-alerts"));
   }
   function portfolio() {
-    let value = 0, cost = 0, n = 0;
-    for (const x of invRows()) { value += x.each * x.qty; cost += (x.cost || 0) * x.qty; n += x.qty; }
-    return { value, cost, pl: value - cost, n };
+    const p = { value: 0, cost: 0, costPriced: 0, costUnpriced: 0, items: 0, priced: 0, unpriced: 0, n: 0 };
+    for (const x of invRows()) {
+      const c = (x.cost || 0) * x.qty; p.items++; p.n += x.qty; p.cost += c;
+      if (x.each == null) { p.unpriced++; p.costUnpriced += c; } else { p.priced++; p.value += Math.round(x.each * x.qty); p.costPriced += c; }
+    }
+    p.pl = p.priced ? p.value - p.costPriced : null;
+    return p;
+  }
+  // the three tiles and the line under them, shared by Today and Inventory
+  function valueTiles(p) {
+    const some = p.priced > 0;
+    return `<div class="tiles"><div class="tile"><span class="lab">Market value</span><b>${some ? money(p.value, true) : "—"}</b><small>${p.priced} of ${p.items} item${p.items === 1 ? "" : "s"} priced</small></div>
+      <div class="tile"><span class="lab">Total cost</span><b>${money(p.cost, true)}</b><small>all ${p.items} item${p.items === 1 ? "" : "s"}</small></div>
+      <div class="tile"><span class="lab">Unrealized (est.)</span><b class="${some ? cls(p.pl) : ""}">${some ? `${p.pl >= 0 ? "+" : ""}${money(p.pl, true)}` : "—"}</b><small>${some ? `${p.costPriced ? pct(p.pl / p.costPriced * 100, 0) + " " : ""}on ${money(p.costPriced, true)} priced` : "no priced items"}</small></div></div>
+      ${p.unpriced ? `<p class="small muted inv-unpriced">${p.unpriced} item${p.unpriced === 1 ? "" : "s"} (${money(p.costUnpriced, true)} cost) ${p.unpriced === 1 ? "has" : "have"} no price yet, so ${p.unpriced === 1 ? "it isn't" : "they aren't"} counted in value or unrealized. That's unknown, not a loss.</p>` : ""}`;
   }
   function drawPortfolio(el) {
     if (!invRows().length) { el.innerHTML = `<div class="empty"><b>Track what you own</b>Search a card, tap <b style="display:inline;font-size:inherit">${LS ? "Bought it" : "Add to inventory"}</b>, and its value updates here every night.</div>`; return; }
     const p = portfolio();
-    el.innerHTML = `<div class="sec-head"><h2>Your inventory</h2><a class="more" href="#mine">Open</a></div>
-      <div class="tiles"><div class="tile"><span class="lab">Value</span><b>${money(p.value, true)}</b><small>${p.n} item${p.n === 1 ? "" : "s"}</small></div>
-      <div class="tile"><span class="lab">Cost</span><b>${money(p.cost, true)}</b><small>what you paid</small></div>
-      <div class="tile"><span class="lab">Profit</span><b class="${cls(p.pl)}">${p.pl >= 0 ? "+" : ""}${money(p.pl, true)}</b><small>${p.cost ? pct(p.pl / p.cost * 100, 0) : "—"}</small></div></div>`;
+    el.innerHTML = `<div class="sec-head"><h2>Your inventory</h2><a class="more" href="#mine">Open</a></div>${valueTiles(p)}`;
   }
   async function drawAlerts(el) {
     if (!S.watch.length) return;
@@ -1394,18 +1430,17 @@
       const moveNote = LS && !on ? `<div class="panel lg-move"><b>Your ledger is ready</b><p class="small muted" style="margin:4px 0 8px">Move these ${S.inv.length} items into it to track what you paid, what you sell and your profit, in your Google Sheet.</p><div class="btns"><button type="button" class="btn primary" id="inv-move">Open Ledger</button></div></div>` : "";
       if (!inv.length) { el.innerHTML = `<div class="empty"><b>Nothing here yet</b>Open any card from Search or Deals and tap ${LS ? "Bought it" : "Add to inventory"}. You'll see what it's worth and your profit every day.</div>`; return; }
       const p = portfolio();
-      const rows = inv.map((x, i) => ({ x, i, val: x.each * x.qty, cost: (x.cost || 0) * x.qty })).sort((a, b) => b.val - a.val);
-      el.innerHTML = `<div class="tiles"><div class="tile"><span class="lab">Value</span><b>${money(p.value, true)}</b><small>${p.n} items</small></div>
-        <div class="tile"><span class="lab">Cost</span><b>${money(p.cost, true)}</b><small>paid</small></div>
-        <div class="tile"><span class="lab">Profit</span><b class="${cls(p.pl)}">${p.pl >= 0 ? "+" : ""}${money(p.pl, true)}</b><small>${p.cost ? pct(p.pl / p.cost * 100, 0) : "—"}</small></div></div>
+      const rows = inv.map((x, i) => ({ x, i, val: x.each == null ? null : Math.round(x.each * x.qty), cost: (x.cost || 0) * x.qty })).sort((a, b) => (b.val ?? -1) - (a.val ?? -1));
+      el.innerHTML = `${valueTiles(p)}
         <section class="sec panel own-box"><span class="lab">Sell, grade or keep?</span>
           <p class="muted small" style="margin:0">Checks each item against real eBay sold prices (PkmnPrices, up to about 250 credits an item of your 20,000 a day). Facts at today's prices, not a forecast. Nothing is saved.</p>
           <div class="btns"><button type="button" class="btn sm" id="own-go"${pkmnConn() ? "" : " disabled"}>${OWN.size ? "Check again" : `Check my ${inv.length} item${inv.length === 1 ? "" : "s"}`}</button></div>
           <p class="small muted" id="own-st" style="margin:0">${pkmnConn() ? "" : "Set up sold prices in Mine → Settings first."}</p></section>
         <div class="list">${rows.map(({ x, val, cost }) => { const o = OWN.get(x.lid || x.k), L = o ? OWNL[o.label] || OWNL.unknown : null;
-          return rowHTML(x, `<b>${money(Math.round(val))}</b><small class="${cls(val - cost)}">${cost ? signed(Math.round(val - cost)) : `${x.qty}×`}</small>`,
-          `<span class="why">${x.qty}× · ${x.graded ? esc(x.graded) + " · " : x.t === "c" ? esc(x.cond) + " · " : ""}${on && x.book === "Personal" ? "Personal · " : ""}paid ${money(x.cost)} each${val && x.qty ? ` · sells for ${money(Math.round(net(Math.round(val / x.qty), x.t)))} each on ${esc(plat().label)}` : ""}</span>${o ? `<span class="why own-res"><span class="chip ${L[0]}">${L[1]}</span> ${esc(o.text)}</span>` : ""}`); }).join("")}</div>
-        <p class="muted small">${on ? "Tap an item for its card. Buys, sales and costs are in Ledger." : "Tap an item to change it."} Values use today's market price for its condition${on ? "; graded items use graded sold prices where Edge has them" : ""}.</p>`;
+          return rowHTML(x, val == null ? `<b class="inv-np">No price yet</b><small class="muted">cost ${money(cost)}</small>` : `<b>${money(val)}</b><small class="${cls(val - cost)}">${cost ? `${signed(val - cost)} est.` : `${x.qty}×`}</small>`,
+          `<span class="why">${x.qty}× · ${x.graded ? esc(x.graded) + " · " : x.t === "c" ? esc(x.cond) + " · " : ""}${on && x.book === "Personal" ? "Personal · " : ""}paid ${money(x.cost)} each${val && x.qty ? ` · sells for ${money(Math.round(net(Math.round(val / x.qty), x.t)))} each on ${esc(plat().label)}` : ""}</span>
+          <span class="why inv-src">${val == null ? `No price yet: Edge has no value for this ${x.graded ? "grade" : "item"}${x.graded ? ". Tap Sell, grade or keep? or open it in Ledger → Check sold prices to value it for this visit" : ""}.` : `Value: ${esc(x.src)}`}</span>${o ? `<span class="why own-res"><span class="chip ${L[0]}">${L[1]}</span> ${esc(o.text)}</span>` : ""}`); }).join("")}</div>
+        <p class="muted small">${on ? "Tap an item for its card. Buys, sales and costs are in Ledger." : "Tap an item to change it."} Market value is before selling costs; unrealized gains and losses are estimates. Realized profit is only from recorded sales (Ledger).${SOLDV.size ? " Sold-price values last for this visit only and aren't saved." : ""}</p>`;
       el.insertAdjacentHTML("afterbegin", moveNote);
       const mv = $("#inv-move", el); if (mv) mv.onclick = () => { SUB.mine = "ledger"; route(); };
       const go = $("#own-go", el);
@@ -1423,6 +1458,7 @@
               credits += res.meta ? res.meta.credits : 0;
               if (!res.ok) { OWN.set(x.lid || x.k, { label: res.reason === "unsupported" ? "unclear" : "unknown", text: gradedNote(res).note }); continue; }
               const r = gr.evaluate(res.data, { cost: x.cost || 0, label: x.graded }, gradedSell(), gradedOpts());
+              noteSold(x.id, x.n, x.graded, r);
               OWN.set(x.lid || x.k, { label: { sell: "sell", hold: "hold", insufficient: "unclear" }[r.verdict], text: gr.line(r) });
             } catch (err) { console.error(err); OWN.set(x.lid || x.k, { label: "unknown", text: "Couldn't check this one." }); }
             continue;
