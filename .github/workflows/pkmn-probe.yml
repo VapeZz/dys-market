@@ -1,0 +1,134 @@
+name: PkmnPrices probe (one-off test)
+# One-off, read-only PkmnPrices verification for M3 (Keo approved Nov 18, 2026, 12:00 AM).
+# Manual dispatch only; no schedule, no push trigger, no checkout, no repo/pages/deploy permissions.
+# Responses stay in memory; the log prints derived checks only (no raw API rows). Hard cap: 480 credits.
+on:
+  workflow_dispatch:
+permissions: {}
+concurrency: { group: pkmn-verify, cancel-in-progress: false }
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify 10 cards (derived results only)
+        env:
+          PKMNPRICES_KEY: ${{ secrets.PKMNPRICES_KEY }}
+        shell: python
+        run: |
+          import json, os, re, sys, time, urllib.request, urllib.parse, urllib.error
+          from datetime import datetime, timezone
+          KEY = os.environ.get("PKMNPRICES_KEY") or sys.exit("no key")
+          CAP = 480
+          used = {"credits": 0, "calls": 0}
+          NOW = datetime.now(timezone.utc)
+          def call(path, q, maxrows):
+              if used["credits"] + maxrows > CAP:
+                  print(f"STOP: next call could pass the {CAP}-credit cap"); return None, {}
+              url = "https://api.pkmnprices.com" + path + ("?" + urllib.parse.urlencode(q) if q else "")
+              req = urllib.request.Request(url, headers={"X-API-Key": KEY, "Accept": "application/json", "User-Agent": "dys-edge-verify"})
+              try:
+                  with urllib.request.urlopen(req, timeout=60) as r:
+                      h = {k.lower(): v for k, v in r.headers.items()}; body = json.loads(r.read())
+              except urllib.error.HTTPError as e:
+                  h = {k.lower(): v for k, v in e.headers.items()}; body = None
+                  print(f"  HTTP {e.code} on {path.split('/')[-1]} (plan or access)")
+              used["credits"] += int(h.get("x-credits-charged", "0") or 0); used["calls"] += 1
+              time.sleep(1.1)
+              return body, h
+          def age_h(ts):
+              if not ts: return None
+              t = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+              if t.tzinfo is None: t = t.replace(tzinfo=timezone.utc)
+              return round((NOW - t).total_seconds() / 3600, 1)
+          pct = lambda a, b: None if not a or not b else round((a / b - 1) * 100, 1)
+          NOT_RAW_EN = re.compile(r"chinese|japanese|italian|korean|french|german|spanish|portuguese|\b(bgs|cgc|psa|sgc|tag)\b|slab|graded|proxy|custom art", re.I)
+          # tcgplayer id, pkmnprices id, printing, Step 3 reference (Nov 18): Edge lowest, cheapest real NM English all-in (price+ship), TCGplayer NM market, foreign/graded listings seen as cheapest NM
+          CARDS = [
+            (170935, 22171, "Holofoil", 22.50, 36.99, 42.26, False),
+            (198534, 20719, "Holofoil", 18.00, 43.25, 38.34, True),
+            (201352, 33114, "Holofoil", 140.00, 181.50, 208.39, True),
+            (211452, 20663, "Holofoil", 140.00, 175.00, 209.57, True),
+            (497606, 28329, "Holofoil", 210.99, 249.99, 291.19, True),
+            (285378, 26629, "Holofoil", 26.00, 30.98, 38.47, False),
+            (42393, 12920, "Holofoil", 21.99, 44.99, 46.00, False),
+            (44424, 10700, "Unlimited Holofoil", 20.00, 31.47, 41.61, False),
+            (42382, 12927, "Holofoil", 499.99, 825.00, 991.77, False),
+            (94689, 14080, "Holofoil", 559.99, 1099.99, 1053.88, False),
+          ]
+          DEEP = {170935, 285378, 201352}   # 30 days of NM history + 30 days of eBay sales counts for 3 cards
+          b, h = call("/v1/cards/22171", {}, 1)
+          rem = int(h.get("x-credits-remaining", "0") or 0)
+          print(f"allowance check: limit {h.get('x-credits-limit')}, remaining today {rem}, prepaid balance header present: {'x-credits-balance' in h}")
+          if rem < 2000: sys.exit("STOP: less than 2,000 included credits left today")
+          detail0 = b
+          out = []
+          for tcg, pk, pr, edge_lo, s3_nm, s3_mkt, s3_foreign in CARDS:
+              r = {"tcg": tcg}
+              d = detail0 if pk == 22171 else call(f"/v1/cards/{pk}", {}, 1)[0]
+              if d:
+                  ps = [p for p in d.get("prices", []) if p.get("source") == "tcgplayer"]
+                  r["detail_fields"] = sorted(k for k in d if k not in ("prices", "attacks", "ability", "flavor_text"))
+                  r["price_conditions"] = sorted({p.get("condition") for p in ps if p.get("condition")})
+                  r["price_printings"] = sorted({p.get("variant") for p in ps if p.get("variant")})
+                  nm = [p for p in ps if p.get("condition") == "Near Mint" and p.get("variant") == pr]
+                  if not nm: nm = [p for p in ps if p.get("condition") == "Near Mint"]
+                  r["nm_market_vs_tcgplayer_nm_pct"] = pct(nm[0]["market_price"], s3_mkt) if nm else None
+                  r["nm_price_age_h"] = age_h(nm[0].get("created_at")) if nm else None
+                  nm_mkt = nm[0]["market_price"] if nm else None
+              else:
+                  nm_mkt = None
+              L, _ = call(f"/v1/cards/{pk}/listings/tcgplayer", {"condition": "Near Mint", "language": "English", "printing": pr, "sort": "total_asc", "limit": 10}, 10)
+              rows = (L or {}).get("data", [])
+              if L is not None and not rows:
+                  L, _ = call(f"/v1/cards/{pk}/listings/tcgplayer", {"condition": "Near Mint", "language": "English", "sort": "total_asc", "limit": 10}, 10)
+                  rows = (L or {}).get("data", []); r["printing_filter_fallback"] = True
+              if rows:
+                  r["listing_fields"] = sorted(rows[0].keys())
+                  r["nm_rows"] = len(rows)
+                  r["languages_seen"] = sorted({x.get("language") for x in rows})
+                  r["conditions_seen"] = sorted({x.get("condition") for x in rows})
+                  r["snapshot_age_h"] = age_h(rows[0].get("snapshot_at"))
+                  bad = [x for x in rows if NOT_RAW_EN.search(x.get("custom_title") or "")]
+                  r["custom_rows"] = sum(1 for x in rows if x.get("listing_type") == "custom")
+                  r["foreign_or_graded_titles"] = len(bad)
+                  first = rows[0]; first_bad = bool(NOT_RAW_EN.search(first.get("custom_title") or ""))
+                  r["cheapest_nm_is_foreign_or_graded"] = first_bad
+                  clean = [x for x in rows if not NOT_RAW_EN.search(x.get("custom_title") or "")]
+                  if clean:
+                      tot = clean[0]["price"] + (clean[0].get("shipping_price") or 0)
+                      r["clean_cheapest_vs_step3_pct"] = pct(tot, s3_nm)
+                      r["edge_lowest_below_clean_nm_pct"] = round((1 - edge_lo / tot) * 100, 1)
+                      ref = nm_mkt or s3_mkt
+                      cost = clean[0]["price"] * 1.08375 + (clean[0].get("shipping_price") or 0)
+                      net = ref * (1 - 0.1325) - 0.30 - (5 if ref >= 50 else 1)
+                      r["meets_5usd_20pct_target"] = (net - cost) >= 5 and (net - cost) / cost >= 0.20
+              else:
+                  r["nm_rows"] = 0
+              A, _ = call(f"/v1/cards/{pk}/listings/tcgplayer", {"printing": pr, "sort": "total_asc", "limit": 5}, 5)
+              arows = (A or {}).get("data", [])
+              r["cheapest5_conditions"] = [x.get("condition") for x in arows]
+              H, _ = call(f"/v1/cards/{pk}/prices/history", {"currency": "usd", "condition": "Near Mint", "variant": pr, "period": "365d", "limit": 1, "page": 1}, 1)
+              if H and H.get("data"):
+                  tot = H["pagination"]["total"]
+                  last = H["data"][0]["date"]
+                  H2, _ = call(f"/v1/cards/{pk}/prices/history", {"currency": "usd", "condition": "Near Mint", "variant": pr, "period": "365d", "limit": 1, "page": tot}, 1)
+                  first = H2["data"][0]["date"] if H2 and H2.get("data") else None
+                  r["nm_history"] = {"rows": tot, "dates": sorted([first, last]), "row_fields": sorted(H["data"][0].keys())}
+              else:
+                  r["nm_history"] = None
+              if tcg in DEEP:
+                  H3, _ = call(f"/v1/cards/{pk}/prices/history", {"currency": "usd", "condition": "Near Mint", "variant": pr, "period": "30d", "limit": 30}, 30)
+                  hd = (H3 or {}).get("data", [])
+                  r["nm_30d_days"] = len({x["date"] for x in hd})
+                  if hd and rows:
+                      lows = [x["low"] for x in hd if x.get("low")]
+                      r["nm_hist_min_low_vs_clean_cheapest_pct"] = pct(min(lows), clean[0]["price"]) if lows and clean else None
+                  V, _ = call(f"/v1/cards/{pk}/sales/volume", {"period": "30d", "graded": "false", "limit": 30}, 30)
+                  vd = (V or {}).get("data", [])
+                  r["ebay_raw_sales_30d"] = sum(x.get("sales", 0) for x in vd)
+                  r["ebay_raw_days_with_sales_30d"] = len({x["date"] for x in vd})
+                  r["volume_fields"] = sorted(vd[0].keys()) if vd else []
+              print("CARD " + json.dumps(r, sort_keys=True))
+              out.append(r)
+          print(f"TOTAL credits {used['credits']} in {used['calls']} calls (cap {CAP})")
