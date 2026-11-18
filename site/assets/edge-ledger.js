@@ -31,7 +31,9 @@
   const PAY = ["Cash", "Card", "Trade", "Other"];
   const KINDS = ["Raw", "Graded", "Sealed", "Other"];
   const STATUS = ["", "At grading", "Listed"];
-  const PLATS = ["eBay", "TCGplayer", "Whatnot", "Shopify", "Card show", "Local", "Trade", "Other"];
+  const PLATS = ["eBay", "TCGplayer", "Whatnot", "Shopify", "Card show", "Local", "Facebook Marketplace", "OfferUp", "Vinted", "Trade", "Other"];
+  const NO_SHIP = ["Card show", "Local", "Trade", "Facebook Marketplace", "OfferUp", "Vinted"];   // in person, or the buyer pays the label (Vinted)
+  const NO_SUP = ["Card show", "Local", "Trade", "Facebook Marketplace", "OfferUp"];
   const PLAT_FEES = { eBay: "ebay", TCGplayer: "tcgplayer", Whatnot: "whatnot" };     // fee estimate from Edge's fee file; others: typed in
   const COST_KINDS = ["Grading", "Supplies", "Shipping", "Show table", "Subscription", "Other"];
   const CASH_KINDS = ["Starting cash", "Money in", "Money out", "Move"];
@@ -383,7 +385,7 @@
         return;
       }
       f.qty ||= 1; f.plat ||= "eBay"; f.day ||= localDay();
-      const est = (p) => ({ fees: PLAT_FEES[f.plat] ? ctx.feeEst(PLAT_FEES[f.plat], p, x.kind === "Sealed" ? "s" : "c") : 0, shipOut: ["Card show", "Local", "Trade"].includes(f.plat) ? 0 : ctx.shipEst(p, x.kind === "Sealed" ? "s" : "c"), supplies: ["Card show", "Local", "Trade"].includes(f.plat) ? 0 : ctx.supplies(x.kind === "Sealed" ? "s" : "c") });
+      const est = (p) => ({ fees: PLAT_FEES[f.plat] ? ctx.feeEst(PLAT_FEES[f.plat], p, x.kind === "Sealed" ? "s" : "c") : 0, shipOut: NO_SHIP.includes(f.plat) ? 0 : ctx.shipEst(p, x.kind === "Sealed" ? "s" : "c"), supplies: NO_SUP.includes(f.plat) ? 0 : ctx.supplies(x.kind === "Sealed" ? "s" : "c") });
       if (f.price == null) { f.price = x.value != null ? Math.round(x.value / x.left) : 0; Object.assign(f, est(f.price)); }
       const costNow = () => { const q = Math.min(x.left, Math.max(1, f.qty)), slice = (k) => Math.round(x.cost * Math.min(k, x.qty) / x.qty); return slice(x.sold + q) - slice(x.sold); };
       const show = () => { const n = netOf(f), c = costNow(); return `You keep <b>${money(n)}</b> · cost ${money(c)} · profit <b class="${cls(n - c)}">${signed(n - c)}</b>`; };
@@ -395,7 +397,7 @@
           ${money$("lf-price", `Sale price${x.left > 1 ? " (total)" : ""}`, f.price)}${money$("lf-shipin", "Shipping the buyer paid", f.shipIn)}
           ${money$("lf-fees", "Fees", f.fees)}${money$("lf-shipout", "Shipping you paid", f.shipOut)}${money$("lf-sup", "Supplies", f.supplies)}${money$("lf-other", "Other costs", f.other)}
           <label class="f full">Note<input class="field" id="lf-note" value="${esc(f.note || "")}"></label></div>
-        <p class="small muted" style="margin:0">${PLAT_FEES[f.plat] ? `Fees, shipping and supplies start at Edge's estimate for ${esc(f.plat)}; type the real numbers from your order.` : "Type the fees, if any."}</p>
+        <p class="small muted" style="margin:0">${PLAT_FEES[f.plat] ? `Fees, shipping and supplies start at Edge's estimate for ${esc(f.plat)}; type the real numbers from your order.` : "Type the fees, if any (a payment app's fee counts). Sales tax you collected isn't part of the sale price."}</p>
         <p class="lg-total" id="lf-out">${show()}</p>
         <div class="btns"><button type="submit" class="btn primary">Save sale</button></div></form>`;
       const keep = () => Object.assign(f, { day: $("#lf-day").value, plat: $("#lf-plat").value, qty: $("#lf-qty") ? Math.min(x.left, Math.max(1, int($("#lf-qty").value) || 1)) : 1,

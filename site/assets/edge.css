@@ -465,3 +465,13 @@ a.row{text-decoration:none;color:inherit}
 .lg-move{border-color:var(--accent-2)}
 .lg-confirm{margin-bottom:10px}
 .lg-row .ph{display:block}
+/* where to sell? (edge-channels.js) */
+.ch-list{display:flex;flex-direction:column;gap:8px}
+.ch-row{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.ch-row.ch-best{border-color:color-mix(in srgb,var(--up) 55%,transparent)}
+.ch-top{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px}.ch-top small{color:var(--ink-2)}
+.ch-nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.ch-nums span{display:flex;flex-direction:column;gap:2px;min-width:0}.ch-nums small{color:var(--ink-2);font-size:11px}
+.ch-sub{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;font-size:12px;color:var(--ink-2)}
+.ch-row p{margin:0}.ch-warn{color:var(--warn)}
+.ch .btns{margin:0}.lg-ch{margin-top:10px}

@@ -206,7 +206,8 @@
         if (res && res.ok) { data = res.data; state.status = "ready"; state.readAt = res.readAt ?? "just now"; state.source = data.source; } else state.status = "error";
         state.note = (res && res.note) || ""; draw();
       };
-      last = r; return r;
+      last = r; if (o.after) try { o.after(r, sell); } catch (e) { console.error(e); }
+      return r;
     };
     draw();
     return { get result() { return last; }, redraw: draw, get sell() { return sell; } };

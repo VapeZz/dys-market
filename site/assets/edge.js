@@ -25,6 +25,8 @@
   const PKMN = part("edge-pkmn.js", "EdgePkmn");
   // sold prices for a graded card the owner holds (edge-graded.js): that exact grader and grade only, never raw or other grades
   const GRADED = part("edge-graded.js", "EdgeGraded");
+  // where to sell? estimated profit per selling option (edge-channels.js), under the Deal check and the PSA check
+  const CHAN = part("edge-channels.js", "EdgeChannels");
   // the ledger (edge-ledger.js, M2): buys, sales, expenses, cash and inventory in two books, kept in the owner's Google
   // Sheet through its web app (tools/ledger/Code.gs), with a copy and a queue of changes on this phone
   const LEDGER = part("edge-ledger.js", "EdgeLedger");
@@ -209,6 +211,13 @@
       shipAuto: (x) => shipOut(x, "c", "ebay"), breaks: [5000] };
   }
   const gradedSell = () => ({ ...gradedBase(), ...(S.set.gradedSell || {}) });
+  function chanOpts(kind, name) {
+    const pl = FEES.sell.ebay, p0 = pl.parts[0] || [13.25, 0, null], p1 = pl.parts[1] || [0], t = kind === "sealed" ? "s" : "c";
+    return { item: { kind, name }, saved: S.set.channels || {}, roi: S.set.roi, minProfit: S.set.minProfit, breaks: t === "s" ? [10000] : [5000],
+      shipAuto: (x) => shipOut(x, t, "ebay"),
+      ebay: { feePct: p0[0], topFrom: p0[2] ?? 750000, topPct: p1[0] || 0, feeFlat: pl.flat || 0, buyerTax: S.set.buyerTax, ship: null, sup: t === "s" ? S.set.supSealed : S.set.supCard },
+      save: (o) => { S.set.channels = o ? JSON.parse(JSON.stringify(o)) : null; save(); } };
+  }
   const gradedSave = (o) => { S.set.gradedSell = o ? { ...o } : null; save(); };
   const gradedOpts = () => ({ today: Math.floor(Date.now() / 864e5), roi: S.set.roi, minProfit: S.set.minProfit });
   // a ledger or inventory row → what lookupGrade needs, and the holding
@@ -230,7 +239,16 @@
     const item = { id: +x.tcg, n: x.n || x.name }, slab = slabOf(x), label = `${slab.grader} ${slab.grade}`;
     const holding = { cost: x.costEach || 0, label };
     const load = (fresh) => pkmn.getGrade(item, slab, conn, fresh).then(gradedNote);
-    const opts = { holding, sell: gradedSell(), base: gradedBase(), ...gradedOpts(), save: gradedSave };
+    let cbox = null, cm = null;
+    const chan = await CHAN;
+    if (chan && box.parentNode) { cbox = document.createElement("div"); cbox.className = "lg-ch"; box.after(cbox); }
+    const after = (r, sell) => {
+      if (!cbox) return;
+      const p = { cost: holding.cost, ref: r.typical ?? null, refLabel: r.typical != null ? `${label} typical sold price, ${r.s && r.s.full30 ? "last 30 days" : "newest sales"}` : null,
+        ebay: { feePct: sell.feePct, topFrom: sell.topFrom ?? 750000, topPct: sell.topPct || 0, feeFlat: sell.perOrder || 0, buyerTax: sell.buyerTax, ship: sell.ship, sup: sell.supplies || 0 } };
+      try { cm ? cm.update(p) : (cm = chan.mount(cbox, { ...chanOpts("graded", x.n || x.name), ...p })); } catch (err) { console.error(err); cbox.remove(); cbox = null; }
+    };
+    const opts = { holding, sell: gradedSell(), base: gradedBase(), ...gradedOpts(), save: gradedSave, after };
     if (!conn) { g.mount(box, { ...opts, note: "Sold prices aren't set up on this device yet (Mine → Settings → Pair this phone)." }); return; }
     const first = await load(false);
     g.mount(box, { ...opts, load, data: first.ok ? first.data : null, note: first.note, readAt: first.ok ? "just now" : null });
@@ -654,7 +672,7 @@
     sheet.hidden = false; document.body.style.overflow = "hidden";
     const card = $("#sheet-card");
     card.innerHTML = `<div class="grab"><span class="lab">Card details</span><button type="button" class="btn sm close">Close</button></div><p class="muted">Loading…</p>`;
-    const [{ it, set }, eb, , ta, daily, strat, backtest, deal, pkmn] = await Promise.all([detail(id, g, n), getJSON("ebay.json").catch(() => ({ cards: {} })), loadGraded(), TA, dailyFile(g), STRAT, BACKTEST, DEAL, PKMN, LEDGER]);
+    const [{ it, set }, eb, , ta, daily, strat, backtest, deal, pkmn, , chan] = await Promise.all([detail(id, g, n), getJSON("ebay.json").catch(() => ({ cards: {} })), loadGraded(), TA, dailyFile(g), STRAT, BACKTEST, DEAL, PKMN, LEDGER, CHAN]);
     if (!it) { card.innerHTML = `<div class="grab"><span class="lab">Card details</span><button type="button" class="btn sm close">Close</button></div><div class="empty"><b>No price for this one yet</b>It may be too new or not sold recently.</div>`; return; }
     const x = { id: it.id, g, n: it.n, t: it.t, sn: set.n };
     S.recent = [x, ...S.recent.filter((y) => !(y.id === x.id && y.n === x.n))].slice(0, 12); save();
@@ -677,6 +695,7 @@
         <div class="tile"><span class="lab">Flip now</span><b class="${f ? cls(f.pr) : ""}">${f ? signed(f.pr) : "—"}</b><small>${f ? `${f.roi.toFixed(0)}% buying the lowest` : "no listing"}</small></div></div>
       ${slabs.length ? `<p class="small muted panel" style="margin:0">You hold this card as ${esc([...new Set(slabs)].join(", "))}. The Deal check below is for buying a raw copy; for your graded copy, open it in Mine → Ledger and tap Check sold prices.</p>` : ""}
       ${deal ? `<section class="sec panel" id="c-deal"></section>` : ""}
+      ${deal && chan ? `<section class="sec panel" id="c-ch"></section>` : ""}
       ${ta && strat ? `<section class="sec" id="c-strat" hidden></section>` : ""}
       ${ta ? `<section class="sec ta" id="c-ta"></section>` : simple}
       ${it.t === "c" ? `<section class="sec"><span class="lab">By condition</span><div class="cond">${COND.map(([c, m]) => `<div><b>${c}</b>${money(Math.round(p * m), p * m >= 10000)}</div>`).join("")}</div></section>` : ""}
@@ -719,8 +738,12 @@
       const warning = reading && !reading.demoted ? { id: reading.id, verdict: reading.verdict, name: reading.name } : null;
       const conn = pkmnConn(), had = pkmn && conn ? pkmn._mem.get(`${it.t}|${it.id}`) : null;
       const first = had ? await had : null;
+      // the comparison follows the Deal check: cost = what this copy would cost you, starting price = the eBay sold value used above
+      const cbox = $("#c-ch"); let cm = null;
+      const chOf = (r) => { const F = r.routes.flip; return { cost: F.cost, ref: F.exit ?? null, refLabel: F.exit ? `${F.grade === "sealed" ? "sealed" : "raw"} sold median${F.grade === "raw" ? ", condition applied" : ""}` : null }; };
+      const after = (r) => { if (!cbox || !chan) return; try { cm ? cm.update(chOf(r)) : (cm = chan.mount(cbox, { ...chanOpts(it.t === "s" ? "sealed" : "raw", it.n), ...chOf(r) })); } catch (err) { console.error(err); cbox.remove(); } };
       deal.mount(dbox, item, first && first.ok ? first.data : null, { ask: lo || p || 0, cond: "NM", shipIn: shipIn(it.t), taxIn: S.set.taxIn }, dealCfg(p), { warning },
-        pkmn && conn ? { load: (fresh) => pkmn.get(item, conn, fresh).then(soldNote) } : { off: true, note: pkmn ? "Sold prices aren't set up yet: add your PkmnPrices relay in Mine → Settings. Until then this stays a PASS." : "The sold-price reader didn't load." });
+        pkmn && conn ? { load: (fresh) => pkmn.get(item, conn, fresh).then(soldNote), after } : { off: true, note: pkmn ? "Sold prices aren't set up yet: add your PkmnPrices relay in Mine → Settings. Until then this stays a PASS." : "The sold-price reader didn't load.", after });
     } catch (err) { console.error(err); dbox.remove(); }
     const form = $("#c-form");
     const cb = $("#c-buy"); if (cb) cb.onclick = () => {

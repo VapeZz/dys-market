@@ -356,7 +356,8 @@
         if (res && res.ok) { data = res.data; state.status = "ready"; } else state.status = "error";
         state.note = (res && res.note) || ""; draw();
       };
-      last = r; return r;
+      last = r; if (hooks && hooks.after) try { hooks.after(r, data); } catch (e) { console.error(e); }
+      return r;
     };
     draw();
     return { get result() { return last; }, redraw: draw };
