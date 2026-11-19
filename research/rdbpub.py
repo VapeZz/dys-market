@@ -16,7 +16,8 @@ SCHEMA_VERSION = 1
 D0 = date(2024, 2, 8)
 FIELDS = ('market', 'low', 'mid', 'high', 'dlow')
 PUBLIC_TABLES = {'meta', 'sets', 'cards', 'price_change', 'presence', 'current_state', 'archive_days', 'missing_days', 'coverage',
-                 'card_fts', 'card_fts_data', 'card_fts_idx', 'card_fts_content', 'card_fts_docsize', 'card_fts_config'}
+                 'card_fts', 'card_fts_data', 'card_fts_idx', 'card_fts_content', 'card_fts_docsize', 'card_fts_config',
+                 'sqlite_stat1', 'sqlite_stat4'}  # sqlite_stat*: query-planner statistics from ANALYZE
 
 def dnum(s): return (date.fromisoformat(s) - D0).days
 def dstr(n): return (D0 + timedelta(n)).isoformat()
