@@ -53,7 +53,8 @@ jobs:
           for n in ('vault', 'scenario'):
               p = f"{os.environ['RUNNER_TEMP']}/{n}-results.json"
               if not os.path.exists(p): print(f'{n}: no results'); bad += 1; continue
-              r = json.load(open(p)); r = r.get('results', r)
+              full = json.load(open(p)); r = full.get('results', full)
+              if isinstance(full.get('error'), str): print(f'{n}: stopped with an error'); bad += 1
               f = [k for k, v in r.items() if not v['pass']]; bad += len(f)
               print(f'{n}: {len(r)-len(f)}/{len(r)} passed' + (f' — failed: {", ".join(f)}' if f else ''))
           open(os.environ['RUNNER_TEMP'] + '/bad', 'w').write(str(bad))

@@ -47,10 +47,10 @@ def source_days():
     return days
 
 def draft_release(name):
-    if not name.startswith(WRITE_PREFIX): raise SystemExit(f'refused: {name} is not a test release')
+    if not name.startswith(WRITE_PREFIX): raise PermissionError(f'refused: {name} is not a test release')
     for r in api('GET', f'/repos/{REPO}/releases?per_page=100'):
         if r['name'] == name:
-            if not r['draft']: raise SystemExit(f'refused: {name} exists and is not a draft')
+            if not r['draft']: raise PermissionError(f'refused: {name} exists and is not a draft')
             return r
     return api('POST', f'/repos/{REPO}/releases', {'tag_name': name, 'name': name, 'draft': True, 'prerelease': True,
                                                    'body': 'Disposable test of the research database storage. Not production.'})
@@ -89,7 +89,7 @@ class _Body:
 
 def upload(release, path, name, fail_after=None):
     """Upload under a NEW name and verify GitHub's digest. Never replaces an existing asset."""
-    if not release['name'].startswith(WRITE_PREFIX) or not release['draft']: raise SystemExit('refused: not a test draft release')
+    if not release['name'].startswith(WRITE_PREFIX) or not release['draft']: raise PermissionError('refused: not a test draft release')
     if any(a['name'] == name for a in list_assets(release['id'])): raise ValueError(f'{name} already exists — names are never reused')
     size = os.path.getsize(path)
     req = urllib.request.Request(f'{UPLOADS}/repos/{REPO}/releases/{release["id"]}/assets?name={name}', data=_Body(path, fail_after),
