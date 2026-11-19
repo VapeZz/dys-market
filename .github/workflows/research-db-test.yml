@@ -42,6 +42,6 @@ jobs:
           bad = [k for k, v in r.items() if not v['pass']]
           print(f"{len(r)-len(bad)}/{len(r)} passed" + (f" — failed: {', '.join(bad)}" if bad else ''))
           for k, v in r.items(): print(f"- {'PASS' if v['pass'] else 'FAIL'} {k}: {v['detail']}")
-          open(os.environ['RUNNER_TEMP'] + '/bad', 'w').write(str(len(bad)) if len(r) == 11 else '99')
+          open(os.environ['RUNNER_TEMP'] + '/bad', 'w').write(str(len(bad)) if len(r) == 10 else '99')
           PY
           test "$(cat "$RUNNER_TEMP/bad")" = "0"

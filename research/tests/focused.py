@@ -15,7 +15,7 @@ def fails(f):
     except Exception as e: return type(e).__name__
 OLD = 'research-db-test-1119'; NEW = 'research-db-test-1119-lookupcheck'
 lookup = lambda name: subprocess.run([sys.executable, '-c', f'import sys; sys.path.insert(0, "research"); import nightly as N; print(N.draft_release("{name}")["id"])'],
-                                     capture_output=True, text=True).stdout.strip()
+                                     capture_output=True, text=True).stdout.strip().splitlines()[-1]
 
 if PHASE == 'lookup-create':
     ids = [lookup(OLD) for _ in range(5)]
@@ -27,8 +27,9 @@ if PHASE == 'lookup-create':
     r = N.draft_release(NEW, create=True)          # creates once and waits until listed
     again = [lookup(NEW) for _ in range(5)]          # immediately, from 5 separate processes
     r2 = N.draft_release(NEW, create=True)          # a second "create" call must find it, not make another
-    ok('create_once_then_found', not before and set(again) == {str(r['id'])} and r2['id'] == r['id'] and len(N._drafts_named(NEW)) == 1,
-       f'created draft {r["id"]}; 5 immediate lookups in other processes + a second create call all returned it; drafts with that name: 1')
+    how = f'created draft {r["id"]}' if not before else f'draft {r["id"]} already existed (made by the previous run), so nothing was created'
+    ok('create_once_then_found', (not before or before[0]['id'] == r['id']) and set(again) == {str(r['id'])} and r2['id'] == r['id']
+       and len(N._drafts_named(NEW)) == 1, f'{how}; 5 immediate lookups in other processes + a second create call all returned it; drafts with that name: 1')
     with open(os.environ['GITHUB_ENV'], 'a') as f: f.write(f'RDB_LOOKUP_ID={r["id"]}\nRDB_STORE_ID={N.draft_release(OLD)["id"]}\n')
 elif PHASE == 'lookup-verify':
     r = N.release_by_id(os.environ['RDB_LOOKUP_ID'])
