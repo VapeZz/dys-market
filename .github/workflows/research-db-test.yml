@@ -17,7 +17,6 @@ jobs:
     timeout-minutes: 30
     env:
       GH_TOKEN: ${{ github.token }}
-      RES: ${{ runner.temp }}/focused-results.json
     steps:
       - name: Refuse to run anywhere but the test branch
         run: test "$GITHUB_REF_NAME" = "research-db-test-1119"
