@@ -2,7 +2,8 @@ name: Price archive (other TCGs)
 
 # Saves a daily price snapshot for Magic, Yu-Gi-Oh!, Lorcana and other TCGs,
 # plus a permanent copy of the Pokémon / One Piece snapshot, as GitHub Release
-# files (one release per month). Does not change the live site.
+# files (one release per month), and tcgcsv's full daily file (all games, every
+# price field) in the tcgcsv-<year> releases. Does not change the live site.
 
 on:
   schedule:
@@ -13,9 +14,14 @@ on:
         description: "Also save each game's full card list (runs automatically on the 1st)"
         type: boolean
         default: false
+      tcgcsv_from:
+        description: "Store tcgcsv's full daily files from this day (YYYY-MM-DD) instead of the last 14 days"
+        type: string
+        default: ""
 
 permissions:
   contents: write
+  actions: read     # the tcgcsv step reads files an earlier run kept (artifacts), so a day isn't downloaded twice
 
 concurrency:
   group: archive
@@ -76,3 +82,29 @@ jobs:
             n=$((n+1)); echo "- $name ($(( $(stat -c %s "$f") / 1024 )) KB) -> $tag" >> "$GITHUB_STEP_SUMMARY"
           done
           echo "### Archived $n files" >> "$GITHUB_STEP_SUMMARY"
+
+      # tcgcsv's own daily file, exactly as published: every game, both Pokémon languages, every printing and every
+      # price field (market, low, mid, high, direct low). Stored in the tcgcsv-<year> release next to Feb 8, 2024 -
+      # Oct 11, 2026. Looks at the last 14 days, so a missed night heals itself; stored days are skipped and a stored
+      # file is never replaced. Runs after the archive above and can't fail the job, so that archive is unchanged.
+      - name: Keep tcgcsv's full daily price file
+        continue-on-error: true
+        timeout-minutes: 30
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TCGCSV_FROM: ${{ inputs.tcgcsv_from }}
+        run: |
+          which 7z || sudo apt-get install -y p7zip-full
+          day=$(cat archive-out/day.txt)
+          from="$TCGCSV_FROM"; [ -n "$from" ] || from=$(date -u -d "$day - 13 days" +%F)
+          PULL_START="$from" PULL_END="$day" PULL_PAUSE=2 SEED_RECENT=tcgcsv-unsaved python tools/history_pull.py
+
+      - name: Keep any tcgcsv file GitHub didn't store (the next run stores it from here)
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: tcgcsv-unsaved
+          path: pull-out/
+          if-no-files-found: ignore
+          retention-days: 14
