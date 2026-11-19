@@ -46,14 +46,37 @@ def source_days():
                                          'url': a['browser_download_url'], 'size': a['size']}
     return days
 
-def draft_release(name):
+def _drafts_named(name):
+    out = []; page = 1
+    while True:
+        rs = api('GET', f'/repos/{REPO}/releases?per_page=100&page={page}'); page += 1
+        out += [r for r in rs if r['name'] == name]
+        if len(rs) < 100: return sorted(out, key=lambda r: r['id'])
+
+def release_by_id(release_id):
+    """Preferred: address the storage release by its id (saved once), never by name."""
+    r = api('GET', f'/repos/{REPO}/releases/{int(release_id)}')
+    if not r['name'].startswith(WRITE_PREFIX) or not r['draft']: raise PermissionError(f'refused: release {release_id} is not a test draft')
+    return r
+
+def draft_release(name, create=False, wait_s=90):
+    """Find the draft named `name`; if several exist (an earlier race), always use the lowest id and report the rest.
+    Creates one only when create=True AND none exists, then waits until the release list shows it, so a later
+    lookup in another process can't miss it and create a second one."""
     if not name.startswith(WRITE_PREFIX): raise PermissionError(f'refused: {name} is not a test release')
-    for r in api('GET', f'/repos/{REPO}/releases?per_page=100'):
-        if r['name'] == name:
-            if not r['draft']: raise PermissionError(f'refused: {name} exists and is not a draft')
-            return r
-    return api('POST', f'/repos/{REPO}/releases', {'tag_name': name, 'name': name, 'draft': True, 'prerelease': True,
-                                                   'body': 'Disposable test of the research database storage. Not production.'})
+    found = _drafts_named(name)
+    if any(not r['draft'] for r in found): raise PermissionError(f'refused: {name} exists and is not a draft')
+    if found:
+        if len(found) > 1: print(f'note: {len(found)} drafts named {name}; using the lowest id', flush=True)
+        return found[0]
+    if not create: raise LookupError(f'no draft named {name} (create=False)')
+    r = api('POST', f'/repos/{REPO}/releases', {'tag_name': name, 'name': name, 'draft': True, 'prerelease': True,
+                                                'body': 'Disposable test of the research database storage. Not production.'})
+    t = time.time()
+    while time.time() - t < wait_s:
+        if any(x['id'] == r['id'] for x in _drafts_named(name)): return r
+        time.sleep(3)
+    raise TimeoutError(f'created draft {r["id"]} but it did not appear in the list within {wait_s}s')
 
 def download_public(url, path, digest, fault=None):
     """Download a source archive by its public URL (no API quota) and verify GitHub's sha256 digest."""

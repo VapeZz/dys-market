@@ -24,9 +24,9 @@ def fails(f):
 def save(): json.dump(R, open(OUT, 'w'), indent=1)
 
 try:
-    release = N.draft_release(REL)
+    release = N.draft_release(REL, create=True)
     ok('writes_only_to_test_draft', release['draft'] and release['name'] == REL, f'draft release {REL}')
-    ok('refuses_other_release', fails(lambda: N.draft_release('tcgcsv-2026')), 'writing to tcgcsv-2026 is refused by the code')
+    ok('refuses_other_release', fails(lambda: N.draft_release('tcgcsv-2026', create=True)), 'writing to tcgcsv-2026 is refused by the code')
     src = N.source_days()
     days = sorted(d for d in src if d <= BASE_UNTIL)
     R['source_days'] = len(src)
