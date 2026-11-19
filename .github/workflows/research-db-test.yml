@@ -1,0 +1,61 @@
+# DISPOSABLE TEST of the research database storage split (Keo approved Nov 18, 2026, 10:53 PM).
+# Lives only on the orphan branch research-db-test-1119; never merged. No schedule. Writes only to the DRAFT release
+# research-db-test-1119; reads tcgcsv-* releases. Uses no secrets except the job's own token, and no paid APIs.
+name: Research DB storage test (disposable)
+on:
+  push:
+    branches: [research-db-test-1119]
+permissions:
+  contents: write
+concurrency:
+  group: research-db-test
+  cancel-in-progress: false
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RDB_TEST_RELEASE: research-db-test-1119
+    steps:
+      - name: Refuse to run anywhere but the test branch
+        run: test "$GITHUB_REF_NAME" = "research-db-test-1119"
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Tools
+        run: |
+          which 7z || sudo apt-get install -y p7zip-full
+          pip install --quiet "cryptography>=44"
+          df -h / | tail -1
+      - name: Private part — disposable keys, synthetic records
+        run: python -I research/tests/vault_test.py "$RUNNER_TEMP/vault" "$RUNNER_TEMP/vault-results.json"
+      - name: Public part — build, publish, nightly scenarios
+        run: python -I research/tests/scenarios.py "$RUNNER_TEMP/w" "$RUNNER_TEMP/scenario-results.json"
+      - name: Leak scan of the results files, then store them (counts, hashes and messages only)
+        if: always()
+        run: |
+          python -I research/leakscan.py "$RUNNER_TEMP"/*-results.json
+          cd research && python - <<'EOF'
+          import os, json, nightly as N
+          rel = N.draft_release(os.environ['RDB_TEST_RELEASE']); run = os.environ['GITHUB_RUN_ID']; att = os.environ['GITHUB_RUN_ATTEMPT']
+          for n in ('vault', 'scenario'):
+              p = f"{os.environ['RUNNER_TEMP']}/{n}-results.json"
+              if os.path.exists(p): N.upload(rel, p, f'results-{n}-{run}-{att}.json')
+          EOF
+      - name: Summary
+        if: always()
+        run: |
+          python -I - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import json, os
+          bad = 0
+          for n in ('vault', 'scenario'):
+              p = f"{os.environ['RUNNER_TEMP']}/{n}-results.json"
+              if not os.path.exists(p): print(f'{n}: no results'); bad += 1; continue
+              r = json.load(open(p)); r = r.get('results', r)
+              f = [k for k, v in r.items() if not v['pass']]; bad += len(f)
+              print(f'{n}: {len(r)-len(f)}/{len(r)} passed' + (f' — failed: {", ".join(f)}' if f else ''))
+          open(os.environ['RUNNER_TEMP'] + '/bad', 'w').write(str(bad))
+          EOF
+          test "$(cat "$RUNNER_TEMP/bad")" = "0"
