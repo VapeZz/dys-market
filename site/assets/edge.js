@@ -1438,12 +1438,46 @@
   const advToday = () => advLog().filter((r) => r.day === localDay()).reduce((s, r) => s + (r.cr || 0), 0);
   const advLast = () => advLog().filter((r) => r.full).sort((a, b) => b.at - a.at)[0] || null;
   function advRecord(n, cr, full) { S.advLog = [...advLog(), { at: Date.now(), day: localDay(), n, cr, full: !!full }].slice(-20); save(); }
+  /* Saved calls: the advisor's own calls kept on this phone for 12 hours (edge-advisor.js snapshot: call, reason without
+     amounts, sale counts, best option's name, profit as a range). No sold prices or other PkmnPrices data, and not in
+     backup files. A row is dropped when it expires, when that holding's cost, quantity, condition or grade changes, or
+     when the selling settings it was worked out with change. */
+  const AKEY = "dys-edge-advice", ADV_KEEP_H = 12;
+  const advSig = () => JSON.stringify(["roi", "minProfit", "platform", "buyerTax", "supCard", "supSealed", "shipCard", "shipCard50", "shipSealed", "shipSealed100", "gradeShip", "holdRate"].map((k) => S.set[k] ?? null));
+  const advFp = (x) => [x.cost || 0, x.qty, x.cond || "", x.graded || "", x.t || ""].join("|");
+  function advSaved() {
+    try {
+      const j = JSON.parse(localStorage.getItem(AKEY) || "null"), now = Date.now();
+      if (!j || j.v !== 1 || j.sig !== advSig() || !Array.isArray(j.rows)) { if (j) localStorage.removeItem(AKEY); return new Map(); }
+      const rows = j.rows.filter((r) => r && r.at > now - ADV_KEEP_H * 36e5 && r.at <= now);
+      if (rows.length !== j.rows.length) { if (rows.length) localStorage.setItem(AKEY, JSON.stringify({ ...j, rows })); else localStorage.removeItem(AKEY); }
+      return new Map(rows.map((r) => [r.key, r]));
+    } catch { return new Map(); }
+  }
+  // the saved call for a holding, if it still matches that holding
+  const advSavedFor = (x, M) => { const r = M.get(advKey(x)); return r && r.fp === advFp(x) ? r : null; };
+  async function advKeep(inv) {
+    const adv = await ADV; if (!adv) return;
+    const M = advSaved(), rows = [];
+    for (const x of inv) {
+      const k = advKey(x), fresh = ADVIN.get(k);
+      if (fresh && fresh.at) rows.push({ ...adv.snapshot([adv.classify(fresh)])[0], fp: advFp(x), at: fresh.at });
+      else { const r = advSavedFor(x, M); if (r) rows.push(r); }
+    }
+    try { if (rows.length) localStorage.setItem(AKEY, JSON.stringify({ v: 1, sig: advSig(), rows })); else localStorage.removeItem(AKEY); } catch {}
+  }
+  const ADVOWN = { sell: "sell", grade: "grade", monitor: "monitor", hold: "hold", data: "unclear" };
+  // Inventory's per-row chips from saved calls, for holdings not checked on this visit
+  function advChips() {
+    const M = advSaved();
+    for (const x of invRows()) { const k = advKey(x); if (ADVIN.has(k) || OWN.has(k)) continue; const r = advSavedFor(x, M); if (r) OWN.set(k, { label: ADVOWN[r.action], text: `${r.why} (saved ${clock(r.at)})` }); }
+  }
   async function reviewHoldings(inv, st) {
     const conn = pkmnConn(), [deal, pkmn, gr, chan] = await Promise.all([DEAL, PKMN, GRADED, CHAN]);
     if (!conn || !deal || !pkmn || !gr) return { ok: false, why: "Sold prices aren't set up yet (Mine → Settings → Pair this phone)." };
     if (ADVBUSY) return { ok: false, why: "A review is already running." };
     ADVBUSY = true; ADVSTOP = false; let credits = 0, i = 0, cut = null, stopped = 0;
-    const put = (x, val, own) => { ADVIN.set(advKey(x), { ...advBase(x), ...val }); if (own) OWN.set(advKey(x), own); };
+    const put = (x, val, own) => { ADVIN.set(advKey(x), { ...advBase(x), ...val, at: Date.now() }); if (own) OWN.set(advKey(x), own); };
     try {
       for (const x of inv) {
         // the relay can't be reached or refuses this phone: the rest would fail the same way, so they aren't tried
@@ -1487,24 +1521,30 @@
     if (!el) return;
     const adv = await ADV, inv = invRows();
     if (!adv) { el.innerHTML = ""; return; }
-    const list = inv.map((x) => ADVIN.get(advKey(x)) || { ...advBase(x), note: "Not reviewed yet: tap Review." });
-    const done = inv.filter((x) => ADVIN.has(advKey(x))).length, fresh = inv.filter((x) => !ADVIN.has(advKey(x))), conn = pkmnConn();
+    const M = advSaved(), kept = new Map(adv.restore(inv.map((x) => !ADVIN.has(advKey(x)) && advSavedFor(x, M)).filter(Boolean)).map((r) => [r.key, r]));
+    const keptAt = [...kept.keys()].map((k) => M.get(k).at);
+    const list = inv.map((x) => ADVIN.get(advKey(x)) || kept.get(advKey(x)) || { ...advBase(x), note: "Not reviewed yet: tap Review." });
+    const has = (x) => ADVIN.has(advKey(x)) || kept.has(advKey(x));
+    const done = inv.filter(has).length, fresh = inv.filter((x) => !has(x)), conn = pkmnConn();
     const fmt = (n) => n.toLocaleString("en-US"), plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
     // what the main button does: all holdings the first time; only the ones added since, once some are reviewed
     const target = done && fresh.length ? fresh : inv, full = target === inv, est = advEstimate(target), last = advLast(), spent = advToday();
     const goTxt = !done ? `Review my ${plural(inv.length, "holding")}` : fresh.length ? `Check ${plural(fresh.length, "unchecked holding")}` : "Review all again";
     const lastTxt = last ? `Last full review ${last.day === localDay() ? "today" : "yesterday"} at ${clock(last.at)}: ${plural(last.n, "item")}, ${fmt(last.cr)} credits.` : "";
     el.innerHTML = `<div class="sec-head"><h2>${opt.title || "Your holdings: what to do"}</h2>${opt.title ? "" : `<a class="more" href="#mine">Inventory</a>`}</div>
-      ${inv.length ? `<p class="muted small adv-note">Checks each holding against real eBay sold prices (PkmnPrices). Facts at today's prices, not a forecast. Sold prices aren't saved; results last for this visit.</p>
+      ${inv.length ? `<p class="muted small adv-note">Checks each holding against real eBay sold prices (PkmnPrices). Facts at today's prices, not a forecast. Sold prices aren't saved: the calls stay on this phone for 12 hours, with amounts as ranges.</p>
       ${!conn ? `<div class="panel adv-off"><b>Sold prices aren't set up on this phone</b><p class="small muted" style="margin:4px 0 8px">Pair it once in Mine → Settings. Until then nothing is checked and no credits are used; everything else in Edge works as usual.</p>
         <div class="btns"><button type="button" class="btn sm primary adv-pair">Go to Settings</button><button type="button" class="btn sm adv-go" disabled>Set up sold prices first</button></div></div>`
       : `<div class="btns"><button type="button" class="btn ${done && !fresh.length ? "sm" : "primary"} adv-go">${goTxt}</button>${done && fresh.length ? `<button type="button" class="btn sm adv-all">Review all again</button>` : ""}</div>
       <p class="small muted adv-est" style="margin:0">Up to about ${fmt(est)} credits for ${plural(target.length, "item")} (usually less) of your 20,000 a day.${lastTxt && !done ? ` ${lastTxt}` : ""}</p>
       <div class="adv-ask" hidden></div>
-      <p class="small muted adv-st" style="margin:0">${done ? `Reviewed ${done} of ${inv.length} at ${clock(ADVAT)} · ${fmt(ADVCRED)} credits.${fresh.length ? ` ${plural(fresh.length, "item")} not checked yet.` : ""}` : ""}</p>`}` : ""}
+      <p class="small muted adv-st" style="margin:0">${done ? `Reviewed ${done} of ${inv.length}${ADVAT ? ` at ${clock(ADVAT)} · ${fmt(ADVCRED)} credits` : ""}.${fresh.length ? ` ${plural(fresh.length, "item")} not checked yet.` : ""}` : ""}</p>`}
+      ${kept.size ? `<p class="small muted adv-kept" style="margin:4px 0 0">${kept.size === done ? "Saved calls" : `${plural(kept.size, "saved call")}`} from ${clock(Math.min(...keptAt))}, kept on this phone until ${clock(Math.min(...keptAt) + ADV_KEEP_H * 36e5)} at no cost. Amounts are ranges: exact sold prices aren't stored. <button type="button" class="linkish adv-forget">Clear saved calls</button></p>` : ""}` : ""}
       ${!inv.length || done ? adv.html(adv.board(list), { roi: S.set.roi, compact: !!opt.compact, img: (x) => { const r = inv.find((y) => advKey(y) === x.key); return r ? img(r.id) : `<span class="ph"></span>`; },
         attrs: (x) => { const r = inv.find((y) => advKey(y) === x.key); return r ? ` data-open="${r.id}" data-g="${r.g}" data-n="${esc(r.n)}"` : ""; } }) : ""}`;
     $$(".adv-tile[data-jump]", el).forEach((b) => { b.onclick = () => { const t = $(`#adv-${b.dataset.jump}`, el); if (t) t.scrollIntoView({ behavior: "smooth", block: "start" }); else if (opt.compact) location.hash = "today"; }; });
+    const forget = $(".adv-forget", el);
+    if (forget) forget.onclick = () => { try { localStorage.removeItem(AKEY); } catch {} for (const k of [...OWN.keys()]) if (!ADVIN.has(k)) OWN.delete(k); drawAdvisor(el, opt); opt.after && opt.after(); };
     const pair = $(".adv-pair", el);
     if (pair) pair.onclick = () => { SUB.mine = "set"; if (location.hash === "#mine") route(); else location.hash = "mine"; };
     const ask = $(".adv-ask", el), st = $(".adv-st", el), go = $(".adv-go", el), all = $(".adv-all", el);
@@ -1529,6 +1569,7 @@
         const res = await reviewHoldings(items, (t) => { if (st) st.textContent = t; });
         if (!res.ok) { ask.hidden = true; ask.innerHTML = ""; if (st) st.textContent = res.why; if (go) go.disabled = false; if (all) all.disabled = false; return; }
         if (res.credits) advRecord(res.checked, res.credits, isFull && !res.stopped && !res.cut);
+        await advKeep(invRows());
         await drawAdvisor(el, opt); opt.after && opt.after();
         if (res.stopped) { const s2 = $(".adv-st", el); if (s2) s2.textContent += ` Stopped: ${plural(res.stopped, "item")} not checked.`; }
       };
@@ -1538,9 +1579,10 @@
   }
   /* "Sell, grade or keep?" for what the owner holds: today's real sold prices, this page only */
   const OWN = new Map();
-  const OWNL = { sell: ["good", "Sell clears your target"], grade: ["good", "Grading looks better"], hold: ["", "Keep for now"], unclear: ["warn", "Not enough sales"], unknown: ["", "No sold data"] };
+  const OWNL = { sell: ["good", "Sell clears your target"], grade: ["good", "Grading looks better"], hold: ["", "Keep for now"], monitor: ["hot", "Monitor"], unclear: ["warn", "Not enough sales"], unknown: ["", "No sold data"] };
   function mineInv(el) {
     const draw = () => {
+      advChips();
       const inv = invRows(), on = ledgerOn();
       const moveNote = LS && !on ? `<div class="panel lg-move"><b>Your ledger is ready</b><p class="small muted" style="margin:4px 0 8px">Move these ${S.inv.length} items into it to track what you paid, what you sell and your profit, in your Google Sheet.</p><div class="btns"><button type="button" class="btn primary" id="inv-move">Open Ledger</button></div></div>` : "";
       if (!inv.length) { el.innerHTML = `<div class="empty"><b>Nothing here yet</b>Open any card from Search or Deals and tap ${LS ? "Bought it" : "Add to inventory"}. You'll see what it's worth and your profit every day.</div>`; return; }

@@ -181,7 +181,7 @@ def run(page, width, theme, mode):
             ok(f"valued at {money(e['ref'])}" in r["txt"], f"{tag}: {r['key']} shows its sold reference")
         ok(r["open"] is not None, f"{tag}: {r['key']} opens its card")
     sumtxt = page.inner_text("#t-adv .adv-sum") if page.query_selector("#t-adv .adv-sum") else ""
-    ok(signed(EXP["sellProfit"]) in sumtxt and "eBay at today's sold prices" in sumtxt, f"{tag}: sell total {sumtxt!r} vs {signed(EXP['sellProfit'])}")
+    ok(signed(EXP["sellProfit"]) in sumtxt and "eBay at the sold prices checked" in sumtxt, f"{tag}: sell total {sumtxt!r} vs {signed(EXP['sellProfit'])}")
     for sec, words in (("sell", "Worth selling"), ("grade", "May be worth grading"), ("monitor", "Monitor"), ("hold", "Hold"), ("data", "Not enough data")):
         if EXP["counts"][sec]:
             ok(page.query_selector(f"#adv-{sec}") and words in page.inner_text(f"#adv-{sec}"), f"{tag}: section {sec}")
@@ -208,24 +208,78 @@ def run(page, width, theme, mode):
     ok(len(chips) == len(HOLD), f"{tag}: every Inventory row carries its call ({len(chips)})")
     ok(calls["n"] == n1, f"{tag}: switching tabs made no new relay calls")
     junk_free(page, "#m-body", f"{tag} Inventory")
-    # nothing stored: no new keys, no sold-price data on the phone, ledger untouched
+    # stored: only the saved calls (our own calls, ranges, counts) under one new key; no sold-price data; ledger untouched
     store1 = page.evaluate("() => JSON.stringify(Object.keys(localStorage).sort())")
-    ok(store0 == store1, f"{tag}: no new storage keys {store1}")
+    ok(sorted(set(json.loads(store1)) - set(json.loads(store0))) == ["dys-edge-advice"] and set(json.loads(store0)) <= set(json.loads(store1)), f"{tag}: one new storage key {store1}")
+    saved = page.evaluate("() => JSON.parse(localStorage.getItem('dys-edge-advice'))")
+    allowed = {"key", "name", "kind", "qty", "cost", "cond", "grade", "book", "action", "why", "band", "ev", "bestName", "bestAssumed", "fp", "at"}
+    ok(saved["v"] == 1 and len(saved["rows"]) == len(HOLD), f"{tag}: one saved call per holding ({len(saved['rows'])})")
+    for r in saved["rows"]:
+        e = EXPK.get(r["key"], {})
+        ok(set(r) <= allowed and (r["ev"] is None or set(r["ev"]) <= {"n30", "n90", "capped", "age"}), f"{tag}: {r['key']} saved fields {sorted(set(r) - allowed)}")
+        ok(r["action"] == e.get("action"), f"{tag}: {r['key']} saved call {r['action']} vs {e.get('action')}")
+        ok("$" not in (r["why"] or ""), f"{tag}: {r['key']} saved reason has no amount {r['why']!r}")
+        nums = {v for v in (e.get("ref"), e.get("profitNow"), e.get("gradeProfit"), (e.get("best") or {}).get("profit"), (e.get("best") or {}).get("price")) if v}
+        found = set(re.findall(r"-?\d+", json.dumps({k: v for k, v in r.items() if k not in ("cost", "at", "fp", "key", "qty")})))
+        ok(not ({str(n) for n in nums} & found), f"{tag}: {r['key']} saved row holds an exact sold amount {nums & {int(x) for x in found}}")
     blob = page.evaluate("() => Object.values(localStorage).join(' ')")
-    ok("sold median" not in blob and "adv" not in json.dumps([k for k in json.loads(store1)]), f"{tag}: no advisor or sold-price data stored")
+    ok("sold median" not in blob and "comps" not in blob and "valued at" not in blob, f"{tag}: no sold-price data stored")
+    ok('"action"' not in page.evaluate("() => localStorage.getItem('dys-edge-v1')"), f"{tag}: saved calls aren't in the backup file's data")
     led = page.evaluate("() => JSON.parse(localStorage.getItem('dys-edge-ledger')).T.items")
     ok(len(led) == len(items) and all(a["price"] == b["price"] and a["qty"] == b["qty"] for a, b in zip(sorted(led, key=lambda x: x["id"]), sorted(items, key=lambda x: x["id"]))), f"{tag}: ledger items unchanged")
-    # reload forgets the review (memory only); a hash change alone is the same page, so reload for real
+    # a reload (a real one) shows the saved calls at no cost: same calls, ranges instead of amounts
     page.goto(f"http://127.0.0.1:{PORT}/edge/#today")
     page.reload()
-    page.wait_for_selector("#t-adv .adv-go", timeout=15000)
-    ok(not page.query_selector("#t-adv .adv-row") and "Review my" in page.inner_text("#t-adv .adv-go"), f"{tag}: a reload forgets the review")
-    ok("Last full review today at" in page.inner_text("#t-adv .adv-est"), f"{tag}: after a reload the last review is still shown")
+    page.wait_for_selector("#t-adv .adv-kept", timeout=15000)
     n2 = calls["n"]
+    acts = dict(page.eval_on_selector_all("#t-adv .adv-row", "rs => rs.map(r => [r.dataset.key, r.dataset.act])"))
+    ok(acts == {k: v["action"] for k, v in EXPK.items()}, f"{tag}: after a reload the saved calls show {acts}")
+    kept = page.inner_text("#t-adv .adv-kept")
+    ok("kept on this phone until" in kept and "exact sold prices aren't stored" in kept, f"{tag}: saved calls are labelled {kept!r}")
+    ok(page.inner_text("#t-adv .adv-go").strip() == "Review all again", f"{tag}: nothing left to check after a reload")
+    rows2 = page.eval_on_selector_all("#t-adv .adv-row", "rs => rs.map(r => ({ key: r.dataset.key, act: r.dataset.act, rt: r.querySelector('.adv-rt').innerText, txt: r.innerText }))")
+    for r in rows2:
+        e = EXPK[r["key"]]
+        ok("valued at" not in r["txt"] and "Best estimate" not in r["txt"], f"{tag}: {r['key']} saved row shows no sold value")
+        if e["action"] == "data":
+            ok("no value" in r["rt"] and "$" not in r["rt"], f"{tag}: {r['key']} saved data row has no value")
+        else:
+            exact = signed(e["gradeProfit"] if e["action"] == "grade" else e["profitNow"])
+            ok(exact not in r["rt"] and "range" in r["rt"] and (" to " in r["rt"] or "or more" in r["rt"] or "loss over" in r["rt"]), f"{tag}: {r['key']} saved row shows a range {r['rt']!r}")
+            if e["best"]:
+                ok(f"Best place to sell: {e['best']['name']}" in r["txt"], f"{tag}: {r['key']} saved best place")
+    junk_free(page, "#t-adv", f"{tag} Today (saved)")
+    if width == 390 and theme == "dark":
+        page.screenshot(path="/tmp/pv/09-saved-calls.png")
+    ok("Last full review today at" not in page.inner_text("#t-adv .adv-est"), f"{tag}: no duplicate last-review line with results showing")
     page.click("#t-adv .adv-go")
     ok("You already reviewed your holdings at" in page.inner_text("#t-adv .adv-ask"), f"{tag}: after a reload a repeat still warns")
     page.click("#t-adv .adv-no")
-    ok(calls["n"] == n2, f"{tag}: the warning spends nothing")
+    page.goto(f"http://127.0.0.1:{PORT}/edge/#mine")
+    page.wait_for_selector("#inv-adv .adv-tiles", timeout=15000)
+    chips = page.eval_on_selector_all("#m-body .list .own-res .chip", "cs => cs.map(c => c.textContent)")
+    ok(len(chips) == len(HOLD), f"{tag}: Inventory chips come back from saved calls ({len(chips)})")
+    ok(calls["n"] == n2, f"{tag}: revisiting Today and Inventory spent nothing ({calls['n'] - n2} calls)")
+    # a holding whose cost changed loses its saved call (only that one)
+    first = items[0]["id"]
+    page.evaluate("(id) => { const L = JSON.parse(localStorage.getItem('dys-edge-ledger')); L.T.items.find((x) => x.id === id).price += 100; localStorage.setItem('dys-edge-ledger', JSON.stringify(L)); }", first)
+    page.goto(f"http://127.0.0.1:{PORT}/edge/#today"); page.reload()
+    page.wait_for_selector("#t-adv .adv-kept", timeout=15000)
+    ok(page.inner_text("#t-adv .adv-go").strip() == "Check 1 unchecked holding", f"{tag}: an edited holding needs a new check {page.inner_text('#t-adv .adv-go')!r}")
+    page.evaluate("(id) => { const L = JSON.parse(localStorage.getItem('dys-edge-ledger')); L.T.items.find((x) => x.id === id).price -= 100; localStorage.setItem('dys-edge-ledger', JSON.stringify(L)); }", first)
+    # changing a selling setting (ROI target) clears them; so does the 12-hour limit; so does Clear
+    page.evaluate("() => { const s = JSON.parse(localStorage.getItem('dys-edge-v1')); s.set.roi = 25; localStorage.setItem('dys-edge-v1', JSON.stringify(s)); }")
+    page.reload(); page.wait_for_selector("#t-adv .adv-go", timeout=15000)
+    ok(not page.query_selector("#t-adv .adv-kept") and "Review my" in page.inner_text("#t-adv .adv-go") and page.evaluate("() => localStorage.getItem('dys-edge-advice')") is None, f"{tag}: a new ROI target clears saved calls")
+    page.evaluate("(sv) => { const s = JSON.parse(localStorage.getItem('dys-edge-v1')); s.set.roi = 20; localStorage.setItem('dys-edge-v1', JSON.stringify(s)); localStorage.setItem('dys-edge-advice', JSON.stringify(sv)); }", saved)
+    page.reload(); page.wait_for_selector("#t-adv .adv-kept", timeout=15000)
+    page.click("#t-adv .adv-forget"); page.wait_for_timeout(300)
+    ok(not page.query_selector("#t-adv .adv-kept") and page.evaluate("() => localStorage.getItem('dys-edge-advice')") is None, f"{tag}: Clear saved calls removes them")
+    old = dict(saved, rows=[dict(r, at=r["at"] - 12 * 3600 * 1000 - 60000) for r in saved["rows"]])
+    page.evaluate("(sv) => localStorage.setItem('dys-edge-advice', JSON.stringify(sv))", old)
+    page.reload(); page.wait_for_selector("#t-adv .adv-go", timeout=15000)
+    ok(not page.query_selector("#t-adv .adv-row") and page.evaluate("() => localStorage.getItem('dys-edge-advice')") is None, f"{tag}: saved calls expire after 12 hours")
+    ok(calls["n"] == n2, f"{tag}: none of this spent anything")
 
 
 def main():

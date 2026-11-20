@@ -508,3 +508,4 @@ a.row{text-decoration:none;color:inherit}
 .adv-confirm .btns, .adv-off .btns { flex-wrap: wrap; }
 .adv-est { margin-top: 4px; }
 .adv-off .adv-go[disabled] { opacity: .45; }
+.linkish { background: none; border: 0; padding: 0; font: inherit; color: var(--accent, #7dd3fc); text-decoration: underline; cursor: pointer; }

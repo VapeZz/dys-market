@@ -145,4 +145,34 @@ test("random thin data never shows a profit (3,000 raw/sealed + 1,500 slabs)", (
   }
   assert.ok(thin > 1500 && valued > 500, `coverage: ${thin} thin, ${valued} valued`);
 });
+
+// Saved calls keep our own calls only: across 3,000 random holdings, a snapshot never holds a sold price, a median, an exact
+// profit or any amount a sold price could be worked back from; its range always contains the exact profit; and the board
+// and panel built from it show the same call with a range, never an exact amount.
+test("saved calls hold no sold-price data and keep the same call (3,000 random holdings)", () => {
+  const OK = new Set(["key", "name", "kind", "qty", "cost", "cond", "grade", "book", "action", "why", "band", "ev", "bestName", "bestAssumed"]);
+  for (const [i, c] of Y.randomCases(3000, 4242).entries()) {
+    const t = c.item.t, own = D.own({ name: "R" + i, ...c.item }, c.data, { cost: c.offer.ask, cond: c.offer.cond || "NM" }, cfg, c.ctx), ref = own.r.routes.flip.exit;
+    const h = { key: "r" + i, name: "R" + i, kind: t === "s" ? "sealed" : "raw", qty: 1, cost: c.offer.ask, cond: c.offer.cond || "NM", own,
+      ch: ref && ["sell", "hold", "grade"].includes(own.label) ? C.compare(chOpts(t === "s" ? "sealed" : "card", c.offer.ask, ref)) : null };
+    const x = A.classify(h), [snap] = A.snapshot([x]);
+    assert.ok(Object.keys(snap).every((k) => OK.has(k)), `case ${i}: field ${Object.keys(snap)}`);
+    assert.ok(!snap.ev || Object.keys(snap.ev).every((k) => ["n30", "n90", "capped", "age"].includes(k)));
+    assert.ok(!/\$/.test(snap.why), `case ${i}: amount in reason ${snap.why}`);
+    const secret = [x.ref, x.profitNow, x.gradeProfit, x.best && x.best.price, x.best && x.best.profit, x.best && x.best.keep, ref, own.proceeds].filter((v) => v != null && v !== c.offer.ask && Math.abs(v) >= 100);   // under $1 can collide with a sale count
+    const nums = (JSON.stringify({ ...snap, cost: 0, qty: 0, key: "", name: "" }).match(/-?\d+/g) || []).map(Number);
+    for (const v of secret) assert.ok(!nums.includes(v), `case ${i}: snapshot holds ${v}`);
+    assert.strictEqual(snap.action, x.action);
+    if (x.action !== "data") {
+      const p = x.action === "grade" ? x.gradeProfit : x.profitNow, [lo, hi] = A.BANDS[snap.band];
+      assert.ok(p >= lo && p < hi, `case ${i}: ${p} outside band ${snap.band}`);
+    } else assert.strictEqual(snap.band, null);
+    const [r] = A.restore([snap]), B = A.board([r]), html = A.html(B, { roi: 20 });
+    assert.strictEqual(B.items[0].action, x.action);
+    const shown = html.replace(/paid \$[\d,.]+/g, "");
+    if (x.profitNow != null) assert.ok(!shown.includes(`${x.profitNow >= 0 ? "+" : "−"}$${(Math.abs(x.profitNow) / 100).toFixed(2)}`), `case ${i}: exact profit shown`);
+    const rowHtml = (shown.match(/<div class="adv-row"[\s\S]*?<\/div>\s*<\/div>/g) || []).join("");
+    assert.ok(rowHtml && !/valued at|Best estimate/.test(rowHtml), `case ${i}: row shows a sold value`);
+  }
+});
 console.log(`${n} advisor tests passed${process.exitCode ? " (with failures above)" : ""}`);

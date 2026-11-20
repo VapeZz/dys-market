@@ -40,6 +40,7 @@
   }
 
   function classify(h) {
+    if (h && h.saved) return h;          // a saved call (see snapshot): already classified, amounts are ranges only
     const out = judge(h);
     // a NOT ENOUGH DATA row carries no value, profit or selling option: nothing is shown that the evidence doesn't support
     if (out.action === "data") { out.best = null; out.ref = null; out.refBasis = ""; out.profitNow = null; out.gradeProfit = null; }
@@ -80,23 +81,68 @@
     return out;
   }
 
+  /* ---------- saved calls (12 hours on the phone): our own calls only, never PkmnPrices data ----------
+     Kept: the call, a reason without amounts, sale counts and age, which selling option was best, and the profit as a
+     range (the same kind of bands the Near Mint finder saves). Not kept: sold prices, medians, sales, exact profits or any
+     amount an exact sold price could be worked back from. The owner's own cost and quantity come from his Ledger. */
+  const BANDS = [[-Infinity, -10000], [-10000, -5000], [-5000, -2000], [-2000, -500], [-500, 0], [0, 500], [500, 1000], [1000, 2000], [2000, 5000], [5000, 10000], [10000, 25000], [25000, Infinity]];
+  const bandOf = (c) => c == null || !isFinite(c) ? null : BANDS.findIndex(([lo, hi]) => c >= lo && c < hi);
+  const bandMid = (i) => i == null ? 0 : i === 0 ? -15000 : i === BANDS.length - 1 ? 30000 : (BANDS[i][0] + BANDS[i][1]) / 2;
+  const whole = (c) => `$${Math.abs(c / 100).toLocaleString("en-US")}`;
+  function bandTxt(i) {
+    if (i == null) return "—";
+    const [lo, hi] = BANDS[i];
+    if (lo === -Infinity) return `loss over ${whole(hi)}`;
+    if (hi === Infinity) return `+${whole(lo)} or more`;
+    if (hi <= 0) return `−${whole(lo)} to ${hi === 0 ? "$0" : "−" + whole(hi)}`;
+    return `${lo === 0 ? "$0" : "+" + whole(lo)} to +${whole(hi)}`;
+  }
+  const short = (c) => `${c < 0 ? "−" : "+"}${whole(c)}`;
+  const rangeTxt = (lo, hi) => lo === hi ? signed(lo) : !isFinite(hi) ? `${short(lo)} or more` : !isFinite(lo) ? `up to ${short(hi)}` : `${short(lo)} to ${short(hi)}`;
+  // a reason without amounts, for a saved call
+  function savedWhy(x) {
+    if (x.action === "sell") return "Cleared your target on eBay at the sold prices checked.";
+    if (x.action === "grade") return "Grading's expected result beat selling raw. A bet on the grade, never a sure profit.";
+    if (x.action === "monitor") return `${x.profitNow != null && x.profitNow < 0 ? "Worth less than you paid at the sold prices checked" : "Below your target"}${x.evidence && x.evidence.change != null && x.evidence.change <= SLIPPING || x.evidence && x.evidence.trend === "lower" ? "; sold prices were slipping" : ""}.`;
+    if (x.action === "hold") return "Below your target at the sold prices checked; prices steady.";
+    return /\$/.test(x.why || "") ? "Not enough reliable sales to value it." : (x.why || "Not enough reliable sales to value it.");
+  }
+  // classified items -> what may be kept on the phone
+  function snapshot(items) {
+    return items.map((x) => ({ key: x.key, name: x.name, kind: x.kind, qty: x.qty, cost: x.cost, cond: x.cond, grade: x.grade, book: x.book, action: x.action,
+      why: savedWhy(x), band: x.action === "data" ? null : bandOf(x.action === "grade" ? x.gradeProfit : x.profitNow),
+      ev: x.evidence ? { n30: x.evidence.n30, n90: x.evidence.n90, capped: !!x.evidence.capped, age: x.evidence.age } : null,
+      bestName: x.action !== "data" && x.best ? x.best.name : null, bestAssumed: !!(x.best && x.best.assumed) }));
+  }
+  // kept rows -> items the board and the panel show (marked saved: amounts as ranges)
+  function restore(rows) {
+    return (rows || []).filter((r) => r && r.key && ACTIONS.includes(r.action)).map((r) => ({ key: r.key, name: r.name, kind: r.kind, qty: r.qty || 1, cost: r.cost || 0,
+      cond: r.cond || "", grade: r.grade || "", book: r.book || "", action: r.action, why: r.why, saved: true, band: r.action === "data" ? null : (r.band ?? null),
+      evidence: r.ev, best: r.bestName ? { name: r.bestName, assumed: r.bestAssumed } : null, ref: null, refBasis: "", profitNow: null, gradeProfit: null }));
+  }
+
   // every holding, grouped by action, with totals for the top of Today
   function board(list) {
     const items = list.map(classify), by = {};
     for (const a of ACTIONS) by[a] = [];
     for (const x of items) by[x.action].push(x);
-    const order = { sell: (x) => -(x.profitNow || 0), grade: (x) => -(x.gradeProfit || 0), monitor: (x) => x.profitNow ?? 0, hold: (x) => -(x.profitNow ?? 0), data: () => 0 };
+    const pv = (x) => x.saved ? bandMid(x.band) : x.action === "grade" ? x.gradeProfit : x.profitNow;
+    const order = { sell: (x) => -(pv(x) || 0), grade: (x) => -(pv(x) || 0), monitor: (x) => pv(x) ?? 0, hold: (x) => -(pv(x) ?? 0), data: () => 0 };
     for (const a of ACTIONS) by[a].sort((p, q) => order[a](p) - order[a](q) || String(p.name).localeCompare(String(q.name)));
     const sum = (xs, f) => xs.reduce((s, x) => s + (f(x) || 0) * x.qty, 0);
-    return { items, by, counts: Object.fromEntries(ACTIONS.map((a) => [a, by[a].length])),
-      sellProfit: sum(by.sell, (x) => x.profitNow), sellBest: sum(by.sell, (x) => x.best ? x.best.profit : x.profitNow),
-      valued: items.filter((x) => x.ref != null).length, total: items.length };
+    const saved = items.some((x) => x.saved), sellSaved = by.sell.some((x) => x.saved);
+    return { items, by, counts: Object.fromEntries(ACTIONS.map((a) => [a, by[a].length])), saved,
+      sellProfit: sellSaved ? null : sum(by.sell, (x) => x.profitNow), sellBest: sellSaved ? null : sum(by.sell, (x) => x.best ? x.best.profit : x.profitNow),
+      // with saved calls in it, the total is a range: each saved row's band, each fresh row's exact profit
+      sellRange: sellSaved ? [sum(by.sell, (x) => x.saved ? BANDS[x.band][0] : x.profitNow), sum(by.sell, (x) => x.saved ? BANDS[x.band][1] : x.profitNow)] : null,
+      valued: items.filter((x) => x.ref != null || (x.saved && x.action !== "data")).length, total: items.length };
   }
 
   /* ---------- the panel (Today and Inventory) ---------- */
   function row(x, h) {
     const b = x.best, ev = x.evidence;
     const right = x.action === "data" ? `<b class="muted">—</b><small class="muted">no value</small>`
+      : x.saved ? `<b class="${x.band >= 5 ? "up" : x.band != null && x.band <= 4 ? "down" : ""}">${bandTxt(x.band)}</b><small class="muted">${x.action === "grade" ? "if graded (est.), range" : "eBay, range"}</small>`
       : x.action === "grade" ? `<b class="up">${signed(x.gradeProfit)}</b><small class="muted">if graded (est.)</small>`
       : `<b class="${x.profitNow > 0 ? "up" : x.profitNow < 0 ? "down" : ""}">${signed(x.profitNow)}</b><small class="muted">eBay, at sold prices</small>`;
     const evTxt = ev ? `${ev.n30}${ev.capped ? "+" : ""} sold in 30 days · ${ageTxt(ev.age)}` : "";
@@ -104,7 +150,8 @@
     return `<div class="adv-row" data-act="${x.action}" data-key="${esc(x.key)}"${h.attrs ? h.attrs(x) : ""}>
       ${h.img ? h.img(x) : `<span class="ph"></span>`}<div class="adv-main"><b class="adv-n">${esc(x.name)}</b><span class="adv-s">${esc(line2)}</span>
         <span class="adv-why">${esc(x.why)}</span>${evTxt ? `<span class="adv-ev">Evidence: ${esc(evTxt)}${x.ref != null ? ` · valued at ${money(x.ref)} (${esc(x.refBasis)})` : ""}</span>` : ""}
-        ${b && x.action !== "data" ? `<span class="adv-ev adv-best">Best estimate: ${esc(b.name)} at ${money(b.price)}${b.assumed ? " (assumed: a share of the eBay sold price)" : ""} → keep ${money(b.keep)}, ${signed(b.profit)}${x.action !== "sell" && b.target ? ` · ${h.roi}% profit at ${money(b.target)}` : ""}</span>` : ""}</div>
+        ${b && x.saved && x.action !== "data" ? `<span class="adv-ev adv-best">Best place to sell: ${esc(b.name)}${b.assumed ? " (local price assumed)" : ""}</span>` : ""}
+        ${b && !x.saved && x.action !== "data" ? `<span class="adv-ev adv-best">Best estimate: ${esc(b.name)} at ${money(b.price)}${b.assumed ? " (assumed: a share of the eBay sold price)" : ""} → keep ${money(b.keep)}, ${signed(b.profit)}${x.action !== "sell" && b.target ? ` · ${h.roi}% profit at ${money(b.target)}` : ""}</span>` : ""}</div>
       <div class="adv-rt">${right}</div></div>`;
   }
   function html(B, h) {
@@ -112,11 +159,12 @@
     const tile = (a) => `<button type="button" class="adv-tile" data-jump="${a}"><b>${B.counts[a]}</b><small>${NAME[a]}</small></button>`;
     const sec = (a, title, note) => B.by[a].length ? `<section class="adv-sec" id="adv-${a}"><div class="sec-head"><h2>${title}</h2><span class="chip ${CHIP[a]}">${B.by[a].length}</span></div>
       ${note ? `<p class="muted small adv-note">${note}</p>` : ""}<div class="adv-list">${B.by[a].map((x) => row(x, h)).join("")}</div></section>` : "";
+    const sellAmt = B.sellRange ? `<b class="${B.sellRange[0] >= 0 ? "up" : ""}">${rangeTxt(B.sellRange[0], B.sellRange[1])}</b>` : `<b class="${B.sellProfit >= 0 ? "up" : "down"}">${signed(B.sellProfit)}</b>`;
     if (h.compact) return `<div class="adv-tiles">${ACTIONS.map(tile).join("")}</div>
-      ${B.counts.sell ? `<p class="small adv-sum">${B.counts.sell} worth selling: about <b class="${B.sellProfit >= 0 ? "up" : "down"}">${signed(B.sellProfit)}</b> over cost on eBay at today's sold prices.</p>` : ""}
+      ${B.counts.sell ? `<p class="small adv-sum">${B.counts.sell} worth selling: about ${sellAmt} over cost on eBay at the sold prices checked.</p>` : ""}
       <p class="small muted adv-note">Each item's call is on its row below. The full list with reasons and where to sell is on Today.</p>`;
     return `<div class="adv-tiles">${ACTIONS.map(tile).join("")}</div>
-      ${B.counts.sell ? `<p class="small adv-sum">Selling the ${B.counts.sell} item${B.counts.sell === 1 ? "" : "s"} worth selling on eBay at today's sold prices: about <b class="${B.sellProfit >= 0 ? "up" : "down"}">${signed(B.sellProfit)}</b> over cost after fees${B.sellBest > B.sellProfit ? `; at each one's best estimate (local prices assumed) about ${signed(B.sellBest)}` : ""}. Check live listings before you price.</p>` : ""}
+      ${B.counts.sell ? `<p class="small adv-sum">Selling the ${B.counts.sell} item${B.counts.sell === 1 ? "" : "s"} worth selling on eBay at the sold prices checked: about ${sellAmt} over cost after fees${!B.sellRange && B.sellBest > B.sellProfit ? `; at each one's best estimate (local prices assumed) about ${signed(B.sellBest)}` : ""}${B.sellRange ? " (saved calls keep ranges, not exact amounts)" : ""}. Check live listings before you price.</p>` : ""}
       ${sec("sell", "Worth selling", "Clears your target on eBay at real sold prices, after fees, shipping and supplies. Best estimate = the selling option with the highest estimated profit; local prices are assumptions you can change on the card's Where to sell?.")}
       ${sec("grade", "May be worth grading", "Expected value from PSA population odds and PSA sold prices. A bet on the grade, never a sure profit.")}
       ${sec("monitor", "Monitor", "Below target and worth less than you paid, or sold prices slipping.")}
@@ -124,7 +172,7 @@
       ${sec("data", "Not enough data", "Edge won't value these from list prices or other grades. Check them by hand before acting.")}`;
   }
 
-  const api = { v: VERSION, classify, board, html, where, ACTIONS, NAME, K: { SLIPPING } };
+  const api = { v: VERSION, classify, board, html, where, snapshot, restore, bandOf, bandTxt, BANDS, ACTIONS, NAME, K: { SLIPPING } };
   if (typeof window !== "undefined") window.EdgeAdvisor = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();
