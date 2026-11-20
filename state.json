@@ -9,7 +9,7 @@
   "one-piece|The Dominance of God": "2026-11-20",
   "palworld|BP03: Eternal Ascent": "2027-01-29",
   "pokemon-jp|Aura Seeker": "2026-11-27",
-  "pokemon|Flowing Fists": "2027-02-05",
+  "pokemon|ME07: Flowing Fists": "2027-02-06",
   "riftbound|Gift of the Rift Bundle": "2026-12-04",
   "riftbound|Legacy": "2027-01-29",
   "union-arena|UE25BT: My Hero Academia Special Booster": "2026-12-11",
@@ -86,7 +86,7 @@
    "available": true,
    "handle": "30th-celebration-knock-out-collection",
    "image": "https://cdn.shopify.com/s/files/1/0733/4635/1331/files/704152_in_1000x1000_199f8b6b-8ec7-484b-ad57-6c2db7cb75f0.jpg?v=1792032056",
-   "price": 21.3,
+   "price": 20.8,
    "title": "30th Celebration Knock Out Collection",
    "type": "Pok\u00e9mon Sealed"
   },
@@ -659,5 +659,5 @@
    "type": "Collectible"
   }
  },
- "updated": "2026-11-20T01:13:45Z"
+ "updated": "2026-11-20T09:08:39Z"
 }
