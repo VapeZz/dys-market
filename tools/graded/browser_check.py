@@ -169,6 +169,7 @@ def run(page, width, theme):
     page.wait_for_selector("#inv-adv .adv-go", timeout=8000)
     ok("Review my 4 holdings" in page.inner_text("#inv-adv .adv-go"), f"{tag}: inventory check counts graded items ({page.inner_text('#inv-adv .adv-go')})")
     page.click("#inv-adv .adv-go")
+    page.click("#inv-adv .adv-yes")   # the review asks first (cost shown)
     page.wait_for_function("() => /Reviewed 4 of 4/.test((document.querySelector('#inv-adv .adv-st') || {}).textContent || '')", timeout=15000)
     rows = page.inner_text("#m-body .list")
     ok("Keep for now" in rows and "PSA 10 typical $82.00" in rows, f"{tag}: Pikachu row says keep")

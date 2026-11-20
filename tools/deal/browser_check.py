@@ -220,6 +220,7 @@ def main():
         page.evaluate("() => { location.hash = '#mine'; }")
         page.wait_for_timeout(600)
         page.click("#inv-adv .adv-go")
+        page.click("#inv-adv .adv-yes")   # the review asks first (cost shown)
         page.wait_for_function("() => /Reviewed \\d+ of \\d+/.test((document.querySelector('#inv-adv .adv-st') || {}).textContent || '')", timeout=30000)
         labels = {"sell": "Sell clears your target", "grade": "Grading looks better", "hold": "Keep for now", "unclear": "Not enough sales", "unknown": "No sold data"}
         seen = {}

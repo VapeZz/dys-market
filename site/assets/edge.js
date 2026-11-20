@@ -433,8 +433,8 @@
     const mine = new Set(S.board.map((x) => String(x.id)));
     if (gb.length < 3 && GR) for (const o of (await opportunities()) || []) { if (gb.length >= 3 || o.e.profit <= 0) break; if (!mine.has(String(o.r[0]))) gb.push({ x: { id: o.r[0], g: o.r[1], n: o.r[2] }, e: o.e }); }
     if (gb.length) { $("#t-grade").hidden = false; $("#t-grade").innerHTML = `<div class="sec-head"><h2>Grading ideas · estimates</h2><a class="more" href="#grade" id="t-grade-more">${GR ? "All opportunities" : "Grading board"}</a></div>
-      <p class="muted small adv-note">From TCGplayer raw prices and the graded price list, not checked against sold prices. Open a card and run its Deal check (grade route) before sending anything in.</p>
-      <div class="list">${gb.map(({ x, e }) => rowHTML(x, `<b>${signed(Math.round(e.profit))}</b><small class="muted">est. · ${e.v[1]}</small>`)).join("")}</div>`;
+      <p class="muted small adv-note">Cards to look at, from TCGplayer raw prices and the graded price list. Not checked against sold prices, so no profit is shown here: open a card and run its Deal check (grade route) before sending anything in.</p>
+      <div class="list">${gb.map(({ x }) => rowHTML(x, `<b>Check it</b><small class="muted">not sold-checked</small>`)).join("")}</div>`;
       $("#t-grade-more").onclick = () => { SUB.grade = GR ? "find" : "board"; }; }
   }
   function portfolio() {
@@ -1430,21 +1430,33 @@
   const advEstimate = (inv) => inv.reduce((s, x) => s + (x.graded ? 161 : x.t === "s" ? 90 : 210), 0);
   const advBase = (x) => ({ key: advKey(x), name: cleanN(x.n), kind: x.graded ? "graded" : x.t === "s" ? "sealed" : "raw", qty: x.qty, cost: x.cost || 0,
     cond: x.cond || "NM", grade: x.graded || "", book: x.book || "" });
+  // guards against paid repeats (Claude's defaults; the review log keeps only when, how many and credits: no prices)
+  const ADV_RECENT_H = 12;            // hours: a full review this recent asks "review again anyway?"
+  const ADV_DAY_CAP = 10000;          // credits a day for holdings reviews on this phone (half the plan's 20,000; Deal checks keep the rest)
+  let ADVSTOP = false;
+  const advLog = () => (Array.isArray(S.advLog) ? S.advLog : []).filter((r) => r && r.at > Date.now() - 2 * 864e5);
+  const advToday = () => advLog().filter((r) => r.day === localDay()).reduce((s, r) => s + (r.cr || 0), 0);
+  const advLast = () => advLog().filter((r) => r.full).sort((a, b) => b.at - a.at)[0] || null;
+  function advRecord(n, cr, full) { S.advLog = [...advLog(), { at: Date.now(), day: localDay(), n, cr, full: !!full }].slice(-20); save(); }
   async function reviewHoldings(inv, st) {
     const conn = pkmnConn(), [deal, pkmn, gr, chan] = await Promise.all([DEAL, PKMN, GRADED, CHAN]);
     if (!conn || !deal || !pkmn || !gr) return { ok: false, why: "Sold prices aren't set up yet (Mine → Settings → Pair this phone)." };
     if (ADVBUSY) return { ok: false, why: "A review is already running." };
-    ADVBUSY = true; let credits = 0, i = 0;
+    ADVBUSY = true; ADVSTOP = false; let credits = 0, i = 0, cut = null, stopped = 0;
     const put = (x, val, own) => { ADVIN.set(advKey(x), { ...advBase(x), ...val }); if (own) OWN.set(advKey(x), own); };
     try {
       for (const x of inv) {
-        st && st(`Checking ${++i} of ${inv.length}…`);
+        // the relay can't be reached or refuses this phone: the rest would fail the same way, so they aren't tried
+        if (cut) { put(x, x.graded ? { graded: null, note: cut } : { own: null, note: cut }, { label: "unknown", text: cut }); continue; }
+        if (ADVSTOP) { stopped++; continue; }
+        st && st(`Checking ${++i} of ${inv.length}… · ${credits.toLocaleString("en-US")} credits so far`);
         if (x.graded) {
           // a slab: that grader and grade's sold prices only (the raw Deal check doesn't apply to a slab)
           try {
             const [grader, grade] = x.graded.split(" "), res = await pkmn.getGrade({ id: x.id, n: x.n }, { grader, grade }, conn, true);
             credits += res.meta ? res.meta.credits : 0;
-            if (!res.ok) { const note = gradedNote(res).note; put(x, { graded: null, note }, { label: res.reason === "unsupported" ? "unclear" : "unknown", text: note }); continue; }
+            if (!res.ok) { const note = gradedNote(res).note; if (res.reason === "network" || res.reason === "denied") cut = note;
+              put(x, { graded: null, note }, { label: res.reason === "unsupported" ? "unclear" : "unknown", text: note }); continue; }
             const sell = gradedSell(), r = gr.evaluate(res.data, { cost: x.cost || 0, label: x.graded }, sell, gradedOpts());
             noteSold(x.id, x.n, x.graded, r);
             const ch = chan && r.typical != null ? chan.compare({ ...chanOpts("graded", x.n), cost: x.cost || 0, ref: r.typical,
@@ -1458,16 +1470,17 @@
           if (!it) { const note = "No market price for this item right now."; put(x, { own: null, note }, { label: "unknown", text: note }); continue; }
           const item = { id: it.id, n: it.n, name: it.n, t: it.t, tcg: it.p, tcgDay: dayNum(d.set.dates?.[d.set.dates.length - 1]) };
           const res = await pkmn.get(item, conn, true); credits += res.meta ? res.meta.credits : 0;
-          if (!res.ok) { const note = soldNote(res).note; put(x, { own: null, note }, { label: "unknown", text: note }); continue; }
+          if (!res.ok) { const note = soldNote(res).note; if (res.reason === "network" || res.reason === "denied") cut = note;
+            put(x, { own: null, note }, { label: "unknown", text: note }); continue; }
           const o = deal.own(item, res.data, { cost: x.cost || 0, cond: x.cond || "NM" }, dealCfg(it.p));
           const ref = o.r && o.r.routes && o.r.routes.flip ? o.r.routes.flip.exit : null;
           const ch = chan && ref && ["sell", "hold", "grade"].includes(o.label) ? chan.compare({ ...chanOpts(x.t === "s" ? "sealed" : "card", x.n), cost: x.cost || 0, ref }) : null;
           put(x, { own: o, ch }, o);
         } catch (err) { console.error(err); put(x, { own: null, note: "Couldn't check this one." }, { label: "unknown", text: "Couldn't check this one." }); }
       }
-    } finally { ADVBUSY = false; }
+    } finally { ADVBUSY = false; ADVSTOP = false; }
     ADVAT = Date.now(); ADVCRED = credits;
-    return { ok: true, credits };
+    return { ok: true, credits, stopped, checked: i, cut: !!cut };
   }
   // the action list: every holding, reviewed or not (not reviewed = "Not enough data: not checked yet")
   async function drawAdvisor(el, opt = {}) {
@@ -1475,21 +1488,53 @@
     const adv = await ADV, inv = invRows();
     if (!adv) { el.innerHTML = ""; return; }
     const list = inv.map((x) => ADVIN.get(advKey(x)) || { ...advBase(x), note: "Not reviewed yet: tap Review." });
-    const done = inv.filter((x) => ADVIN.has(advKey(x))).length, est = advEstimate(inv), conn = pkmnConn();
+    const done = inv.filter((x) => ADVIN.has(advKey(x))).length, fresh = inv.filter((x) => !ADVIN.has(advKey(x))), conn = pkmnConn();
+    const fmt = (n) => n.toLocaleString("en-US"), plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+    // what the main button does: all holdings the first time; only the ones added since, once some are reviewed
+    const target = done && fresh.length ? fresh : inv, full = target === inv, est = advEstimate(target), last = advLast(), spent = advToday();
+    const goTxt = !done ? `Review my ${plural(inv.length, "holding")}` : fresh.length ? `Check ${plural(fresh.length, "unchecked holding")}` : "Review all again";
+    const lastTxt = last ? `Last full review ${last.day === localDay() ? "today" : "yesterday"} at ${clock(last.at)}: ${plural(last.n, "item")}, ${fmt(last.cr)} credits.` : "";
     el.innerHTML = `<div class="sec-head"><h2>${opt.title || "Your holdings: what to do"}</h2>${opt.title ? "" : `<a class="more" href="#mine">Inventory</a>`}</div>
-      ${inv.length ? `<p class="muted small adv-note">Checks each holding against real eBay sold prices (PkmnPrices, up to about ${est.toLocaleString("en-US")} credits for ${inv.length} item${inv.length === 1 ? "" : "s"} of your 20,000 a day). Facts at today's prices, not a forecast. Nothing is saved; results last for this visit.</p>
-      <div class="btns"><button type="button" class="btn ${done ? "sm" : "primary"} adv-go"${conn ? "" : " disabled"}>${done ? "Review again" : `Review my ${inv.length} holding${inv.length === 1 ? "" : "s"}`}</button></div>
-      <p class="small muted adv-st" style="margin:0">${!conn ? "Set up sold prices in Mine → Settings first." : done ? `Reviewed ${done} of ${inv.length} at ${clock(ADVAT)} · ${ADVCRED.toLocaleString("en-US")} credits.` : ""}</p>` : ""}
+      ${inv.length ? `<p class="muted small adv-note">Checks each holding against real eBay sold prices (PkmnPrices). Facts at today's prices, not a forecast. Sold prices aren't saved; results last for this visit.</p>
+      ${!conn ? `<div class="panel adv-off"><b>Sold prices aren't set up on this phone</b><p class="small muted" style="margin:4px 0 8px">Pair it once in Mine → Settings. Until then nothing is checked and no credits are used; everything else in Edge works as usual.</p>
+        <div class="btns"><button type="button" class="btn sm primary adv-pair">Go to Settings</button><button type="button" class="btn sm adv-go" disabled>Set up sold prices first</button></div></div>`
+      : `<div class="btns"><button type="button" class="btn ${done && !fresh.length ? "sm" : "primary"} adv-go">${goTxt}</button>${done && fresh.length ? `<button type="button" class="btn sm adv-all">Review all again</button>` : ""}</div>
+      <p class="small muted adv-est" style="margin:0">Up to about ${fmt(est)} credits for ${plural(target.length, "item")} (usually less) of your 20,000 a day.${lastTxt && !done ? ` ${lastTxt}` : ""}</p>
+      <div class="adv-ask" hidden></div>
+      <p class="small muted adv-st" style="margin:0">${done ? `Reviewed ${done} of ${inv.length} at ${clock(ADVAT)} · ${fmt(ADVCRED)} credits.${fresh.length ? ` ${plural(fresh.length, "item")} not checked yet.` : ""}` : ""}</p>`}` : ""}
       ${!inv.length || done ? adv.html(adv.board(list), { roi: S.set.roi, compact: !!opt.compact, img: (x) => { const r = inv.find((y) => advKey(y) === x.key); return r ? img(r.id) : `<span class="ph"></span>`; },
         attrs: (x) => { const r = inv.find((y) => advKey(y) === x.key); return r ? ` data-open="${r.id}" data-g="${r.g}" data-n="${esc(r.n)}"` : ""; } }) : ""}`;
     $$(".adv-tile[data-jump]", el).forEach((b) => { b.onclick = () => { const t = $(`#adv-${b.dataset.jump}`, el); if (t) t.scrollIntoView({ behavior: "smooth", block: "start" }); else if (opt.compact) location.hash = "today"; }; });
-    const go = $(".adv-go", el);
-    if (go) go.onclick = async () => {
-      go.disabled = true; const st = $(".adv-st", el);
-      const res = await reviewHoldings(invRows(), (t) => { if (st) st.textContent = t; });
-      if (!res.ok) { if (st) st.textContent = res.why; go.disabled = false; return; }
-      drawAdvisor(el, opt); opt.after && opt.after();
+    const pair = $(".adv-pair", el);
+    if (pair) pair.onclick = () => { SUB.mine = "set"; if (location.hash === "#mine") route(); else location.hash = "mine"; };
+    const ask = $(".adv-ask", el), st = $(".adv-st", el), go = $(".adv-go", el), all = $(".adv-all", el);
+    // step 1: say what it costs (and warn on a recent repeat or the daily limit); step 2: run only on "Review now"
+    const confirm = (items, isFull) => {
+      if (!ask || ADVBUSY) return;
+      const e = advEstimate(items), recent = isFull && last && Date.now() - last.at < ADV_RECENT_H * 36e5, over = spent + e > ADV_DAY_CAP;
+      ask.hidden = false;
+      ask.innerHTML = `<div class="panel adv-confirm${recent || over ? " adv-warn" : ""}">
+        ${over ? `<b>Today's review limit is reached</b><p class="small" style="margin:4px 0 8px">Holdings reviews on this phone have used ${fmt(spent)} credits today; this one could use up to ${fmt(e)}, past the ${fmt(ADV_DAY_CAP)} a day kept for reviews so Deal checks always have credits. Single cards can still be checked from their Deal check. The limit resets tomorrow.</p>
+          <div class="btns"><button type="button" class="btn sm adv-no">OK</button></div>`
+        : `<b>${isFull ? `Review ${plural(items.length, "holding")}?` : `Check ${plural(items.length, "unchecked holding")}?`}</b>
+          <p class="small" style="margin:4px 0 8px">Uses up to about <b>${fmt(e)} credits</b> (usually less) of your 20,000 a day.${spent ? ` Reviews on this phone today: ${fmt(spent)} credits.` : ""}${recent ? `<br><b>You already reviewed your holdings at ${clock(last.at)}</b> (${fmt(last.cr)} credits). Sold prices change slowly, so another review now will most likely show the same calls.` : ""}</p>
+          <div class="btns"><button type="button" class="btn sm primary adv-yes">${recent ? "Review again anyway" : "Review now"} · up to ${fmt(e)} credits</button><button type="button" class="btn sm adv-no">Cancel</button></div>`}</div>`;
+      $(".adv-no", ask).onclick = () => { ask.hidden = true; ask.innerHTML = ""; };
+      const yes = $(".adv-yes", ask);
+      if (yes) yes.onclick = async () => {
+        if (ADVBUSY) return;
+        yes.disabled = true; if (go) go.disabled = true; if (all) all.disabled = true;
+        ask.innerHTML = `<div class="btns"><button type="button" class="btn sm adv-stop">Stop after this item</button></div>`;
+        $(".adv-stop", ask).onclick = (ev) => { ADVSTOP = true; ev.target.disabled = true; ev.target.textContent = "Stopping…"; };
+        const res = await reviewHoldings(items, (t) => { if (st) st.textContent = t; });
+        if (!res.ok) { ask.hidden = true; ask.innerHTML = ""; if (st) st.textContent = res.why; if (go) go.disabled = false; if (all) all.disabled = false; return; }
+        if (res.credits) advRecord(res.checked, res.credits, isFull && !res.stopped && !res.cut);
+        await drawAdvisor(el, opt); opt.after && opt.after();
+        if (res.stopped) { const s2 = $(".adv-st", el); if (s2) s2.textContent += ` Stopped: ${plural(res.stopped, "item")} not checked.`; }
+      };
     };
+    if (go && conn) go.onclick = () => confirm(target, full);
+    if (all) all.onclick = () => confirm(inv, true);
   }
   /* "Sell, grade or keep?" for what the owner holds: today's real sold prices, this page only */
   const OWN = new Map();

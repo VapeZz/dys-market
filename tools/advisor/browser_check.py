@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 from urllib.parse import urlparse, parse_qs
 
 from playwright.sync_api import sync_playwright
@@ -20,7 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PORT = 8779
 MOCK = json.load(open(f"{DIR}/mock-relay.json"))
 checks, fails = 0, []
-calls = {"n": 0}
+calls = {"n": 0, "keys": {}}
 
 
 def ok(cond, what):
@@ -54,7 +55,8 @@ def relay(mode):
         if mode["m"] == "offline":
             return route.abort()
         calls["n"] += 1
-        if req.headers.get("x-edge-pass") != "test-pass":
+        calls["keys"][key_of(req.url)] = calls["keys"].get(key_of(req.url), 0) + 1
+        if mode["m"] == "denied" or req.headers.get("x-edge-pass") != "test-pass":
             return route.fulfill(status=401, headers=CORS, body="denied")
         status, body = MOCK["routes"].get(key_of(req.url), [404, {"error": "not found"}])
         n = max(1, len((body or {}).get("data") or []) if isinstance(body, dict) else 1)
@@ -99,6 +101,7 @@ SEED = {"inv": [], "watch": WATCH, "set": {"platform": "ebay"}}
 hold_in = [{**h, "key": h["key"].split(":")[0]} for h in HOLD]
 EXP = json.loads(subprocess.check_output(["node", os.path.join(HERE, "expect.js"), DIR, json.dumps(hold_in)]))
 EXPK = {x["key"]: x for x in EXP["items"]}
+EST = sum(161 if h["kind"] == "Graded" else 90 if h["kind"] == "Sealed" else 210 for h in HOLD)
 
 
 def junk_free(page, sel, where):
@@ -125,9 +128,31 @@ def run(page, width, theme, mode):
     ok("Leafeon" not in buy, f"{tag}: a watched card above its target isn't listed")
     ok("BUY candidate" in buy and "Deal check" in buy, f"{tag}: points at the Deal check for a BUY call")
     store0 = page.evaluate("() => JSON.stringify(Object.keys(localStorage).sort())")
+    # the cost is shown before anything is spent, and a review needs a second, explicit tap
+    est = page.inner_text("#t-adv .adv-est")
+    ok(f"Up to about {EST:,} credits for {len(HOLD)} items" in est, f"{tag}: estimate before reviewing {est!r} vs {EST}")
     n0 = calls["n"]
     page.click("#t-adv .adv-go")
+    ask = page.inner_text("#t-adv .adv-ask")
+    ok(f"Review {len(HOLD)} holdings?" in ask and f"{EST:,} credits" in ask and page.query_selector("#t-adv .adv-yes"), f"{tag}: confirm shows the cost {ask!r}")
+    page.click("#t-adv .adv-no")
+    page.wait_for_timeout(300)
+    ok(calls["n"] == n0 and not page.query_selector("#t-adv .adv-row") and page.is_hidden("#t-adv .adv-ask"), f"{tag}: Cancel spends nothing")
+    page.click("#t-adv .adv-go")
+    calls["keys"] = {}
+    page.dblclick("#t-adv .adv-yes")      # a double tap starts one review, not two
     page.wait_for_function("() => /Reviewed \\d+ of \\d+/.test(document.querySelector('#t-adv .adv-st')?.textContent || '')", timeout=30000)
+    if mode != "offline":
+        multi = {str(h["id"]) for h in HOLD if sum(1 for y in HOLD if y["id"] == h["id"]) > 1}   # a card held raw and as a slab is read once for each
+        dup = {k: v for k, v in calls["keys"].items() if v > (2 if any(f"|{i}" in k or f"syn-{i}/" in k for i in multi) else 1)}
+        ok(not dup, f"{tag}: no provider call made twice in one review {list(dup.items())[:3]}")
+        log = page.evaluate("() => JSON.parse(localStorage.getItem('dys-edge-v1')).advLog")
+        ok(isinstance(log, list) and len(log) == 1 and set(log[0]) == {"at", "day", "n", "cr", "full"} and log[0]["n"] == len(HOLD) and log[0]["full"], f"{tag}: review log keeps only time, count and credits {log}")
+        # asking again right away warns that it was just done
+        page.click("#t-adv .adv-go")
+        ask = page.inner_text("#t-adv .adv-ask")
+        ok("You already reviewed your holdings at" in ask and "Review again anyway" in ask, f"{tag}: a repeat warns {ask!r}")
+        page.click("#t-adv .adv-no")
     st = page.inner_text("#t-adv .adv-st")
     ok(f"Reviewed {len(HOLD)} of {len(HOLD)}" in st and re.search(r"[\d,]+ credits", st), f"{tag}: status {st!r}")
     if mode == "offline":
@@ -161,6 +186,8 @@ def run(page, width, theme, mode):
         if EXP["counts"][sec]:
             ok(page.query_selector(f"#adv-{sec}") and words in page.inner_text(f"#adv-{sec}"), f"{tag}: section {sec}")
     junk_free(page, "#t-adv", f"{tag} Today")
+    if page.query_selector("#t-grade:not([hidden]) .list"):
+        ok("$" not in page.inner_text("#t-grade .list"), f"{tag}: grading ideas on Today show no unchecked profit")
     if width == 390 and theme == "dark":
         page.screenshot(path="/tmp/adv_today.png", full_page=True)
     # tap a tile: scrolls to its section; tap a row: opens the card sheet
@@ -193,6 +220,12 @@ def run(page, width, theme, mode):
     page.reload()
     page.wait_for_selector("#t-adv .adv-go", timeout=15000)
     ok(not page.query_selector("#t-adv .adv-row") and "Review my" in page.inner_text("#t-adv .adv-go"), f"{tag}: a reload forgets the review")
+    ok("Last full review today at" in page.inner_text("#t-adv .adv-est"), f"{tag}: after a reload the last review is still shown")
+    n2 = calls["n"]
+    page.click("#t-adv .adv-go")
+    ok("You already reviewed your holdings at" in page.inner_text("#t-adv .adv-ask"), f"{tag}: after a reload a repeat still warns")
+    page.click("#t-adv .adv-no")
+    ok(calls["n"] == n2, f"{tag}: the warning spends nothing")
 
 
 def main():
@@ -200,23 +233,71 @@ def main():
     try:
         with sync_playwright() as p:
             br = p.chromium.launch()
-            for width, theme, mode in [(390, "dark", "ok"), (360, "light", "ok"), (430, "dark", "ok"), (390, "light", "offline"), (390, "dark", "unpaired")]:
+            for width, theme, mode in [(390, "dark", "ok"), (360, "light", "ok"), (430, "dark", "ok"), (390, "light", "offline"), (390, "dark", "unpaired"),
+                                      (390, "dark", "cap"), (390, "dark", "denied"), (390, "dark", "stop")]:
                 ctx = br.new_context()
+                calls["n"] = 0
+                seed = dict(SEED, advLog=[{"at": int(time.time() * 1000) - 3600e3, "day": time.strftime("%Y-%m-%d"), "n": 14, "cr": 9000, "full": False}]) if mode == "cap" else SEED
                 relay_cfg = "" if mode == "unpaired" else "localStorage.setItem('dys-edge-relay', JSON.stringify({ relay: 'https://relay.test', pass: 'test-pass' }));"
                 ctx.add_init_script(f"""if (!sessionStorage.getItem('seeded')) {{ sessionStorage.setItem('seeded', '1');
                   localStorage.clear(); localStorage.setItem('dys-theme', '{theme}');
-                  localStorage.setItem('dys-edge-v1', {json.dumps(json.dumps(SEED))});
+                  localStorage.setItem('dys-edge-v1', {json.dumps(json.dumps(seed))});
                   localStorage.setItem('dys-edge-ledger', {json.dumps(json.dumps(LEDGER))}); {relay_cfg} }}""")
                 page = ctx.new_page()
                 errors = []
                 page.on("pageerror", lambda e: errors.append(str(e)))
-                m = {"m": "offline" if mode == "offline" else "ok"}
+                m = {"m": mode if mode in ("offline", "denied") else "ok"}
                 page.route("https://relay.test/**", relay(m))
                 page.route("https://script.google.com/**", lambda r: r.abort())
                 if mode == "unpaired":
                     page.goto(f"http://127.0.0.1:{PORT}/edge/#today")
                     page.wait_for_selector("#t-adv .adv-go", timeout=15000)
-                    ok(page.is_disabled("#t-adv .adv-go") and "Set up sold prices" in page.inner_text("#t-adv"), "unpaired: review is off and says how to set it up")
+                    txt = page.inner_text("#t-adv")
+                    ok(page.is_disabled("#t-adv .adv-go") and "aren't set up on this phone" in txt and "no credits are used" in txt, "unpaired: review is off and says how to set it up")
+                    ok(not page.query_selector("#t-adv .adv-row") and not page.query_selector("#t-adv .adv-yes"), "unpaired: no actions, nothing to confirm")
+                    ok("What to consider buying" in page.inner_text("#view") and page.query_selector("#t-port .tiles"), "unpaired: the rest of Today still works")
+                    page.screenshot(path="/tmp/pv/08-unpaired.png", full_page=False)
+                    page.click("#t-adv .adv-pair")
+                    page.wait_for_selector("#rl-pair", timeout=8000)
+                    ok("Pair this phone" in page.inner_text("#rl-pair"), "unpaired: Go to Settings opens pairing")
+                    page.click("#m-seg >> text=Inventory")
+                    page.wait_for_selector("#inv-adv .adv-go", timeout=15000)
+                    ok(page.is_disabled("#inv-adv .adv-go") and len(page.query_selector_all("#m-body .list .row")) == len(HOLD), "unpaired: Inventory still lists every holding, review off")
+                    ok(calls["n"] == 0, "unpaired: no relay calls")
+                elif mode == "cap":
+                    page.goto(f"http://127.0.0.1:{PORT}/edge/#today")
+                    page.wait_for_selector("#t-adv .adv-go", timeout=15000)
+                    page.click("#t-adv .adv-go")
+                    ask = page.inner_text("#t-adv .adv-ask")
+                    ok("Today's review limit is reached" in ask and not page.query_selector("#t-adv .adv-yes"), f"cap: blocked {ask[:120]!r}")
+                    page.screenshot(path="/tmp/pv/07-cap.png", full_page=False)
+                    ok(calls["n"] == 0, "cap: no relay calls")
+                elif mode == "denied":
+                    page.goto(f"http://127.0.0.1:{PORT}/edge/#today")
+                    page.wait_for_selector("#t-adv .adv-go", timeout=15000)
+                    n0 = calls["n"]; page.click("#t-adv .adv-go"); page.click("#t-adv .adv-yes")
+                    page.wait_for_function("() => /Reviewed \\d+ of \\d+/.test(document.querySelector('#t-adv .adv-st')?.textContent || '')", timeout=30000)
+                    acts = page.eval_on_selector_all("#t-adv .adv-row", "rs => rs.map(r => r.dataset.act)")
+                    ok(set(acts) == {"data"} and len(acts) == len(HOLD) and "refused" in page.inner_text("#t-adv"), f"denied: every holding NOT ENOUGH DATA, says why {set(acts)}")
+                    ok(calls["n"] - n0 == 1, f"denied: stops after the first refusal ({calls['n'] - n0} calls)")
+                    ok("$" not in "".join(page.eval_on_selector_all("#t-adv .adv-rt", "rs => rs.map(r => r.innerText)")), "denied: no money shown")
+                    ok(page.evaluate("() => (JSON.parse(localStorage.getItem('dys-edge-v1')).advLog || []).length") == 0, "denied: nothing spent, nothing logged")
+                elif mode == "stop":
+                    page.goto(f"http://127.0.0.1:{PORT}/edge/#today")
+                    page.wait_for_selector("#t-adv .adv-go", timeout=15000)
+                    page.click("#t-adv .adv-go"); page.click("#t-adv .adv-yes")
+                    page.click("#t-adv .adv-stop")
+                    page.wait_for_function("() => /Stopped: \\d+ items? not checked/.test(document.querySelector('#t-adv .adv-st')?.textContent || '')", timeout=30000)
+                    st = page.inner_text("#t-adv .adv-st")
+                    m2 = re.search(r"Reviewed (\d+) of (\d+)", st)
+                    left = len(HOLD) - int(m2.group(1))
+                    ok(0 < int(m2.group(1)) < len(HOLD), f"stop: stopped part way {st!r}")
+                    ok(page.inner_text("#t-adv .adv-go").strip() == f"Check {left} unchecked holding{'s' if left != 1 else ''}", f"stop: the button offers only the rest {page.inner_text('#t-adv .adv-go')!r}")
+                    est2 = page.inner_text("#t-adv .adv-est")
+                    ok(f"for {left} item" in est2, f"stop: estimate covers only the rest {est2!r}")
+                    page.screenshot(path="/tmp/pv/06-stopped.png", full_page=False)
+                    log = page.evaluate("() => JSON.parse(localStorage.getItem('dys-edge-v1')).advLog")
+                    ok(len(log) == 1 and not log[0]["full"], f"stop: a stopped review isn't counted as a full one {log}")
                 else:
                     run(page, width, theme, mode)
                 ok(not errors, f"{width}px {mode}: page errors {errors[:3]}")

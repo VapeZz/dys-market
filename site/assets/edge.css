@@ -500,3 +500,11 @@ a.row{text-decoration:none;color:inherit}
 .adv-rt b{font-size:16px;white-space:nowrap}
 .adv-rt small{font-size:11.5px;line-height:1.25}
 .adv-empty{padding:14px}
+/* Holdings Advisor: confirm before a paid review, warnings, not-paired panel */
+.adv-ask { margin: 8px 0 4px; }
+.adv-confirm, .adv-off { padding: 12px; border-radius: 12px; }
+.adv-confirm p, .adv-off p { line-height: 1.45; }
+.adv-confirm.adv-warn { border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent); background: color-mix(in srgb, var(--warn) 10%, transparent); }
+.adv-confirm .btns, .adv-off .btns { flex-wrap: wrap; }
+.adv-est { margin-top: 4px; }
+.adv-off .adv-go[disabled] { opacity: .45; }

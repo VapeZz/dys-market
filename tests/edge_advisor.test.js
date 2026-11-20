@@ -108,4 +108,41 @@ test("html: every holding appears once; NOT ENOUGH DATA rows show no price or pr
   assert.ok(/Nothing held yet/.test(A.html(A.board([]), { roi: 20 })));
   assert.ok(!/<script/i.test(A.html(A.board([raw(3000, liquid, { name: "<script>x</script>" })]), { roi: 20 })));    // names are escaped
 });
+
+// Thin or messy sales never turn into a profit call. Checked from the raw sales themselves (not from the modules' own
+// verdicts) on 3,000 random holdings and 1,500 random slabs: fewer than 5 exact sales of the resale grade in 90 days, fewer than
+// 3 in 30, or no sale in 21 days => NOT ENOUGH DATA, and its row shows no dollar figure at all.
+test("random thin data never shows a profit (3,000 raw/sealed + 1,500 slabs)", () => {
+  // the row as the phone shows it, minus the price the owner paid (a fact he typed, not a valuation)
+  const rows = (h) => (A.html(A.board([h]), { roi: 20 }).match(/<div class="adv-row"[\s\S]*?<\/div>\s*<\/div>/g) || []).map((r) => r.replace(/paid \$[\d,.]+( each)?/g, ""));
+  let thin = 0, valued = 0;
+  for (const [i, c] of Y.randomCases(3000, 2611).entries()) {
+    const t = c.item.t, g = t === "s" ? "sealed" : "raw", day = T;
+    const ex = c.data.comps.filter((x) => x[2] === g && x[3] === 1 && x[0] <= day && x[0] > day - 90);
+    const n90 = ex.length, n30 = ex.filter((x) => x[0] > day - 30).length, age = ex.length ? day - Math.max(...ex.map((x) => x[0])) : null;
+    const own = D.own({ name: "R" + i, ...c.item }, c.data, { cost: c.offer.ask, cond: c.offer.cond || "NM" }, cfg, c.ctx);
+    const ref = own.r.routes.flip.exit, h = { key: "r" + i, name: "R" + i, kind: t === "s" ? "sealed" : "raw", qty: 1, cost: c.offer.ask, cond: c.offer.cond || "NM", own,
+      ch: ref && ["sell", "hold", "grade"].includes(own.label) ? C.compare(chOpts(t === "s" ? "sealed" : "card", c.offer.ask, ref)) : null };
+    const x = A.classify(h), html = rows(h).join("");
+    if (n90 < 5 || n30 < 3 || age == null || age > 21 || day - c.data.asOf > 3) {
+      thin++;
+      assert.strictEqual(x.action, "data", `case ${i}: ${n90}/90d ${n30}/30d age ${age} -> ${x.action}`);
+      assert.ok(x.profitNow == null && x.best == null && x.ref == null && x.gradeProfit == null, `case ${i}: data row carries a value`);
+      assert.ok(!/\$/.test(html), `case ${i}: data row prints money: ${html.slice(0, 300)}`);
+    } else if (x.action !== "data") { valued++; assert.ok(x.evidence && x.evidence.n90 >= 5 && x.evidence.n30 >= 3, `case ${i}: valued on thin evidence`); }
+  }
+  const r = Y.rng(99);
+  for (let i = 0; i < 1500; i++) {
+    const n = Math.floor(r() * 12), mid = 2000 + Math.floor(r() * 50000), lag = Math.floor(r() * 40);
+    const list = Array.from({ length: n }, () => [lag + Math.floor(r() * (90 - lag)), Math.round(mid * (1 + (r() * 2 - 1) * r() * 0.6))]).filter((a) => a[0] < 90);
+    const hs = slab(Math.round(mid * (0.3 + r())), list, { key: "s" + i }), x = A.classify(hs), html = rows(hs).join("");
+    const n30 = list.filter((a) => a[0] < 30).length, age = list.length ? Math.min(...list.map((a) => a[0])) : null;
+    if (list.length < 5 || n30 < 3 || age == null || age > 21) {
+      thin++;
+      assert.strictEqual(x.action, "data", `slab ${i}: ${list.length}/90d ${n30}/30d age ${age} -> ${x.action}`);
+      assert.ok(x.profitNow == null && x.best == null && !/\$/.test(html), `slab ${i}: data row shows money`);
+    } else if (x.action !== "data") valued++;
+  }
+  assert.ok(thin > 1500 && valued > 500, `coverage: ${thin} thin, ${valued} valued`);
+});
 console.log(`${n} advisor tests passed${process.exitCode ? " (with failures above)" : ""}`);
