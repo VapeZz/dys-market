@@ -190,8 +190,8 @@ def run(page, width, theme):
     page.reload(); page.wait_for_selector("#m-seg button")
     open_inventory(page)
     ok("No price yet" in row(page, "SYNTH Pikachu"), f"{tag}: after reload, no sold value")
-    page.click("#own-go")
-    page.wait_for_function("() => /Checked 4 items/.test((document.querySelector('#own-st') || {}).textContent || '')", timeout=15000)
+    page.click("#inv-adv .adv-go")
+    page.wait_for_function("() => /Reviewed 4 of 4/.test((document.querySelector('#inv-adv .adv-st') || {}).textContent || '')", timeout=15000)
     ok("$82.00" in row(page, "SYNTH Pikachu"), f"{tag}: Sell, grade or keep? values it for this visit")
     no_junk(page, f"{tag} inventory after Sell, grade or keep?")
 

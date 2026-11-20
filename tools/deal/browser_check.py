@@ -219,8 +219,8 @@ def main():
         ctx, page = new_page(b, 390, inv=inv, errors=errs)
         page.evaluate("() => { location.hash = '#mine'; }")
         page.wait_for_timeout(600)
-        page.click("#own-go")
-        page.wait_for_function("() => /Checked \\d+ item/.test((document.querySelector('#own-st') || {}).textContent || '')", timeout=30000)
+        page.click("#inv-adv .adv-go")
+        page.wait_for_function("() => /Reviewed \\d+ of \\d+/.test((document.querySelector('#inv-adv .adv-st') || {}).textContent || '')", timeout=30000)
         labels = {"sell": "Sell clears your target", "grade": "Grading looks better", "hold": "Keep for now", "unclear": "Not enough sales", "unknown": "No sold data"}
         seen = {}
         for i, g in owned_cards:

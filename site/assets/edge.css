@@ -477,3 +477,26 @@ a.row{text-decoration:none;color:inherit}
 .ch .btns{margin:0}.lg-ch{margin-top:10px}
 /* inventory value without a price (unknown, not $0) */
 .inv-np{font-size:13px;color:var(--ink-2)}.inv-src{color:var(--ink-2)}.inv-unpriced{margin:6px 0 0}
+
+/* Holdings Advisor (edge-advisor.js): Today's action list and Inventory's summary */
+.adv-tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin:6px 0 2px}
+.adv-tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;color:inherit;font:inherit;min-width:0}
+.adv-tile b{font:700 18px var(--display);font-variant-numeric:tabular-nums}
+.adv-tile small{font-size:10.5px;color:var(--ink-3);text-align:center;line-height:1.2}
+.adv-sec{margin-top:14px;scroll-margin-top:70px}
+.adv-note{margin:2px 0 8px}
+.adv-sum{margin:8px 0 0}
+.adv-list{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.adv-row{display:grid;grid-template-columns:64px minmax(0,1fr);column-gap:12px;row-gap:6px;padding:12px;border-top:1px solid var(--line);cursor:pointer;text-align:left}
+.adv-row:first-child{border-top:0}
+.adv-row:hover{background:var(--surface-2)}
+.adv-row > img,.adv-row > .ph{grid-row:1/span 2;width:64px;height:89px;object-fit:contain;border-radius:6px;background:var(--surface-2);align-self:start}
+.adv-main{min-width:0;display:flex;flex-direction:column;gap:3px}
+.adv-n{font-weight:600;font-size:14px;line-height:1.3;overflow-wrap:anywhere}
+.adv-s{font-size:12px;color:var(--ink-3)}
+.adv-why{font-size:12.5px;line-height:1.4;color:var(--ink-2);overflow-wrap:anywhere}
+.adv-ev{font-size:11.5px;line-height:1.35;color:var(--ink-3);overflow-wrap:anywhere}
+.adv-rt{grid-column:2;display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;font-variant-numeric:tabular-nums}
+.adv-rt b{font-size:16px;white-space:nowrap}
+.adv-rt small{font-size:11.5px;line-height:1.25}
+.adv-empty{padding:14px}

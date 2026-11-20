@@ -166,10 +166,10 @@ def run(page, width, theme):
 
     # 7. "Sell, grade or keep?" now checks graded items too
     page.click("#m-seg button:has-text('Inventory')")
-    page.wait_for_selector("#own-go", timeout=8000)
-    ok("Check my 4 items" in page.inner_text("#own-go"), f"{tag}: inventory check counts graded items ({page.inner_text('#own-go')})")
-    page.click("#own-go")
-    page.wait_for_function("() => /Checked 4 items/.test((document.querySelector('#own-st') || {}).textContent || '')", timeout=15000)
+    page.wait_for_selector("#inv-adv .adv-go", timeout=8000)
+    ok("Review my 4 holdings" in page.inner_text("#inv-adv .adv-go"), f"{tag}: inventory check counts graded items ({page.inner_text('#inv-adv .adv-go')})")
+    page.click("#inv-adv .adv-go")
+    page.wait_for_function("() => /Reviewed 4 of 4/.test((document.querySelector('#inv-adv .adv-st') || {}).textContent || '')", timeout=15000)
     rows = page.inner_text("#m-body .list")
     ok("Keep for now" in rows and "PSA 10 typical $82.00" in rows, f"{tag}: Pikachu row says keep")
     ok("Sell clears your target" in rows, f"{tag}: Umbreon PSA 10 row says sell")

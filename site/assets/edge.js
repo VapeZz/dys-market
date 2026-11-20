@@ -27,6 +27,9 @@
   const GRADED = part("edge-graded.js", "EdgeGraded");
   // where to sell? estimated profit per selling option (edge-channels.js), under the Deal check and the PSA check
   const CHAN = part("edge-channels.js", "EdgeChannels");
+  // the Holdings Advisor (edge-advisor.js, P3/P4): one action per holding (sell, grade, monitor, hold, not enough data)
+  // from the sold-price checks above; results live in this page's memory only, like every sold-price check
+  const ADV = part("edge-advisor.js", "EdgeAdvisor");
   // the ledger (edge-ledger.js, M2): buys, sales, expenses, cash and inventory in two books, kept in the owner's Google
   // Sheet through its web app (tools/ledger/Code.gs), with a copy and a queue of changes on this phone
   const LEDGER = part("edge-ledger.js", "EdgeLedger");
@@ -392,16 +395,19 @@
 
   /* ---------- Today ---------- */
   async function viewToday(v) {
-    v.innerHTML = `<section class="brief" id="t-brief"><span class="lab">Market brief</span><h1>Loading…</h1></section>
+    v.innerHTML = `<section class="sec" id="t-adv"></section>
+      <section class="sec" id="t-buy"></section>
+      <section class="brief" id="t-brief"><span class="lab">Market brief</span><h1>Loading…</h1></section>
       <section class="sec" id="t-port"></section>
-      <section class="sec" id="t-alerts" hidden></section>
       <section class="sec"><div class="sec-head"><h2>Market indices</h2></div><div class="hscroll" id="t-idx"></div></section>
-      <section class="sec"><div class="sec-head"><h2>Best flips right now</h2><a class="more" href="#deals">All deals</a></div><div id="t-flips"></div></section>
       <section class="sec"><div class="sec-head"><h2>Biggest moves today</h2></div><div id="t-mv-seg"></div><div id="t-movers"></div></section>
       <section class="sec" id="t-grade" hidden></section>
       <section class="sec" id="t-store" hidden></section>
       <p class="muted small">Market prices are TCGplayer's, updated nightly. Profits use your selling platform, fees and shipping from Mine → Settings.</p>`;
-    const [intel, scout, buyer] = await Promise.all([getJSON("intel.json").catch(() => null), getJSON("scout.json").catch(() => null), getJSON("buyer.json").catch(() => null)]);
+    const [intel, buyer] = await Promise.all([getJSON("intel.json").catch(() => null), getJSON("buyer.json").catch(() => null)]);
+    await loadIndex();
+    drawAdvisor($("#t-adv"));
+    drawBuy($("#t-buy"));
     if (intel) {
       $("#t-brief").innerHTML = `<span class="lab">Market brief · ${esc(fmtDay(intel.date))}</span><h1>${esc(intel.brief.head)}</h1><p>${esc(intel.brief.body)}</p>`;
       $("#t-idx").innerHTML = intel.indices.map((x) => { const ch = x.w1 ?? x.d1; return `<div class="idx"><span class="lab">${esc(x.name)}</span><b>${money(x.v, true)}</b>
@@ -413,12 +419,6 @@
       };
       seg($("#t-mv-seg"), [["up", "Rising"], ["down", "Falling"]], "up", drawMv); drawMv("up");
     } else $("#t-brief").innerHTML = `<span class="lab">Market brief</span><h1>Today's brief isn't ready yet</h1>`;
-    if (scout) {
-      const rows = scout.picks.filter((r) => r.plan === "flip" && gameOk(r.k)).map((r) => ({ r, f: flip(r.p, r.lo, r.t) })).filter((x) => x.f && x.f.pr > 0)
-        .sort((a, b) => b.f.pr - a.f.pr).slice(0, 5)
-        .map(({ r, f }) => rowHTML(r, `<b class="up">${signed(f.pr)}</b><small class="muted">buy ${money(r.lo)} · ${f.roi.toFixed(0)}%</small>`));
-      $("#t-flips").innerHTML = listOrEmpty(rows, `No flips clear your ${S.set.roi}% target today.`);
-    } else $("#t-flips").innerHTML = `<div class="empty">Today's deal list builds with the nightly update.</div>`;
     if (buyer && (buyer.fix?.length || buyer.rising?.length)) {
       const fix = buyer.fix || [];
       $("#t-store").hidden = false;
@@ -427,16 +427,15 @@
         <p class="muted small">${fix.length} store price${fix.length === 1 ? "" : "s"} far from market. Tap one to see the numbers.</p>`;
       $('#t-store [data-sub]').onclick = () => { SUB.deals = "store"; };
     }
-    await loadIndex();
     drawPortfolio($("#t-port"));
     await loadGraded();
     const gb = S.board.map((x) => { const bp = boardPrices(x); return { x, e: gradeEval(marketOf(x) || 0, bp.p10, bp.p9, bp.p8, undefined, cardOdds(x.id)) }; }).filter((r) => r.e.profit > 0).sort((a, b) => b.e.profit - a.e.profit).slice(0, 3);
     const mine = new Set(S.board.map((x) => String(x.id)));
     if (gb.length < 3 && GR) for (const o of (await opportunities()) || []) { if (gb.length >= 3 || o.e.profit <= 0) break; if (!mine.has(String(o.r[0]))) gb.push({ x: { id: o.r[0], g: o.r[1], n: o.r[2] }, e: o.e }); }
-    if (gb.length) { $("#t-grade").hidden = false; $("#t-grade").innerHTML = `<div class="sec-head"><h2>Best to grade</h2><a class="more" href="#grade" id="t-grade-more">${GR ? "All opportunities" : "Grading board"}</a></div>
-      <div class="list">${gb.map(({ x, e }) => rowHTML(x, `<b class="up">${signed(Math.round(e.profit))}</b><small class="muted">${e.v[1]}</small>`)).join("")}</div>`;
+    if (gb.length) { $("#t-grade").hidden = false; $("#t-grade").innerHTML = `<div class="sec-head"><h2>Grading ideas · estimates</h2><a class="more" href="#grade" id="t-grade-more">${GR ? "All opportunities" : "Grading board"}</a></div>
+      <p class="muted small adv-note">From TCGplayer raw prices and the graded price list, not checked against sold prices. Open a card and run its Deal check (grade route) before sending anything in.</p>
+      <div class="list">${gb.map(({ x, e }) => rowHTML(x, `<b>${signed(Math.round(e.profit))}</b><small class="muted">est. · ${e.v[1]}</small>`)).join("")}</div>`;
       $("#t-grade-more").onclick = () => { SUB.grade = GR ? "find" : "board"; }; }
-    drawAlerts($("#t-alerts"));
   }
   function portfolio() {
     const p = { value: 0, cost: 0, costPriced: 0, costUnpriced: 0, items: 0, priced: 0, unpriced: 0, n: 0 };
@@ -460,18 +459,21 @@
     const p = portfolio();
     el.innerHTML = `<div class="sec-head"><h2>Your inventory</h2><a class="more" href="#mine">Open</a></div>${valueTiles(p)}`;
   }
-  async function drawAlerts(el) {
-    if (!S.watch.length) return;
+  /* What to consider buying: only leads, never a BUY by themselves. A watched card at its target price is a lead from
+     TCGplayer's market or lowest listing (any condition), so it says so and points at the Deal check, which is the only
+     place Edge says "BUY candidate" (real sold prices, every gate). The Near Mint finder's list joins here once connected. */
+  async function drawBuy(el) {
     const hits = [];
     for (const w of S.watch) {
       const d = await detail(w.id, w.g, w.n).catch(() => null);
       const it = d?.it; if (!it) continue;
       const now = Math.min(it.lo || Infinity, it.p || Infinity);
-      if (isFinite(now) && now <= w.target) hits.push(rowHTML({ ...w, n: it.n }, `<b class="up">${money(now)}</b><small class="muted">target ${money(w.target)}</small>`));
+      if (isFinite(now) && now <= w.target) hits.push(rowHTML({ ...w, n: it.n }, `<b>${money(now)}</b><small class="muted">target ${money(w.target)}</small>`,
+        `<span class="why">${it.lo && it.lo <= w.target ? "Lowest listing (any condition)" : "Market price"} at or under your target. Not checked against sold prices yet: open it and run the Deal check.</span>`));
     }
-    if (!hits.length) return;
-    el.hidden = false;
-    el.innerHTML = `<div class="sec-head"><h2>At your price</h2><span class="chip hot">${hits.length}</span></div><div class="list">${hits.join("")}</div>`;
+    el.innerHTML = `<div class="sec-head"><h2>What to consider buying</h2>${hits.length ? `<span class="chip hot">${hits.length}</span>` : ""}</div>
+      ${hits.length ? `<div class="list">${hits.join("")}</div>` : `<div class="empty adv-empty">${S.watch.length ? `None of your ${S.watch.length} watched card${S.watch.length === 1 ? " is" : "s are"} at your target price today.` : "Watch a card's price (open it → Watch price) and it shows here when it reaches your number."}</div>`}
+      <p class="muted small adv-note">Edge only calls something a <b>BUY candidate</b> in a card's Deal check, after real sold prices clear every check (sales, freshness, spread, trend and your ${S.set.roi}% target). Near Mint deals from the daily finder will show here once it's connected.</p>`;
   }
 
   /* ---------- Search ---------- */
@@ -1421,6 +1423,74 @@
     ledgerSync().then((r) => { if (r && r.ok && SUB.mine === "ledger" && LMOUNT) LMOUNT.redraw(); });
     draw();
   }
+  /* ---------- Holdings Advisor: review every holding against real sold prices (this page only) ---------- */
+  const ADVIN = new Map(); let ADVAT = null, ADVCRED = 0, ADVBUSY = false;
+  const advKey = (x) => x.lid || x.k;
+  // rough upper bound for the button: raw up to ~210 credits (raw, PSA 10, PSA 9 sales + population), PSA ~161, sealed ~90
+  const advEstimate = (inv) => inv.reduce((s, x) => s + (x.graded ? 161 : x.t === "s" ? 90 : 210), 0);
+  const advBase = (x) => ({ key: advKey(x), name: cleanN(x.n), kind: x.graded ? "graded" : x.t === "s" ? "sealed" : "raw", qty: x.qty, cost: x.cost || 0,
+    cond: x.cond || "NM", grade: x.graded || "", book: x.book || "" });
+  async function reviewHoldings(inv, st) {
+    const conn = pkmnConn(), [deal, pkmn, gr, chan] = await Promise.all([DEAL, PKMN, GRADED, CHAN]);
+    if (!conn || !deal || !pkmn || !gr) return { ok: false, why: "Sold prices aren't set up yet (Mine → Settings → Pair this phone)." };
+    if (ADVBUSY) return { ok: false, why: "A review is already running." };
+    ADVBUSY = true; let credits = 0, i = 0;
+    const put = (x, val, own) => { ADVIN.set(advKey(x), { ...advBase(x), ...val }); if (own) OWN.set(advKey(x), own); };
+    try {
+      for (const x of inv) {
+        st && st(`Checking ${++i} of ${inv.length}…`);
+        if (x.graded) {
+          // a slab: that grader and grade's sold prices only (the raw Deal check doesn't apply to a slab)
+          try {
+            const [grader, grade] = x.graded.split(" "), res = await pkmn.getGrade({ id: x.id, n: x.n }, { grader, grade }, conn, true);
+            credits += res.meta ? res.meta.credits : 0;
+            if (!res.ok) { const note = gradedNote(res).note; put(x, { graded: null, note }, { label: res.reason === "unsupported" ? "unclear" : "unknown", text: note }); continue; }
+            const sell = gradedSell(), r = gr.evaluate(res.data, { cost: x.cost || 0, label: x.graded }, sell, gradedOpts());
+            noteSold(x.id, x.n, x.graded, r);
+            const ch = chan && r.typical != null ? chan.compare({ ...chanOpts("graded", x.n), cost: x.cost || 0, ref: r.typical,
+              ebay: { feePct: sell.feePct, topFrom: sell.topFrom ?? 750000, topPct: sell.topPct || 0, feeFlat: sell.perOrder || 0, buyerTax: sell.buyerTax, ship: sell.ship, sup: sell.supplies || 0 } }) : null;
+            put(x, { graded: r, ch }, { label: { sell: "sell", hold: "hold", insufficient: "unclear" }[r.verdict], text: gr.line(r) });
+          } catch (err) { console.error(err); put(x, { graded: null, note: "Couldn't check this one." }, { label: "unknown", text: "Couldn't check this one." }); }
+          continue;
+        }
+        try {
+          const d = await detail(x.id, x.g, x.n), it = d.it;
+          if (!it) { const note = "No market price for this item right now."; put(x, { own: null, note }, { label: "unknown", text: note }); continue; }
+          const item = { id: it.id, n: it.n, name: it.n, t: it.t, tcg: it.p, tcgDay: dayNum(d.set.dates?.[d.set.dates.length - 1]) };
+          const res = await pkmn.get(item, conn, true); credits += res.meta ? res.meta.credits : 0;
+          if (!res.ok) { const note = soldNote(res).note; put(x, { own: null, note }, { label: "unknown", text: note }); continue; }
+          const o = deal.own(item, res.data, { cost: x.cost || 0, cond: x.cond || "NM" }, dealCfg(it.p));
+          const ref = o.r && o.r.routes && o.r.routes.flip ? o.r.routes.flip.exit : null;
+          const ch = chan && ref && ["sell", "hold", "grade"].includes(o.label) ? chan.compare({ ...chanOpts(x.t === "s" ? "sealed" : "card", x.n), cost: x.cost || 0, ref }) : null;
+          put(x, { own: o, ch }, o);
+        } catch (err) { console.error(err); put(x, { own: null, note: "Couldn't check this one." }, { label: "unknown", text: "Couldn't check this one." }); }
+      }
+    } finally { ADVBUSY = false; }
+    ADVAT = Date.now(); ADVCRED = credits;
+    return { ok: true, credits };
+  }
+  // the action list: every holding, reviewed or not (not reviewed = "Not enough data: not checked yet")
+  async function drawAdvisor(el, opt = {}) {
+    if (!el) return;
+    const adv = await ADV, inv = invRows();
+    if (!adv) { el.innerHTML = ""; return; }
+    const list = inv.map((x) => ADVIN.get(advKey(x)) || { ...advBase(x), note: "Not reviewed yet: tap Review." });
+    const done = inv.filter((x) => ADVIN.has(advKey(x))).length, est = advEstimate(inv), conn = pkmnConn();
+    el.innerHTML = `<div class="sec-head"><h2>${opt.title || "Your holdings: what to do"}</h2>${opt.title ? "" : `<a class="more" href="#mine">Inventory</a>`}</div>
+      ${inv.length ? `<p class="muted small adv-note">Checks each holding against real eBay sold prices (PkmnPrices, up to about ${est.toLocaleString("en-US")} credits for ${inv.length} item${inv.length === 1 ? "" : "s"} of your 20,000 a day). Facts at today's prices, not a forecast. Nothing is saved; results last for this visit.</p>
+      <div class="btns"><button type="button" class="btn ${done ? "sm" : "primary"} adv-go"${conn ? "" : " disabled"}>${done ? "Review again" : `Review my ${inv.length} holding${inv.length === 1 ? "" : "s"}`}</button></div>
+      <p class="small muted adv-st" style="margin:0">${!conn ? "Set up sold prices in Mine → Settings first." : done ? `Reviewed ${done} of ${inv.length} at ${clock(ADVAT)} · ${ADVCRED.toLocaleString("en-US")} credits.` : ""}</p>` : ""}
+      ${!inv.length || done ? adv.html(adv.board(list), { roi: S.set.roi, compact: !!opt.compact, img: (x) => { const r = inv.find((y) => advKey(y) === x.key); return r ? img(r.id) : `<span class="ph"></span>`; },
+        attrs: (x) => { const r = inv.find((y) => advKey(y) === x.key); return r ? ` data-open="${r.id}" data-g="${r.g}" data-n="${esc(r.n)}"` : ""; } }) : ""}`;
+    $$(".adv-tile[data-jump]", el).forEach((b) => { b.onclick = () => { const t = $(`#adv-${b.dataset.jump}`, el); if (t) t.scrollIntoView({ behavior: "smooth", block: "start" }); else if (opt.compact) location.hash = "today"; }; });
+    const go = $(".adv-go", el);
+    if (go) go.onclick = async () => {
+      go.disabled = true; const st = $(".adv-st", el);
+      const res = await reviewHoldings(invRows(), (t) => { if (st) st.textContent = t; });
+      if (!res.ok) { if (st) st.textContent = res.why; go.disabled = false; return; }
+      drawAdvisor(el, opt); opt.after && opt.after();
+    };
+  }
   /* "Sell, grade or keep?" for what the owner holds: today's real sold prices, this page only */
   const OWN = new Map();
   const OWNL = { sell: ["good", "Sell clears your target"], grade: ["good", "Grading looks better"], hold: ["", "Keep for now"], unclear: ["warn", "Not enough sales"], unknown: ["", "No sold data"] };
@@ -1432,10 +1502,7 @@
       const p = portfolio();
       const rows = inv.map((x, i) => ({ x, i, val: x.each == null ? null : Math.round(x.each * x.qty), cost: (x.cost || 0) * x.qty })).sort((a, b) => (b.val ?? -1) - (a.val ?? -1));
       el.innerHTML = `${valueTiles(p)}
-        <section class="sec panel own-box"><span class="lab">Sell, grade or keep?</span>
-          <p class="muted small" style="margin:0">Checks each item against real eBay sold prices (PkmnPrices, up to about 250 credits an item of your 20,000 a day). Facts at today's prices, not a forecast. Nothing is saved.</p>
-          <div class="btns"><button type="button" class="btn sm" id="own-go"${pkmnConn() ? "" : " disabled"}>${OWN.size ? "Check again" : `Check my ${inv.length} item${inv.length === 1 ? "" : "s"}`}</button></div>
-          <p class="small muted" id="own-st" style="margin:0">${pkmnConn() ? "" : "Set up sold prices in Mine → Settings first."}</p></section>
+        <section class="sec panel own-box" id="inv-adv"></section>
         <div class="list">${rows.map(({ x, val, cost }) => { const o = OWN.get(x.lid || x.k), L = o ? OWNL[o.label] || OWNL.unknown : null;
           return rowHTML(x, val == null ? `<b class="inv-np">No price yet</b><small class="muted">cost ${money(cost)}</small>` : `<b>${money(val)}</b><small class="${cls(val - cost)}">${cost ? `${signed(val - cost)} est.` : `${x.qty}×`}</small>`,
           `<span class="why">${x.qty}× · ${x.graded ? esc(x.graded) + " · " : x.t === "c" ? esc(x.cond) + " · " : ""}${on && x.book === "Personal" ? "Personal · " : ""}paid ${money(x.cost)} each${val && x.qty ? ` · sells for ${money(Math.round(net(Math.round(val / x.qty), x.t)))} each on ${esc(plat().label)}` : ""}</span>
@@ -1443,36 +1510,7 @@
         <p class="muted small">${on ? "Tap an item for its card. Buys, sales and costs are in Ledger." : "Tap an item to change it."} Market value is before selling costs; unrealized gains and losses are estimates. Realized profit is only from recorded sales (Ledger).${SOLDV.size ? " Sold-price values last for this visit only and aren't saved." : ""}</p>`;
       el.insertAdjacentHTML("afterbegin", moveNote);
       const mv = $("#inv-move", el); if (mv) mv.onclick = () => { SUB.mine = "ledger"; route(); };
-      const go = $("#own-go", el);
-      if (go) go.onclick = async () => {
-        const conn = pkmnConn(), [deal, pkmn, gr] = await Promise.all([DEAL, PKMN, GRADED]), st = $("#own-st", el);
-        if (!conn || !deal || !pkmn || !gr) { st.textContent = "Sold prices aren't set up yet (Mine → Settings)."; return; }
-        go.disabled = true; let credits = 0, i = 0;
-        const todo = inv;
-        for (const x of todo) {
-          st.textContent = `Checking ${++i} of ${todo.length}…`;
-          // a graded item: that grader and grade's sold prices only (the raw Deal check below doesn't apply to a slab)
-          if (x.graded) {
-            try {
-              const [grader, grade] = x.graded.split(" "), res = await pkmn.getGrade({ id: x.id, n: x.n }, { grader, grade }, conn, true);
-              credits += res.meta ? res.meta.credits : 0;
-              if (!res.ok) { OWN.set(x.lid || x.k, { label: res.reason === "unsupported" ? "unclear" : "unknown", text: gradedNote(res).note }); continue; }
-              const r = gr.evaluate(res.data, { cost: x.cost || 0, label: x.graded }, gradedSell(), gradedOpts());
-              noteSold(x.id, x.n, x.graded, r);
-              OWN.set(x.lid || x.k, { label: { sell: "sell", hold: "hold", insufficient: "unclear" }[r.verdict], text: gr.line(r) });
-            } catch (err) { console.error(err); OWN.set(x.lid || x.k, { label: "unknown", text: "Couldn't check this one." }); }
-            continue;
-          }
-          try {
-            const d = await detail(x.id, x.g, x.n), it = d.it;
-            if (!it) { OWN.set(x.lid || x.k, { label: "unknown", text: "No market price for this item right now." }); continue; }
-            const item = { id: it.id, n: it.n, name: it.n, t: it.t, tcg: it.p, tcgDay: dayNum(d.set.dates?.[d.set.dates.length - 1]) };
-            const res = await pkmn.get(item, conn, true); credits += res.meta ? res.meta.credits : 0;
-            OWN.set(x.lid || x.k, res.ok ? deal.own(item, res.data, { cost: x.cost || 0, cond: x.cond || "NM" }, dealCfg(it.p)) : { label: "unknown", text: soldNote(res).note });
-          } catch (err) { console.error(err); OWN.set(x.lid || x.k, { label: "unknown", text: "Couldn't check this one." }); }
-        }
-        draw(); const s2 = $("#own-st", el); if (s2) s2.textContent = `Checked ${todo.length} item${todo.length === 1 ? "" : "s"} just now · ${credits} credits.`;
-      };
+      drawAdvisor($("#inv-adv", el), { title: "Sell, grade or keep?", compact: true, after: draw });
     };
     draw();
   }
