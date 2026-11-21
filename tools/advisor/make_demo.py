@@ -37,13 +37,21 @@ for h in HOLD:
                   "price": h["cost"], "status": "", "note": "SAMPLE"})
 LEDGER = {"v": 1, "T": {"buys": [], "items": items, "sales": [], "costs": [], "cash": []}, "q": [], "pulled": 0, "err": "", "migrated": True, "sheet": ""}
 umb, leaf = names[610516], names[610499]
+# card-show buy list (Nov 20): four sample cards on the watchlist and on the buy list, not checked yet, so "Check prices"
+# can be tried (the synthetic relay answers; nothing is spent)
+BL_CARDS = [(610513, 23821), (42355, 604), (517020, 23237), (610653, 23821)]
+SETN = {23821: "SV: Prismatic Evolutions", 23237: "SV: Scarlet & Violet 151", 604: "Base Set"}
 SEED = {"inv": [], "watch": [{"id": 610516, "g": 23821, "n": umb["n"], "target": umb["p"] + 100, "at": "2026-11-10"},
-                             {"id": 610499, "g": 23821, "n": leaf["n"], "target": 100, "at": "2026-11-10"}], "set": {"platform": "ebay"}}
+                             {"id": 610499, "g": 23821, "n": leaf["n"], "target": 100, "at": "2026-11-10"}]
+        + [{"k": f"{i}|{names[i]['n']}", "id": i, "g": g, "n": names[i]["n"], "t": "c", "target": names[i]["p"] // 2, "at": "2026-11-20"} for i, g in BL_CARDS],
+        "set": {"platform": "ebay"}}
+BUYLIST = {"v": 1, "items": [{"k": f"{i}|{names[i]['n']}", "id": i, "g": g, "n": names[i]["n"], "setN": SETN[g], "t": "c", "r": names[i].get("r", ""), "cond": "NM", "added": 1795200000000}
+                             for i, g in BL_CARDS[:3]]}
 
 DEMO = """/* Edge demo shim: sample ledger + synthetic sold-price relay answered in the page. Nothing real is called. */
 (() => {
-  const V = "adv-demo-3", SEED = %s, LEDGER = %s;
-  const seed = (paired) => { try { localStorage.clear(); localStorage.setItem("dys-theme", "dark"); localStorage.setItem("dys-edge-v1", JSON.stringify(SEED));
+  const V = "bl-demo-1", SEED = %s, LEDGER = %s, BUYLIST = %s;
+  const seed = (paired) => { try { localStorage.clear(); localStorage.setItem("dys-theme", "dark"); localStorage.setItem("dys-edge-v1", JSON.stringify(SEED)); localStorage.setItem("dys-edge-buylist", JSON.stringify(BUYLIST));
     localStorage.setItem("dys-edge-ledger", JSON.stringify(LEDGER)); if (paired) localStorage.setItem("dys-edge-relay", JSON.stringify({ relay: "https://relay.test", pass: "sample" }));
     localStorage.setItem("dys-demo", V); } catch (e) {} };
   try { if (localStorage.getItem("dys-demo") !== V) seed(true); } catch (e) {}
@@ -70,18 +78,18 @@ DEMO = """/* Edge demo shim: sample ledger + synthetic sold-price relay answered
   addEventListener("DOMContentLoaded", () => {
     const paired = (() => { try { return !!localStorage.getItem("dys-edge-relay"); } catch (e) { return true; } })();
     const b = document.createElement("div"); b.className = "demo-bar";
-    b.innerHTML = `<b>Preview · sample holdings, made-up sales.</b> Nothing real is called and no credits are spent.
+    b.innerHTML = `<b>Preview · sample cards, made-up sales.</b> Daily deals shows the real Nov 19 finder run. Nothing real is called and no credits are spent.
       <span><button type="button" data-d="pair">${paired ? "Unpair this phone" : "Pair again"}</button><button type="button" data-d="reset">Reset preview</button></span>`;
-    b.onclick = (e) => { const d = e.target.dataset.d; if (!d) return; seed(d === "reset" ? true : !paired); location.hash = "#today"; location.reload(); };
+    b.onclick = (e) => { const d = e.target.dataset.d; if (!d) return; seed(d === "reset" ? true : !paired); location.hash = "#deals"; location.reload(); };
     document.body.prepend(b);
   });
 })();
-""" % (json.dumps(SEED), json.dumps(LEDGER))
+""" % (json.dumps(SEED), json.dumps(LEDGER), json.dumps(BUYLIST))
 open(os.path.join(OUT, "assets/demo.js"), "w").write(DEMO)
 
 html = open(os.path.join(SITE, "edge/index.html")).read()
 html = html.replace("../assets/", "assets/").replace('href="manifest.webmanifest"', 'href="data:,"')
-html = html.replace("<title>DYS Edge</title>", "<title>DYS Edge preview: Holdings Advisor + Today (sample data)</title>")
+html = html.replace("<title>DYS Edge</title>", "<title>DYS Edge preview: Card-show Buy list (sample data)</title>")
 html = html.replace("</head>", """<style>.demo-bar{padding:8px 12px;font:13px/1.4 Inter,system-ui,sans-serif;background:#3b2a05;color:#ffd77a;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
 .demo-bar span{display:flex;gap:6px}.demo-bar button{font:inherit;font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid #ffd77a66;background:transparent;color:#ffd77a}</style>
 <script src="assets/demo.js"></script>

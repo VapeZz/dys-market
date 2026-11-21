@@ -18,7 +18,7 @@ const memLS = () => { const m = new Map(); return { getItem: (k) => m.has(k) ? m
   await test("steps and bands round down, so a saved number never exceeds the exact one", () => {
     assert.deepStrictEqual([1999, 2000, 2649, 4999, 5000, 7499].map(B.floorTo), [1900, 2000, 2500, 4750, 5000, 7000]);
     assert.strictEqual(B.floorTo(0), null); assert.strictEqual(B.floorTo(99), 0);   // under $1: nothing to offer
-    assert.deepStrictEqual(B.resaleBand(3350), [3000, 4000]); assert.deepStrictEqual(B.resaleBand(1849), [1500, 2000]); assert.deepStrictEqual(B.resaleBand(12345), [10000, 12500]);
+    assert.deepStrictEqual(B.resaleBand(3350), [3000, 3500]); assert.deepStrictEqual(B.resaleBand(1849), [1800, 2000]); assert.deepStrictEqual(B.resaleBand(7300), [7000, 8000]); assert.deepStrictEqual(B.resaleBand(12345), [10000, 12500]);
     assert.deepStrictEqual([0, 2, 5, 9, 20].map(B.paceBand), ["0", "1–2", "3–6", "7–14", "15+"]);
     assert.strictEqual(B.opening(2700), 2100); assert.strictEqual(B.opening(500), 400); assert.strictEqual(B.opening(100), null); assert.strictEqual(B.opening(null), null);
     for (const w of [300, 1000, 2250, 2700, 7000]) assert.ok(B.opening(w) < w && B.opening(w) % 100 === 0, `open < walk for ${w}`);
@@ -37,7 +37,7 @@ const memLS = () => { const m = new Map(); return { getItem: (k) => m.has(k) ? m
       assert.strictEqual(at.verdict, "buy", `${cond}: the engine calls the walk-away a BUY with cash`);
       const F = at.routes.flip; assert.ok(F.profit >= 500 && F.profit * 100 >= F.cost * 20 && F.cost <= 7500);
     }
-    assert.strictEqual(est.grade, D.check(it, d, { ask: 100, cond: "NM", shipIn: 0, taxIn: 0 }, noRes).confidence); assert.ok(/^[A-D]$/.test(est.grade)); assert.strictEqual(est.pace, "7–14"); assert.deepStrictEqual(est.resale, [4000, 5000]);
+    assert.strictEqual(est.grade, D.check(it, d, { ask: 100, cond: "NM", shipIn: 0, taxIn: 0 }, noRes).confidence); assert.ok(/^[A-D]$/.test(est.grade)); assert.strictEqual(est.pace, "7–14"); assert.deepStrictEqual(est.resale, B.resaleBand(D.check(it, d, { ask: 100, cond: "NM", shipIn: 0, taxIn: 0 }, noRes).routes.flip.exit));
     assert.strictEqual(est.issue, null); assert.strictEqual(est.at, NOW); assert.strictEqual(est.tcg, 4000);
   });
 

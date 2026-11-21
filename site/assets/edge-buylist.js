@@ -6,7 +6,7 @@
 
    What is saved (localStorage "dys-edge-buylist"): our own derived numbers, rounded so that no exact sold price can be
    worked back from them — the walk-away is the engine's max to pay floored to a step ($1 under $20, $2.50 under $50, $5
-   above), the resale value is a band ($5 / $10 / $25 wide), sales pace is a count band, the evidence grade a letter.
+   above), the resale value is a band ($2 under $20, $5 under $50, $10 under $100, $25 above), sales pace is a count band, the evidence grade a letter.
    Not saved: sold prices, medians, comps, exact profits or the exact max (PkmnPrices data stays in memory). Estimates are
    dropped after 7 days; after 3 days they are shown but never used for a rules result.
    No dependencies: node tests/edge_buylist.test.js */
@@ -26,7 +26,7 @@
   const floorTo = (c) => c == null || !isFinite(c) || c <= 0 ? null : Math.floor(c / step(c)) * step(c);
   function resaleBand(exit) {
     if (exit == null || !isFinite(exit) || exit <= 0) return null;
-    const w = exit < 2000 ? 500 : exit < 10000 ? 1000 : 2500, lo = Math.floor(exit / w) * w;
+    const w = exit < 2000 ? 200 : exit < 5000 ? 500 : exit < 10000 ? 1000 : 2500, lo = Math.floor(exit / w) * w;
     return [lo, lo + w];
   }
   const paceBand = (n) => n == null ? null : n <= 0 ? "0" : n <= 2 ? "1–2" : n <= 6 ? "3–6" : n <= 14 ? "7–14" : "15+";
