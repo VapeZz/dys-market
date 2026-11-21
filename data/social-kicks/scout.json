@@ -1,0 +1,100 @@
+{
+ "at": "2026-11-20T17:40Z",
+ "from": "2026-11-21",
+ "to": "2026-11-21",
+ "pairs": [
+  {
+   "c": "IZ1694-600",
+   "n": "Air Jordan 3 \"Lola Bunny\"",
+   "d": "2026-11-21",
+   "r": 155,
+   "b": "Jordan",
+   "h": 1,
+   "n_ask": 2,
+   "low": 123.73,
+   "p25": 123.73,
+   "med": 174.37
+  },
+  {
+   "c": "IF4396-001",
+   "n": "Air Jordan 3 \"Not Nice\"",
+   "d": "2026-11-21",
+   "r": 215,
+   "b": "Jordan",
+   "h": 2,
+   "n_ask": 6,
+   "low": 189.95,
+   "p25": 204.99,
+   "med": 239.5
+  },
+  {
+   "c": "DM0967-601",
+   "n": "Air Jordan 3 \"Santa\"",
+   "d": "2026-11-21",
+   "r": 155,
+   "b": "Jordan",
+   "h": 1,
+   "n_ask": 1,
+   "low": 124.56,
+   "p25": 124.56,
+   "med": 124.56
+  },
+  {
+   "c": "IO1746-002",
+   "n": "Jordan Tatum 5 \"Sunset\"",
+   "d": "2026-11-21",
+   "r": 135,
+   "b": "Jordan",
+   "h": 1,
+   "n_ask": 0
+  },
+  {
+   "c": "IQ5570-300",
+   "n": "Jordan Triangle \"Paolo Banchero\"",
+   "d": "2026-11-21",
+   "r": 150,
+   "b": "Jordan",
+   "h": 1,
+   "n_ask": 0
+  },
+  {
+   "c": "IO8233-500",
+   "n": "Nike Kobe AD Protro \"Purple Stardust\"",
+   "d": "2026-11-21",
+   "r": 155,
+   "b": "Nike",
+   "h": 2,
+   "n_ask": 6,
+   "low": 130.0,
+   "p25": 168.21,
+   "med": 217.5
+  },
+  {
+   "c": "IZ2573-010",
+   "n": "Nike Zoom Hyperflight \"Safari\"",
+   "d": "2026-11-21",
+   "r": 190,
+   "b": "Nike",
+   "h": 1,
+   "n_ask": 0
+  },
+  {
+   "c": "JA5895-001",
+   "n": "Oregon Ducks x Nike Air Foamposite Pro \"Mummy Duck\"",
+   "d": "2026-11-21",
+   "r": 230,
+   "b": "Nike",
+   "h": 2,
+   "n_ask": 0
+  },
+  {
+   "c": "JA7805-302",
+   "n": "Victory Lap Radio x Nike Air Force 1 Low",
+   "d": "2026-11-21",
+   "r": null,
+   "b": "Nike",
+   "h": 1,
+   "n_ask": 0
+  }
+ ]
+}
