@@ -373,6 +373,84 @@
       <text x="${W - R + 6}" y="${Y(mx) + 4}">${money(mx, mx >= 10000)}</text><text x="${W - R + 6}" y="${Y(mn) + 4}">${money(mn, mn >= 10000)}</text>
       <text x="${L}" y="${H - 6}">${esc(fmtDay(ds[pts[0][0]]))}</text><text x="${W - R}" y="${H - 6}" text-anchor="end">${esc(fmtDay(ds[last[0]]))}</text></svg>`;
   }
+  /* ---------- card search: the whole card list, ranked (Nov 21, 2026). Shared by Search (and the Ledger's "add a
+     card"), Show check and the Buy list. Before, each stopped after the first 200-400 matches in price order, so cheaper
+     cards never showed ("Mew": 425 matches, 12 shown). Every word must start a word of the name or set ("mew" no longer
+     matches "Bartholomew"); card numbers match with or without leading zeros ("6/165" finds 006/165, "179" alone finds
+     179/131); printing words filter the exact printing (reverse, holo, 1st, unlimited, normal). */
+  const SPR = ["1st Edition Holofoil", "1st Edition Normal", "1st Edition", "Unlimited Holofoil", "Unlimited", "Reverse Holofoil", "Holofoil", "Normal"];
+  const fold = (x) => String(x || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const printingOfRow = (n, t) => { if (t === "s") return ""; const m = /\(([^()]*)\)\s*$/.exec(n || ""); return m && SPR.includes(m[1]) ? m[1] : "Normal"; };
+  const numNorm = (x) => x.split("/").map((p) => p.replace(/^([a-z]*)0+(?=\d)/, "$1")).join("/");
+  let SX = null;
+  function searchIndex() {
+    if (SX && SX.rows === ROWS) return SX;
+    const n = ROWS.length, text = new Array(n), base = new Array(n), num = new Array(n), pr = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const r = ROWS[i], nm = r[1] || "";
+      text[i] = " " + fold(nm + " " + setName(r[2])).replace(/[^a-z0-9/]+/g, " ") + " ";
+      base[i] = fold(nm.split(" - ")[0].replace(/\s*\(.*$/, "")).replace(/[^a-z0-9]+/g, " ").trim();
+      const m = / - ([a-z]*\d+[a-z]*(?:\/[a-z]*\d+[a-z]*)?)/i.exec(nm); num[i] = m ? numNorm(m[1].toLowerCase()) : "";
+      pr[i] = printingOfRow(nm, r[3]);
+    }
+    return (SX = { rows: ROWS, text, base, num, pr });
+  }
+  const PR_WORDS = [["rev", /\b(reverse holofoil|reverse holo|reverse|rev holo|rh)\b/g], ["1st", /\b(1st edition|1st ed|1st|first edition|first ed)\b/g],
+    ["unl", /\b(unlimited|unl)\b/g], ["normal", /\b(non[\s-]?holo|normal)\b/g], ["holo", /\b(holofoil|holo)\b/g]];
+  function parseQuery(q) {
+    let x = " " + fold(q).replace(/#/g, " ") + " "; const want = new Set();
+    for (const [k, re] of PR_WORDS) { re.lastIndex = 0; if (re.test(x)) { want.add(k); x = x.replace(re, " "); } }
+    return { toks: x.replace(/[^a-z0-9/]+/g, " ").trim().split(/\s+/).filter(Boolean), want };
+  }
+  function printingOk(p, want) {
+    if (!want.size) return true;
+    if (!p) return false;                                   // sealed has no printing
+    if (want.has("rev") && p !== "Reverse Holofoil") return false;
+    if (want.has("holo") && !want.has("rev") && !(p.endsWith("Holofoil") && p !== "Reverse Holofoil")) return false;
+    if (want.has("1st") && !p.startsWith("1st Edition")) return false;
+    if (want.has("unl") && !p.startsWith("Unlimited")) return false;
+    if (want.has("normal") && !["Normal", "Unlimited", "1st Edition", "1st Edition Normal"].includes(p)) return false;
+    return true;
+  }
+  // every match, best first; keep(r) filters by game or type. Returns rows of the card list.
+  function findCards(q, keep) {
+    const { toks, want } = parseQuery(q);
+    if (!toks.length && !want.size) return [];
+    const X = searchIndex(), hits = [], isNum = (t) => /\d/.test(t);
+    const words = toks.filter((t) => !isNum(t)).join(" ");
+    for (let i = 0; i < ROWS.length; i++) {
+      const r = ROWS[i];
+      if (keep && !keep(r)) continue;
+      if (!printingOk(X.pr[i], want)) continue;
+      const tx = X.text[i]; let sc = 0, ok = true;
+      for (const t of toks) {
+        if (isNum(t) && X.num[i]) { const a = numNorm(t), b = X.num[i]; if (b === a || b.split("/")[0] === a) { sc += 50; continue; } }
+        if (tx.includes(" " + t)) continue;
+        ok = false; break;
+      }
+      if (!ok) continue;
+      const b = X.base[i];
+      if (words) sc += b === words ? 100 : b.startsWith(words + " ") ? 60 : (" " + b + " ").includes(" " + words + " ") ? 40 : b.startsWith(words) ? 25 : 0;
+      hits.push([sc, i]);
+    }
+    hits.sort((a, b) => b[0] - a[0] || (ROWS[b[1]][4] || 0) - (ROWS[a[1]][4] || 0));
+    return hits.map((h) => ROWS[h[1]]);
+  }
+  // a results list that grows: the first `step` rows, then "Show more" adds `step` at a time
+  function pagedList(box, list, step, html, wire, wrap = "sc-list") {
+    let shown = 0;
+    box.innerHTML = `<p class="small muted sr-count" data-n="${list.length}">${list.length.toLocaleString("en-US")} match${list.length === 1 ? "" : "es"}</p><div class="${wrap}"></div><div class="btns sr-more-wrap"></div>`;
+    const ul = box.querySelector(`.${wrap.split(" ")[0]}`), more = box.querySelector(".sr-more-wrap");
+    const add = () => {
+      const part = list.slice(shown, shown + step); shown += part.length;
+      const tmp = document.createElement("div"); tmp.innerHTML = part.map(html).join("");
+      const nodes = [...tmp.children]; nodes.forEach((n) => ul.appendChild(n)); wire(nodes);
+      const left = list.length - shown;
+      more.innerHTML = left > 0 ? `<button type="button" class="btn sm sr-more">Show ${Math.min(step, left)} more · ${left.toLocaleString("en-US")} left</button>` : "";
+      const b = more.querySelector(".sr-more"); if (b) b.onclick = add;
+    };
+    add();
+  }
   const rowHTML = (x, right, extra = "") => `<button type="button" class="row" data-open="${x.id}" data-g="${x.g}" data-n="${esc(x.n)}">
       ${img(x.id)}<span style="min-width:0;display:flex;flex-direction:column;gap:2px"><span class="nm">${esc(cleanN(x.n))}</span><span class="st">${esc(x.sn || setName(x.g))}</span></span>
       <span class="rt">${right}</span>${extra}</button>`;
@@ -508,18 +586,10 @@
       if (!$("#s-res")) return;                         // left Search before a delayed search ran
       LAST_Q = q.value; const s = q.value.trim().toLowerCase();
       if (!s) { drawRecent(); return; }
-      const toks = s.split(/\s+/), out = [];
-      for (let i = 0; i < ROWS.length && out.length < 400; i++) {
-        const r = ROWS[i];
-        if (S_TYPE !== "all" && r[3] !== S_TYPE) continue;
-        if (!gameOk(gameOfSet(r[2]))) continue;
-        if (toks.every((t) => HAY[i].includes(t))) out.push(r);
-      }
-      const first = toks[0];
-      out.sort((a, b) => (b[1].toLowerCase().startsWith(first) - a[1].toLowerCase().startsWith(first)) || (b[4] || 0) - (a[4] || 0));
-      const rows = out.slice(0, 60).map((r) => rowHTML({ id: r[0], n: r[1], g: r[2] }, `<b>${money(r[4])}</b><small class="muted">${r[3] === "s" ? "sealed" : "card"}</small>`));
-      $("#s-res").innerHTML = rows.length ? `<div class="list">${rows.join("")}</div>${out.length > 60 ? `<p class="muted small">Showing the top 60 of ${out.length >= 400 ? "400+" : out.length}. Add a set name or number to narrow it.</p>` : ""}`
-        : `<div class="empty"><b>Nothing found</b>Try fewer words, a card number like 199/165, or switch games.</div>`;
+      const out = findCards(s, (r) => (S_TYPE === "all" || r[3] === S_TYPE) && gameOk(gameOfSet(r[2])));
+      if (!out.length) { $("#s-res").innerHTML = `<div class="empty"><b>Nothing found</b>Try fewer words, a card number like 199/165, or switch games.</div>`; return; }
+      pagedList($("#s-res"), out, 30, (r) => rowHTML({ id: r[0], n: r[1], g: r[2], sn: setName(r[2]) + (r[3] === "s" ? "" : ` · ${printingOfRow(r[1], r[3])}`) },
+        `<b>${money(r[4])}</b><small class="muted">${r[3] === "s" ? "sealed" : "card"}</small>`), () => {}, "list");
     };
     const drawRecent = () => {
       const rows = S.recent.filter((x) => S_TYPE === "all" || x.t === S_TYPE).map((x) => rowHTML(x, `<b>${money(marketOf(x))}</b>`));
@@ -865,16 +935,15 @@
     const pair = $(".sc-pair", el); if (pair) pair.onclick = () => { SUB.mine = "set"; location.hash = "mine"; };
     await loadIndex();
     const q = $("#sc-q", el);
+    if (!q) return;                                   // he switched to another tab while the card list loaded
     const results = (typed) => {
       SC.q = q.value; const t = q.value.trim().toLowerCase(), box = $("#sc-res", el);
       if (!t || (!typed && SC.pick && t === SC.pick.q)) { box.innerHTML = ""; return; }   // the picked card's name: no list until he types
-      const toks = t.split(/\s+/), out = [];
-      for (let i = 0; i < ROWS.length && out.length < 200; i++) { const r = ROWS[i]; if (!gameOk(gameOfSet(r[2]))) continue; if (toks.every((k) => HAY[i].includes(k))) out.push(r); }
-      out.sort((a, b) => (b[1].toLowerCase().startsWith(toks[0]) - a[1].toLowerCase().startsWith(toks[0])) || (b[4] || 0) - (a[4] || 0));
-      box.innerHTML = out.length ? `<div class="sc-list">${out.slice(0, 12).map((r) => `<button type="button" class="sc-hit" data-sc="${r[0]}" data-g="${r[2]}" data-n="${esc(r[1])}" data-t="${r[3]}">
-          ${img(r[0])}<span class="sc-hn"><b>${esc(cleanN(r[1]))}</b><small class="muted">${esc(setName(r[2]))} · ${r[3] === "s" ? "sealed" : "card"}</small></span><span class="sc-hp"><b>${money(r[4])}</b><small class="muted">TCGplayer</small></span></button>`).join("")}</div>`
-        : `<p class="muted small">Nothing found. Try the card number (e.g. 161/131) or fewer words.</p>`;
-      $$(".sc-hit", box).forEach((b) => { b.onclick = () => pick({ id: +b.dataset.sc, g: +b.dataset.g, n: b.dataset.n, t: b.dataset.t }); });
+      const out = findCards(t, (r) => gameOk(gameOfSet(r[2])));
+      if (!out.length) { box.innerHTML = `<p class="muted small">Nothing found. Try the card number (e.g. 161/131) or fewer words.</p>`; return; }
+      pagedList(box, out, 20, (r) => `<button type="button" class="sc-hit" data-sc="${r[0]}" data-g="${r[2]}" data-n="${esc(r[1])}" data-t="${r[3]}">
+          ${img(r[0])}<span class="sc-hn"><b>${esc(cleanN(r[1]))}</b><small class="muted">${esc(setName(r[2]))} · ${r[3] === "s" ? "sealed" : esc(printingOfRow(r[1], r[3]))}</small></span><span class="sc-hp"><b>${money(r[4])}</b><small class="muted">TCGplayer</small></span></button>`,
+        (nodes) => nodes.forEach((b) => { b.onclick = () => pick({ id: +b.dataset.sc, g: +b.dataset.g, n: b.dataset.n, t: b.dataset.t }); }));
     };
     let tm; q.addEventListener("input", () => { clearTimeout(tm); tm = setTimeout(() => results(true), 140); });
     const pick = async (x) => {
@@ -1134,12 +1203,11 @@
     const results = () => {
       BLV.q = q.value; const t = q.value.trim().toLowerCase();
       if (!t || !ROWS) { resBox.innerHTML = t && !ROWS ? `<p class="small muted">The card list needs a connection the first time.</p>` : ""; return; }
-      const toks = t.split(/\s+/), hits = [];
-      for (let i = 0; i < ROWS.length && hits.length < 200; i++) { const r = ROWS[i]; if (!gameOk(gameOfSet(r[2]))) continue; if (toks.every((k) => HAY[i].includes(k))) hits.push(r); }
-      hits.sort((a, b) => (b[1].toLowerCase().startsWith(toks[0]) - a[1].toLowerCase().startsWith(toks[0])) || (b[4] || 0) - (a[4] || 0));
-      resBox.innerHTML = hits.length ? `<div class="sc-list">${hits.slice(0, 10).map((r) => { const on = BLS && BLS.has(keyOf(r[0], r[1]));
-        return `<button type="button" class="sc-hit bl-s" data-id="${r[0]}" data-g="${r[2]}" data-n="${esc(r[1])}" data-t="${r[3]}"${on ? " disabled" : ""}>${img(r[0])}<span class="sc-hn"><b>${esc(blName(r[1]))}</b><small class="muted">${esc(setName(r[2]))} · ${esc(printingOf(r[1]))}</small></span><span class="sc-hp"><b>${on ? "✓ on list" : "+ Add"}</b><small class="muted">${money(r[4])}</small></span></button>`; }).join("")}</div>` : `<p class="small muted">Nothing found. Try the card number or fewer words.</p>`;
-      $$(".bl-s", resBox).forEach((b) => { b.onclick = () => { if (blAdd({ id: +b.dataset.id, g: +b.dataset.g, n: b.dataset.n, t: b.dataset.t })) { BLV.q = q.value; drawBuyList(el); } }; });
+      const hits = findCards(t, (r) => gameOk(gameOfSet(r[2])));
+      if (!hits.length) { resBox.innerHTML = `<p class="small muted">Nothing found. Try the card number or fewer words.</p>`; return; }
+      pagedList(resBox, hits, 10, (r) => { const on = BLS && BLS.has(keyOf(r[0], r[1]));
+        return `<button type="button" class="sc-hit bl-s" data-id="${r[0]}" data-g="${r[2]}" data-n="${esc(r[1])}" data-t="${r[3]}"${on ? " disabled" : ""}>${img(r[0])}<span class="sc-hn"><b>${esc(blName(r[1]))}</b><small class="muted">${esc(setName(r[2]))} · ${esc(printingOf(r[1]))}</small></span><span class="sc-hp"><b>${on ? "✓ on list" : "+ Add"}</b><small class="muted">${money(r[4])}</small></span></button>`; },
+        (nodes) => nodes.forEach((b) => { b.onclick = () => { if (blAdd({ id: +b.dataset.id, g: +b.dataset.g, n: b.dataset.n, t: b.dataset.t })) { BLV.q = q.value; drawBuyList(el); } }; }));
     };
     let tm; q.addEventListener("input", () => { clearTimeout(tm); tm = setTimeout(results, 140); });
     loadIndex().then(results).catch(() => results());
@@ -2150,7 +2218,7 @@
     catch { $("#view").innerHTML = `<div class="empty"><b>Couldn't load the market data</b>Check your connection and reopen the app.</div>`; return; }
     $("#asof").textContent = META.updated ? `Prices ${fmtDay(META.updated)}` : "";
     route();
-    (window.requestIdleCallback || setTimeout)(() => loadIndex().catch(() => {}));
+    (window.requestIdleCallback || setTimeout)(() => loadIndex().then(() => (window.requestIdleCallback || setTimeout)(() => searchIndex())).catch(() => {}));   // the search index too, so the first search is quick
     if ("serviceWorker" in navigator && window.isSecureContext) navigator.serviceWorker.register(`${BASE}sw.js`).catch(() => {});
   })();
 })();
