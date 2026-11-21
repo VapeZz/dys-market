@@ -79,6 +79,9 @@ def pick_cards():
             key = (g, MOCK["kinds"][str(it["id"])], it["t"], "hi" if it["p"] >= 2000 else "lo")
             if key not in picks or "Umbreon ex - 161/131" in it["n"]:
                 picks[key] = (it["id"], g)
+            # a well-sold card a buy fits inside the $75 per-purchase limit (added Nov 20 with the buying rules)
+            if MOCK["kinds"][str(it["id"])] == "good" and it["t"] == "c" and 4000 <= it["p"] <= 6500 and ("budget",) not in picks:
+                picks[("budget",)] = (it["id"], g)
     return sorted(set(picks.values()))
 
 
@@ -164,7 +167,7 @@ def main():
     kinds = {}
     for e in exp.values():
         kinds[e["kind"]] = kinds.get(e["kind"], 0) + 1
-    print(f"{len(cards)} items {kinds}; buy {sum(e['verdict'] == 'buy' for e in exp.values())}")
+    print(f"{len(cards)} items {kinds}; buy at the lowest listing {sum(e['verdict'] == 'buy' for e in exp.values())}, research only (over the limit) {sum(e['reason'] == 'limit' for e in exp.values())}")
     errors = []
     with sync_playwright() as pw:
         b = pw.chromium.launch(executable_path="/usr/bin/google-chrome", args=["--no-sandbox"])
@@ -176,12 +179,15 @@ def main():
                     check_card(page, i, g, exp[str(i)], f"{width}px {theme}")
                 if width == 390 and theme == "dark":
                     # the three situations: card show price, online deal with shipping, condition
-                    i, g = next(c for c in cards if exp[str(c[0])]["verdict"] == "buy" and exp[str(c[0])]["t"] == "c")
-                    e = exp[str(i)]
+                    # a well-sold card inside the $75 limit; its max to pay comes from the engine (Nov 20: buying rules)
+                    i, g = next(c for c in cards if exp[str(c[0])]["kind"] == "good" and exp[str(c[0])]["t"] == "c" and exp[str(c[0])]["exit"] and exp[str(c[0])]["exit"] <= 9000 and exp[str(c[0])]["exit"] >= 3000)
+                    e = expect([(i, g)], {"offers": {str(i): [100, "NM", 150, 0]}})[str(i)]
+                    ok(e["verdict"] == "buy" and e["max"], f"fixture: a buy fits the limit for {i} {e['reason']}")
                     open_card(page, i, g)
                     before = calls["n"]
-                    ok(page.get_attribute("#c-deal", "data-verdict") == "buy", "a second open in the same page shows the sold prices already read")
+                    ok(page.get_attribute("#c-deal", "data-verdict") == exp[str(i)]["verdict"] and "Sold prices read" in page.inner_text("#c-deal .dl-beta"), "a second open in the same page shows the sold prices already read")
                     ok(calls["n"] == before, "and makes no new calls")
+                    page.fill("#c-deal .dl-ship", "1.50"); page.dispatch_event("#c-deal .dl-ship", "change")
                     page.fill("#c-deal .dl-ask", f"{e['max'] / 100:.2f}"); page.dispatch_event("#c-deal .dl-ask", "change")
                     ok(page.get_attribute("#c-deal", "data-verdict") == "buy", "paying exactly the max is still a BUY candidate")
                     page.fill("#c-deal .dl-ship", "5"); page.dispatch_event("#c-deal .dl-ship", "change")
@@ -257,7 +263,7 @@ def main():
         ctx.close()
         # screenshots for the report
         ctx, page = new_page(b, 390)
-        shots = [next((c for c in cards if exp[str(c[0])][k] == v), None) for k, v in (("verdict", "buy"), ("kind", "thin"), ("kind", "none"))]
+        shots = [next((c for c in cards if exp[str(c[0])][k] == v), None) for k, v in (("kind", "good"), ("kind", "thin"), ("kind", "none"))]
         for n, c in enumerate([c for c in shots if c]):
             open_card(page, *c)
             load_sold(page)

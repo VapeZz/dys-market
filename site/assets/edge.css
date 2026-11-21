@@ -509,3 +509,20 @@ a.row{text-decoration:none;color:inherit}
 .adv-est { margin-top: 4px; }
 .adv-off .adv-go[disabled] { opacity: .45; }
 .linkish { background: none; border: 0; padding: 0; font: inherit; color: var(--accent, #7dd3fc); text-decoration: underline; cursor: pointer; }
+/* Show check (Deals): find the card, type the price, verdict on sold prices */
+.sc-top { margin: 0 0 8px; }
+.sc-list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.sc-hit { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--card, transparent); color: inherit; font: inherit; cursor: pointer; }
+.sc-hit.sc-past { grid-template-columns: 1fr auto; }
+.sc-hit img, .sc-hit .ph { width: 40px; height: 56px; object-fit: contain; border-radius: 4px; }
+.sc-hn, .sc-hp { display: flex; flex-direction: column; min-width: 0; }
+.sc-hn b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-hp { text-align: right; align-items: flex-end; }
+.sc-hp small { max-width: 46vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-head { display: grid; grid-template-columns: 56px 1fr; gap: 12px; align-items: center; margin: 12px 0 8px; }
+.sc-head img, .sc-head .ph { width: 56px; height: 78px; object-fit: contain; border-radius: 6px; }
+.sc-head b { display: block; }
+.sc-deal { margin-top: 4px; }
+.sc-acts { flex-wrap: wrap; margin-top: 8px; }
+.sc-off { padding: 12px; border-radius: 12px; margin-bottom: 8px; }
+.w-dc { cursor: pointer; margin-left: 2px; }

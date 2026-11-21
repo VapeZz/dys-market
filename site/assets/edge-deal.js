@@ -82,9 +82,9 @@
   // all-in cost of buying at `ask`
   const costIn = (ask, offer) => ask + Math.round(ask * (offer.taxIn || 0) / 100) + (offer.shipIn || 0);
   // the highest ask whose net profit still clears the ROI target and the minimum profit (a search: fees are stepped)
-  function maxAsk(proceeds, offer, roi, minProfit) {
+  function maxAsk(proceeds, offer, roi, minProfit, cap = Infinity) {
     if (!(proceeds > 0)) return 0;
-    const ok = (a) => { const c = costIn(a, offer), pr = proceeds - c; return pr >= minProfit && pr * 100 >= c * roi; };
+    const ok = (a) => { const c = costIn(a, offer), pr = proceeds - c; return c <= cap && pr >= minProfit && pr * 100 >= c * roi; };
     let lo = 0, hi = proceeds;
     if (!ok(lo)) return 0;
     while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (ok(mid)) lo = mid; else hi = mid; }
@@ -158,8 +158,26 @@
     gates.push(gate("margin", clears,
       profit == null ? "No sold price to work from"
       : `Net ${signed(profit)} (${pct(roi)}) at a ${money(exit)} exit${clears ? "" : ` (needs ${cfg.roi}% and ${money(cfg.minProfit ?? MIN_PROFIT)})`}`));
-    const max = proceeds ? maxAsk(proceeds, offer, cfg.roi, cfg.minProfit ?? MIN_PROFIT) : 0;
-    return { route: "flip", grade, ev, exit, proceeds, cost, profit, roi, max, gates, pass: gates.every((x) => x.ok || !x.hard), days: ev.everyDays };
+    // the owner's buying rules: a per-purchase limit (all-in) and a cash reserve. A card over the limit is still worked
+    // out in full (research), but it is never a BUY candidate; cash on hand is what he typed for this check, if anything.
+    const B = cfg.budget || null;
+    let cap = Infinity, capBy = null;
+    if (B && B.limit) {
+      gates.push(gate("limit", cost <= B.limit, cost <= B.limit ? `All-in ${money(cost)} is within your ${money(B.limit)} per-purchase limit`
+        : `All-in ${money(cost)} is over your ${money(B.limit)} per-purchase limit: research only, not a buy`));
+      cap = B.limit; capBy = "limit";
+    }
+    if (B && B.reserve) {
+      if (B.cash != null) {
+        const left = B.cash - cost;
+        gates.push(gate("reserve", left >= B.reserve, left >= B.reserve ? `Leaves ${money(left)} cash, keeping your ${money(B.reserve)} reserve`
+          : `Would leave ${money(left)} cash, under your ${money(B.reserve)} reserve`));
+        if (B.cash - B.reserve < cap) { cap = Math.max(0, B.cash - B.reserve); capBy = "reserve"; }
+      } else gates.push(gate("reserve", false, `Cash on hand not entered: keep ${money(B.reserve)} back after this buy`, false));
+    }
+    const max = proceeds ? maxAsk(proceeds, offer, cfg.roi, cfg.minProfit ?? MIN_PROFIT, cap) : 0;
+    const maxRules = proceeds && cap !== Infinity ? maxAsk(proceeds, offer, cfg.roi, cfg.minProfit ?? MIN_PROFIT) : max;
+    return { route: "flip", grade, ev, exit, proceeds, cost, profit, roi, max, maxRules, capBy: max < maxRules ? capBy : null, gates, pass: gates.every((x) => x.ok || !x.hard), days: ev.everyDays };
   }
 
   function gradeRoute(item, data, offer, cfg, day, ctx) {
@@ -227,10 +245,11 @@
     const pick = flip.pass ? flip : null;
     if (!out.scope) { out.reason = "scope"; out.why = `Out of M1 scope: worth under ${money(SCOPE_MIN)}`; return out; }
     if (pick) { out.verdict = "buy"; out.route = pick.route; out.why = pick.route === "flip" ? `Every check clears for a resale at ${money(flip.exit)}` : "Every check clears for grading"; return out; }
-    const ORDER = ["fresh", "evidence", "liquidity", "spread", "agree", "trend", "margin"];   // the clearest reason first: old data before thin data
+    const ORDER = ["fresh", "evidence", "liquidity", "spread", "agree", "trend", "margin", "limit", "reserve"];   // the clearest reason first: old data before thin data
     const miss = ORDER.map((c) => flip.gates.find((x) => x.code === c && x.hard && !x.ok)).find(Boolean) || flip.gates.find((x) => x.hard && !x.ok);
     const WHY = { evidence: "Not enough evidence", liquidity: "Not enough evidence", fresh: "Not enough evidence", spread: "Not enough evidence",
-      agree: "Sold prices not confirmed by a second source", trend: "Market is falling or flagged", margin: "Doesn't clear your margin" };
+      agree: "Sold prices not confirmed by a second source", trend: "Market is falling or flagged", margin: "Doesn't clear your margin",
+      limit: "Over your per-purchase limit: research only", reserve: "Would break your cash reserve" };
     out.why = miss ? WHY[miss.code] || "A check misses" : "A check misses";
     out.reason = miss ? miss.code : null;
     return out;
@@ -251,7 +270,7 @@
     const F = r.routes.flip, G = r.routes.grade, ev = F.ev, tgt = cfg.roi;
     if (r.reason === "no-data") return "No sold prices loaded yet. Edge won't guess a value, so this stays a PASS until real sales are in.";
     if (!r.scope) return `Under ${money(SCOPE_MIN)}: fees and shipping eat most of any profit, so the Deal check doesn't call it.`;
-    if (r.verdict === "buy") return `Sells ${daysTxt(ev.everyDays)} near ${money(F.exit)}. At ${money(offer.ask)} you'd net about ${signed(F.profit)} (${pct(F.roi)}) after fees, tax and shipping. Don't pay more than ${money(F.max)}${offer.shipIn ? ` plus the ${money(offer.shipIn)} shipping` : ""}.`;
+    if (r.verdict === "buy") return `Sells ${daysTxt(ev.everyDays)} near ${money(F.exit)}. At ${money(offer.ask)} you'd net about ${signed(F.profit)} (${pct(F.roi)}) after fees, tax and shipping. Don't pay more than ${money(F.max)}${offer.shipIn ? ` plus the ${money(offer.shipIn)} shipping` : ""}.${cfg.budget && cfg.budget.reserve && cfg.budget.cash == null ? ` Keep ${money(cfg.budget.reserve)} cash back.` : ""}`;
     switch (r.reason) {
       case "evidence": return `Only ${ev.n90} sale${ev.n90 === 1 ? "" : "s"} of this exact card in 90 days: too few to trust a price.`;
       case "liquidity": return `Only ${ev.n30} sold in the last 30 days: it could take a while to resell.`;
@@ -261,6 +280,8 @@
       case "spread": return "Sold prices are all over the place (mixed conditions or listings), so there's no reliable value.";
       case "agree": return item.tcg ? `TCGplayer (${money(item.tcg)}) and eBay sold (${money(ev.m90)}) disagree by more than ${MAX_DISAGREE}%. Find out which is right before buying.` : "Only one price source, so the value can't be cross-checked.";
       case "trend": return "Prices are falling or a tested warning is on. Wait.";
+      case "limit": return `The numbers work (net ${signed(F.profit)}, ${pct(F.roi)}), but the all-in ${money(F.cost)} is over your ${money(cfg.budget.limit)} per-purchase limit. Research only: Edge doesn't call a buy above your limit.`;
+      case "reserve": return `The numbers work (net ${signed(F.profit)}, ${pct(F.roi)}), but it would leave ${money(cfg.budget.cash - F.cost)} cash, under your ${money(cfg.budget.reserve)} reserve.${F.max ? ` Within your reserve, pay ${money(F.max)} or less.` : ""}`;
       case "margin": return `At ${money(offer.ask)} you'd net ${signed(F.profit)} (${pct(F.roi)}), under your ${tgt}% target. ${F.max ? `Pay ${money(F.max)} or less${offer.shipIn ? ` plus the ${money(offer.shipIn)} shipping` : ""}.` : "No price works at this resale value."}${r.gradeClears ? ` Grading might pay (expected ${signed(G.profit)}), but that bets on the grade.` : ""}`;
       default: return r.why;
     }
@@ -306,7 +327,7 @@
       <p class="dl-sum">${esc(summary(r, item, offer, cfg))}</p>
       <div class="prices dl-tiles">${tile("Resale value", F.exit ? money(F.exit) : "—", F.exit ? `${ev.n30}${ev.capped ? "+" : ""} sold in 30 days` : "no sold data")}
         ${tile("Net profit", F.profit != null ? signed(F.profit) : "—", F.profit != null ? `${pct(F.roi)} after costs` : "needs sold data", F.profit > 0 ? "up" : F.profit < 0 ? "down" : "")}
-        ${tile("Max to pay", F.max ? money(F.max) : "—", F.max ? `for ${cfg.roi}% profit` : "—")}</div>
+        ${tile("Max to pay", F.max ? money(F.max) : "—", F.max ? (F.capBy === "limit" ? `your ${money(cfg.budget.limit)} limit, all-in` : F.capBy === "reserve" ? "keeps your cash reserve" : `for ${cfg.roi}% profit`) : F.maxRules ? "over your limit or reserve" : "—")}</div>
       ${btn || state.note ? `<div class="dl-data">${btn}${state.note ? `<p class="dl-note">${esc(state.note)}</p>` : ""}</div>` : ""}
       ${none ? "" : `<div class="chips"><span class="chip dl-conf dl-conf-${r.confidence}" title="${esc(CONF[r.confidence])}">Evidence: ${r.confidence}</span>
         <span class="chip">${esc(daysTxt(ev.everyDays) || "no sales in 30 days")}</span>${G && G.pass ? `<span class="chip">Grading might pay</span>` : ""}</div>`}
@@ -335,7 +356,7 @@
       ${H ? `<span class="lab">Hold · information only</span><p class="dl-note">To break even after fees and ${cfg.holdRate || 0}% a month cost of money, ${H.m12 > 0 ? `the sold price has to rise ${pct(H.m6, 1)} in 6 months or ${pct(H.m12, 1)} in 12` : "today's resale value already covers 12 months"}. Edge makes no hold call yet.</p>` : ""}
       ${data && data.source ? `<p class="dl-note">Source: ${esc(data.source)}.</p>` : ""}`}
       </details>
-      <p class="dl-foot">PASS unless every check clears. "BUY candidate" means real sold prices support this price, not that the price will rise. Check the copy and live listings before you buy. Market data, not financial advice.</p>`;
+      <p class="dl-foot">PASS unless every check clears, including your per-purchase limit and cash reserve. "BUY candidate" means real sold prices support this price, not that the price will rise. Check the copy and live listings before you buy. Market data, not financial advice.</p>`;
   }
   /* hooks.load(fresh) → Promise<{ ok, data, note }>; without hooks the panel only reads `data` */
   function mount(root, item, data, offer, cfg, ctx = {}, hooks = null) {
@@ -344,11 +365,13 @@
     const draw = () => {
       const r = check(item, data, offer, cfg, ctx);
       const det = root.querySelector(".dl-more"); if (det) state.open = det.open;
+      const focused = document.activeElement && root.contains(document.activeElement) ? document.activeElement.className : null;
       root.classList.add("dl"); root.dataset.verdict = r.verdict; root.dataset.reason = r.reason || ""; root.innerHTML = html(r, item, data, offer, cfg, state);
       const a = root.querySelector(".dl-ask"), s = root.querySelector(".dl-ship"), c = root.querySelector(".dl-cond"), b = root.querySelector(".dl-load");
       const num = (el) => Math.max(0, Math.round((parseFloat(el.value) || 0) * 100));
-      if (a) a.onchange = () => { offer.ask = num(a); draw(); };
-      if (s) s.onchange = () => { offer.shipIn = num(s); draw(); };
+      // typing is kept as it happens, so a redraw (sold prices arriving) never wipes a price being typed
+      if (a) { a.oninput = () => { offer.ask = num(a); }; a.onchange = () => { offer.ask = num(a); draw(); }; }
+      if (s) { s.oninput = () => { offer.shipIn = num(s); }; s.onchange = () => { offer.shipIn = num(s); draw(); }; }
       if (c) c.onchange = () => { offer.cond = c.value; draw(); };
       if (b) b.onclick = async () => {
         state.status = "loading"; state.note = ""; draw();
@@ -356,6 +379,7 @@
         if (res && res.ok) { data = res.data; state.status = "ready"; } else state.status = "error";
         state.note = (res && res.note) || ""; draw();
       };
+      if (focused) { const f = root.querySelector("." + focused.split(" ").filter((c) => c.startsWith("dl-"))[0]); if (f && f.focus) f.focus({ preventScroll: true }); }
       last = r; if (hooks && hooks.after) try { hooks.after(r, data); } catch (e) { console.error(e); }
       return r;
     };

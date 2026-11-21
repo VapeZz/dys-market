@@ -24,15 +24,17 @@ const day = (d) => Math.floor(Date.parse(d + "T00:00:00Z") / 864e5);
     const cfg = { today: Math.floor(Date.now() / 864e5), fees: F.sell[S.platform], buyerTax: S.platform === "none" ? 0 : S.buyerTax,
       shipOut: (x, tt) => S.platform === "none" ? 0 : tt === "s" ? (x >= 10000 ? S.shipSealed100 : S.shipSealed) : (x >= 5000 ? S.shipCard50 : S.shipCard),
       supplies: (tt) => tt === "s" ? S.supSealed : S.supCard, roi: S.roi, minProfit: S.minProfit, holdRate: S.holdRate,
+      budget: { limit: S.buyLimit ?? 7500, reserve: S.cashReserve ?? 10000, cash: S.cashNow ?? null },
       grade: { fee: feeAt(p || 0), ship: S.gradeShip, months: Math.max(1, Math.round((parseInt(tier[3], 10) || 60) / 30)) + 1 } };
     const item = { id, n: it.n, name: it.n, t, tcg: p, tcgDay: day(set.dates[set.dates.length - 1]) };
     const res = await P.lookup(item, { relay: "https://relay.test", pass: "test-pass", fetch: M.fetcher(mock.routes), today: cfg.today });
     const data = res.ok ? res.data : null;
-    const offer = { ask: it.lo || p || 0, cond: "NM", shipIn: t === "s" ? S.buySealed : S.buyCard, taxIn: S.taxIn };
+    const ov = (S.offers || {})[id];
+    const offer = ov ? { ask: ov[0], cond: ov[1] || "NM", shipIn: ov[2] ?? 0, taxIn: ov[3] ?? 0 } : { ask: it.lo || p || 0, cond: "NM", shipIn: t === "s" ? S.buySealed : S.buyCard, taxIn: S.taxIn };
     const r = D.check(item, data, offer, cfg, {});
     const o = owned[id] ? D.own(item, data, { cost: owned[id][0], cond: owned[id][1] }, cfg, {}) : null;
     out[id] = { verdict: r.verdict, reason: r.reason || null, route: r.route, why: r.why, summary: D.summary(r, item, offer, cfg), profit: r.routes.flip.profit, max: r.routes.flip.max,
-      exit: r.routes.flip.exit, confidence: r.confidence, kind: mock.kinds[id], found: res.ok, ask: offer.ask, t, p, name: it.n, own: o ? { label: o.label, text: o.text } : null };
+      exit: r.routes.flip.exit, cost: r.routes.flip.cost, capBy: r.routes.flip.capBy, confidence: r.confidence, kind: mock.kinds[id], found: res.ok, ask: offer.ask, t, p, name: it.n, own: o ? { label: o.label, text: o.text } : null };
   }
   process.stdout.write(JSON.stringify(out));
 })();
