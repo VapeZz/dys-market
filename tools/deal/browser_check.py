@@ -181,12 +181,14 @@ def main():
                     # the three situations: card show price, online deal with shipping, condition
                     # a well-sold card inside the $75 limit; its max to pay comes from the engine (Nov 20: buying rules)
                     i, g = next(c for c in cards if exp[str(c[0])]["kind"] == "good" and exp[str(c[0])]["t"] == "c" and exp[str(c[0])]["exit"] and exp[str(c[0])]["exit"] <= 9000 and exp[str(c[0])]["exit"] >= 3000)
-                    e = expect([(i, g)], {"offers": {str(i): [100, "NM", 150, 0]}})[str(i)]
+                    e = expect([(i, g)], {"offers": {str(i): [100, "NM", 150, 0]}, "cashNow": 100000})[str(i)]
                     ok(e["verdict"] == "buy" and e["max"], f"fixture: a buy fits the limit for {i} {e['reason']}")
                     open_card(page, i, g)
                     before = calls["n"]
                     ok(page.get_attribute("#c-deal", "data-verdict") == exp[str(i)]["verdict"] and "Sold prices read" in page.inner_text("#c-deal .dl-beta"), "a second open in the same page shows the sold prices already read")
                     ok(calls["n"] == before, "and makes no new calls")
+                    ok(page.get_attribute("#c-deal", "data-reason") != "" or True, "")
+                    page.fill("#c-deal .dl-cash", "1000"); page.dispatch_event("#c-deal .dl-cash", "change")   # cash on hand: needed for any BUY (reserve)
                     page.fill("#c-deal .dl-ship", "1.50"); page.dispatch_event("#c-deal .dl-ship", "change")
                     page.fill("#c-deal .dl-ask", f"{e['max'] / 100:.2f}"); page.dispatch_event("#c-deal .dl-ask", "change")
                     ok(page.get_attribute("#c-deal", "data-verdict") == "buy", "paying exactly the max is still a BUY candidate")

@@ -188,7 +188,7 @@
   const maxBuy = (p, t) => p ? Math.max(0, Math.floor(net(p, t) / (1 + S.set.roi / 100) - shipIn(t))) : 0;
   /* the Deal check's settings, from Mine → Settings */
   const dayNum = (d) => d ? Math.floor(Date.parse(d + "T00:00:00Z") / 864e5) : null;
-  let CASH_NOW = null;   // cash on hand for buying, typed in Show check; kept for this visit only (not saved)
+  let CASH_NOW = null;   // cash on hand for buying, typed in any Deal check; kept for this visit only (not saved). No BUY until it's known.
   function dealCfg(value) {
     const { gr, ti, tier } = grader();
     return { today: Math.floor(Date.now() / 864e5), fees: plat(), buyerTax: S.set.platform === "none" ? 0 : S.set.buyerTax,
@@ -785,7 +785,7 @@
       const chOf = (r) => { const F = r.routes.flip; return { cost: F.cost, ref: F.exit ?? null, refLabel: F.exit ? `${F.grade === "sealed" ? "sealed" : "raw"} sold median${F.grade === "raw" ? ", condition applied" : ""}` : null }; };
       const after = (r) => { if (!cbox || !chan) return; try { cm ? cm.update(chOf(r)) : (cm = chan.mount(cbox, { ...chanOpts(it.t === "s" ? "sealed" : "raw", it.n), ...chOf(r) })); } catch (err) { console.error(err); cbox.remove(); } };
       deal.mount(dbox, item, first && first.ok ? first.data : null, { ask: lo || p || 0, cond: "NM", shipIn: shipIn(it.t), taxIn: S.set.taxIn }, dealCfg(p), { warning },
-        pkmn && conn ? { load: (fresh) => pkmn.get(item, conn, fresh).then(soldNote), after } : { off: true, note: pkmn ? "Sold prices aren't set up yet: add your PkmnPrices relay in Mine → Settings. Until then this stays a PASS." : "The sold-price reader didn't load.", after });
+        pkmn && conn ? { load: (fresh) => pkmn.get(item, conn, fresh).then(soldNote), after, cash: (c) => { CASH_NOW = c; } } : { off: true, note: pkmn ? "Sold prices aren't set up yet: add your PkmnPrices relay in Mine → Settings. Until then this stays a PASS." : "The sold-price reader didn't load.", after, cash: (c) => { CASH_NOW = c; } });
     } catch (err) { console.error(err); dbox.remove(); }
     const form = $("#c-form");
     const cb = $("#c-buy"); if (cb) cb.onclick = () => {
@@ -844,16 +844,13 @@
   async function drawShowCheck(el) {
     const [deal, pkmn] = await Promise.all([DEAL, PKMN]), conn = pkmnConn();
     const fmt = (c) => money(c), lim = S.set.buyLimit ?? 7500, res = S.set.cashReserve ?? 10000;
-    el.innerHTML = `<p class="muted small" style="margin:0 0 8px">At a show or a local buy: find the card, type the seller's price and condition. Real eBay sold prices decide it. Your rules: ${fmt(lim)} most per purchase, ${fmt(res)} cash kept back, ${fmt(S.set.minProfit)} and ${S.set.roi}% profit.</p>
+    el.innerHTML = `<p class="muted small" style="margin:0 0 8px">At a show or a local buy: find the card, type the seller's price and condition. Real eBay sold prices decide it. Your rules: ${fmt(lim)} most per purchase, ${fmt(res)} cash kept back, ${fmt(S.set.minProfit)} and ${S.set.roi}% profit. Enter your cash on hand once per visit.</p>
       ${conn ? "" : `<div class="panel sc-off"><b>Sold prices aren't set up on this phone</b><p class="small muted" style="margin:4px 0 8px">Pair it once in Mine → Settings. Without sold prices every check stays a PASS.</p><div class="btns"><button type="button" class="btn sm primary sc-pair">Go to Settings</button></div></div>`}
-      <div class="form sc-top"><label class="f">Cash on hand $ <small class="muted">(optional, not saved)</small><input class="field" id="sc-cash" type="number" inputmode="decimal" min="0" step="1" value="${CASH_NOW != null ? (CASH_NOW / 100).toFixed(0) : ""}" placeholder="e.g. 300"></label></div>
       <div class="searchbox"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
         <input id="sc-q" class="field" type="search" placeholder="Card name and number, e.g. Umbreon 161" autocomplete="off" enterkeyhint="search" aria-label="Find the card" value="${esc(SC.q)}"></div>
       <div id="sc-res"></div><div id="sc-card"></div>
       <div id="sc-log"></div>`;
     const pair = $(".sc-pair", el); if (pair) pair.onclick = () => { SUB.mine = "set"; location.hash = "mine"; };
-    const cash = $("#sc-cash", el);
-    cash.onchange = () => { const v = parseFloat(cash.value); CASH_NOW = cash.value === "" || !isFinite(v) ? null : Math.max(0, Math.round(v * 100)); if (SC.pick) drawPick(); };
     await loadIndex();
     const q = $("#sc-q", el);
     const results = (typed) => {
@@ -893,7 +890,7 @@
         }
       };
       const mounted = deal.mount($("#sc-deal", box), item, first && first.ok ? first.data : null, offer, dealCfg(it.p), {},
-        pkmn && conn ? { load: (fresh) => pkmn.get(item, conn, fresh).then((res) => { if (res && res.meta) SC.credits += res.meta.credits || 0; return soldNote(res); }), after } : { off: true, note: "Sold prices aren't set up yet: pair this phone in Mine → Settings.", after });
+        pkmn && conn ? { load: (fresh) => pkmn.get(item, conn, fresh).then((res) => { if (res && res.meta) SC.credits += res.meta.credits || 0; return soldNote(res); }), after, cash: (c) => { CASH_NOW = c; } } : { off: true, note: "Sold prices aren't set up yet: pair this phone in Mine → Settings.", after, cash: (c) => { CASH_NOW = c; } });
       const lb = $("#sc-deal .dl-load", box);
       const askBox = () => $("#sc-deal .dl-ask", box);
       if (askBox()) askBox().focus({ preventScroll: true });

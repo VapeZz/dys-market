@@ -205,18 +205,20 @@ test("real case, Nov 16: sold median far under TCGplayer is a disagreement, not 
 
 /* the owner's buying rules (Nov 20): all-in per-purchase limit and cash reserve */
 const B = (o = {}) => ({ budget: { limit: 7500, reserve: 10000, cash: null, ...o } });
-test("budget: within the limit, cash not entered -> BUY candidate, with a reminder to keep the reserve", () => {
-  const r = run(card({ offer: { ask: 5000 } }), B());
-  assert.strictEqual(r.verdict, "buy");
-  assert.ok(gate(r, "limit").ok);
-  const g = gate(r, "reserve"); assert.ok(!g.ok && !g.hard && /Cash on hand not entered/.test(g.text));
-  assert.ok(/Keep \$100\.00 cash back/.test(D.summary(r, card().item, card({ offer: { ask: 5000 } }).offer, Y.cfg(B()))));
+test("budget: cash not entered -> no BUY yet: every price check clears, asks for cash; with cash it's a BUY candidate", () => {
+  const c = card({ offer: { ask: 5000 } });
+  const r = run(c, B());
+  assert.strictEqual(r.verdict, "pass"); assert.strictEqual(r.reason, "cash");
+  assert.ok(/Enter your cash on hand to confirm you keep \$100\.00 back/.test(D.summary(r, c.item, c.offer, Y.cfg(B()))));
+  assert.ok(gate(r, "limit").ok && gate(r, "margin").ok);
+  assert.strictEqual(run(c, B({ cash: 30000 })).verdict, "buy");
 });
 test("budget: over the $75 limit all-in -> PASS, research only, numbers still worked out", () => {
   const c = card({ item: { tcg: 20000 }, data: { comps: flat("raw", 20000, AGES) }, offer: { ask: 9000, shipIn: 0 } });
   const r0 = run(c), r = run(c, B());
   assert.strictEqual(r0.verdict, "buy");                       // without the rule it would be a buy
   assert.strictEqual(r.verdict, "pass"); assert.strictEqual(r.reason, "limit");
+  assert.strictEqual(run(c, B({ cash: 1000000 })).reason, "limit");   // plenty of cash doesn't lift the limit
   assert.ok(r.routes.flip.profit > 0 && /research only/.test(r.why));
   assert.ok(/over your \$75\.00 per-purchase limit/.test(D.summary(r, c.item, c.offer, Y.cfg(B()))));
   assert.ok(D.costIn(r.routes.flip.max, c.offer) <= 7500, "max to pay stays inside the limit");
@@ -224,7 +226,7 @@ test("budget: over the $75 limit all-in -> PASS, research only, numbers still wo
 });
 test("budget: a buy that would leave less than the $100 reserve -> PASS; max to pay keeps the reserve", () => {
   const c = card({ offer: { ask: 5000, shipIn: 0 } });
-  const r = run(c, B({ cash: 14000 }));
+  const r = run(c, B({ cash: 14000 }));   // $140 cash, $50 buy -> $90 left
   assert.strictEqual(r.verdict, "pass"); assert.strictEqual(r.reason, "reserve");
   assert.ok(/Would leave \$90\.00 cash/.test(gate(r, "reserve").text));
   assert.ok(D.costIn(r.routes.flip.max, c.offer) <= 4000 && r.routes.flip.capBy === "reserve");
@@ -234,18 +236,24 @@ test("budget: thin data stays a PASS for evidence, whatever the budget", () => {
   const r = run(card({ data: { comps: flat("raw", 10000, [9, 40]) } }), B({ cash: 100000 }));
   assert.strictEqual(r.verdict, "pass"); assert.strictEqual(r.reason, "evidence");
 });
-test("budget: 3,000 random cases: no BUY over the limit or past the reserve; max to pay inside both; never a BUY the plain rules reject", () => {
-  const R = Y.rng(2026);
-  for (const [i, c] of Y.randomCases(3000, 77).entries()) {
-    const cash = R() < 0.3 ? null : Math.round(R() * 30000), b = B({ cash });
+test("budget: 20,000 random cases: every BUY clears $5, 20%, the $75 limit and a confirmed $100 reserve; no BUY over the limit or past the reserve; max to pay inside both; never a BUY the plain rules reject", () => {
+  const R = Y.rng(2026); let buys = 0;
+  for (const [i, c] of Y.randomCases(20000, 77).entries()) {
+    const cash = R() < 0.3 ? null : Math.round(R() * 50000), b = B({ cash });
+    // half the cases are priced at 30-90% of their plain resale value, so plenty of them clear and the BUY side is tested
+    if (i % 2) { const e = D.check(c.item, c.data, c.offer, Y.cfg(), c.ctx).routes.flip.exit; if (e) c.offer = { ...c.offer, ask: Math.round(e * (0.3 + R() * 0.6)) }; }
     const plain = D.check(c.item, c.data, c.offer, Y.cfg(), c.ctx), r = D.check(c.item, c.data, c.offer, Y.cfg(b), c.ctx), F = r.routes.flip;
     if (r.verdict === "buy") {
+      buys++;
       assert.strictEqual(plain.verdict, "buy", `case ${i}: budget made a buy`);
+      assert.ok(F.profit >= 500, `case ${i}: BUY under $5 net ${F.profit}`);
+      assert.ok(F.profit * 100 >= F.cost * 20, `case ${i}: BUY under 20% ROI ${F.profit}/${F.cost}`);
       assert.ok(F.cost <= 7500, `case ${i}: buy over the limit ${F.cost}`);
-      assert.ok(cash == null || cash - F.cost >= 10000, `case ${i}: buy breaks the reserve`);
+      assert.ok(cash != null && cash - F.cost >= 10000, `case ${i}: buy without a confirmed $100 reserve (cash ${cash})`);
     }
-    if (plain.verdict === "buy" && F.cost <= 7500 && (cash == null || cash - F.cost >= 10000)) assert.strictEqual(r.verdict, "buy", `case ${i}: rules blocked a buy that fits them`);
+    if (plain.verdict === "buy" && F.cost <= 7500 && cash != null && cash - F.cost >= 10000) assert.strictEqual(r.verdict, "buy", `case ${i}: rules blocked a buy that fits them`);
     if (F.max) { assert.ok(D.costIn(F.max, c.offer) <= 7500, `case ${i}: max over limit`); if (cash != null) assert.ok(D.costIn(F.max, c.offer) <= cash - 10000, `case ${i}: max past reserve`); }
   }
+  assert.ok(buys >= 60, `coverage: only ${buys} BUY candidates in the sample`); console.log(`  random sample: ${buys} BUY candidates checked`);
 });
 console.log(`${n} deal check tests passed${process.exitCode ? " (with failures above)" : ""}`);
