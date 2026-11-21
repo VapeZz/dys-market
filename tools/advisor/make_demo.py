@@ -5,6 +5,7 @@ answered inside the page. Nothing real is called: no relay, no PkmnPrices, no Go
     python3 tools/advisor/make_demo.py <site copy> <holdings.json> <out dir>
 """
 import json
+import re
 import os
 import shutil
 import sys
@@ -48,10 +49,26 @@ SEED = {"inv": [], "watch": [{"id": 610516, "g": 23821, "n": umb["n"], "target":
 BUYLIST = {"v": 1, "items": [{"k": f"{i}|{names[i]['n']}", "id": i, "g": g, "n": names[i]["n"], "setN": SETN[g], "t": "c", "r": names[i].get("r", ""), "cond": "NM", "added": 1795200000000}
                              for i, g in BL_CARDS[:3]]}
 
+# binder / lot offer (Nov 21): a sample binder page of six cards, not checked yet, so "Check prices" and "Check live" can be
+# tried. Wartortle shows the printing check only when the site copy carries a second printing of it (tools/lot's test copy).
+srows = json.load(open(os.path.join(SITE, "data/search.json")))
+LOT_CARDS = [(517038, 23237, 1), (516998, 23237, 2), (610513, 23821, 1), (517020, 23237, 1), (42433, 604, 1), (42359, 604, 1)]
+def alts(i, n):
+    m = re.compile(r"\(([^()]*)\)\s*$")
+    out = []
+    for r in srows:
+        if r[0] == i and r[1] != n and r[3] != "s":
+            g = m.search(r[1]); pr = g.group(1) if g and g.group(1) in ("1st Edition Holofoil", "1st Edition Normal", "1st Edition", "Unlimited Holofoil", "Unlimited", "Reverse Holofoil", "Holofoil", "Normal") else "Normal"
+            if pr not in out: out.append(pr)
+    return out
+LOTS = {"v": 1, "lots": [{"id": "lotdemo", "name": "Sample binder page", "created": 1795300000000, "askMode": "total", "lines": [
+    {"l": f"ld{j}", "k": f"{i}|{names[i]['n']}", "id": i, "g": g, "n": names[i]["n"], "setN": SETN[g], "t": "c", "r": names[i].get("r", ""), "cond": "NM", "qty": q,
+     "alts": alts(i, names[i]["n"]), "prOk": not alts(i, names[i]["n"]), "tcg": names[i]["p"]} for j, (i, g, q) in enumerate(LOT_CARDS)]}]}
+
 DEMO = """/* Edge demo shim: sample ledger + synthetic sold-price relay answered in the page. Nothing real is called. */
 (() => {
-  const V = "bl-demo-1", SEED = %s, LEDGER = %s, BUYLIST = %s;
-  const seed = (paired) => { try { localStorage.clear(); localStorage.setItem("dys-theme", "dark"); localStorage.setItem("dys-edge-v1", JSON.stringify(SEED)); localStorage.setItem("dys-edge-buylist", JSON.stringify(BUYLIST));
+  const V = "lot-demo-1", SEED = %s, LEDGER = %s, BUYLIST = %s, LOTS = %s;
+  const seed = (paired) => { try { localStorage.clear(); localStorage.setItem("dys-theme", "dark"); localStorage.setItem("dys-edge-v1", JSON.stringify(SEED)); localStorage.setItem("dys-edge-buylist", JSON.stringify(BUYLIST)); localStorage.setItem("dys-edge-lots", JSON.stringify(LOTS));
     localStorage.setItem("dys-edge-ledger", JSON.stringify(LEDGER)); if (paired) localStorage.setItem("dys-edge-relay", JSON.stringify({ relay: "https://relay.test", pass: "sample" }));
     localStorage.setItem("dys-demo", V); } catch (e) {} };
   try { if (localStorage.getItem("dys-demo") !== V) seed(true); } catch (e) {}
@@ -78,18 +95,18 @@ DEMO = """/* Edge demo shim: sample ledger + synthetic sold-price relay answered
   addEventListener("DOMContentLoaded", () => {
     const paired = (() => { try { return !!localStorage.getItem("dys-edge-relay"); } catch (e) { return true; } })();
     const b = document.createElement("div"); b.className = "demo-bar";
-    b.innerHTML = `<b>Preview · sample cards, made-up sales.</b> Daily deals shows the real Nov 19 finder run. Nothing real is called and no credits are spent.
+    b.innerHTML = `<b>Preview · sample cards, made-up sales.</b> Try Deals → Lot offer. Daily deals shows the real Nov 19 finder run. Nothing real is called and no credits are spent.
       <span><button type="button" data-d="pair">${paired ? "Unpair this phone" : "Pair again"}</button><button type="button" data-d="reset">Reset preview</button></span>`;
     b.onclick = (e) => { const d = e.target.dataset.d; if (!d) return; seed(d === "reset" ? true : !paired); location.hash = "#deals"; location.reload(); };
     document.body.prepend(b);
   });
 })();
-""" % (json.dumps(SEED), json.dumps(LEDGER), json.dumps(BUYLIST))
+""" % (json.dumps(SEED), json.dumps(LEDGER), json.dumps(BUYLIST), json.dumps(LOTS))
 open(os.path.join(OUT, "assets/demo.js"), "w").write(DEMO)
 
 html = open(os.path.join(SITE, "edge/index.html")).read()
 html = html.replace("../assets/", "assets/").replace('href="manifest.webmanifest"', 'href="data:,"')
-html = html.replace("<title>DYS Edge</title>", "<title>DYS Edge preview: Card-show Buy list (sample data)</title>")
+html = html.replace("<title>DYS Edge</title>", "<title>DYS Edge preview: Lot offers (sample data)</title>")
 html = html.replace("</head>", """<style>.demo-bar{padding:8px 12px;font:13px/1.4 Inter,system-ui,sans-serif;background:#3b2a05;color:#ffd77a;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
 .demo-bar span{display:flex;gap:6px}.demo-bar button{font:inherit;font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid #ffd77a66;background:transparent;color:#ffd77a}</style>
 <script src="assets/demo.js"></script>

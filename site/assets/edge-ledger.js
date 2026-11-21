@@ -225,7 +225,7 @@
   /* ---------- screens (Mine → Ledger) ---------- */
   /* ctx from edge.js: { store, h (helpers: money, signed, esc, img, cleanN, localDay, fmtDay, cents, dollars, toast, cls, pct),
        priceOf(item), feeEst(platKey, priceCents, t) → cents, shipEst(priceCents, t), supplies(t), pick(form) (search for cards to add to form.lines), resume (a form to reopen),
-       conn() → { url, token } | null, sync() → Promise, oldInv() → [rows], archiveOldInv() → keeps a copy, true if saved, backup() (backup file), openCard(id, g, n), draft (prefill a buy) } */
+       conn() → { url, token } | null, sync() → Promise, oldInv() → [rows], archiveOldInv() → keeps a copy, true if saved, backup() (backup file), openCard(id, g, n), draft (prefill a buy: one line, or { lines, where, pay, ship, tax, note } for a whole buy) } */
   function mount(root, ctx) {
     const { money: short, esc, img, cleanN, localDay, fmtDay, cents, dollars, toast, cls } = ctx.h;
     // the ledger shows every amount to the cent (Edge's money() rounds $1,000+ to whole dollars); the tiles stay short
@@ -585,6 +585,7 @@
     // one click handler: the open form's, or the lists' (so one tap is never handled twice)
     root.addEventListener("click", (e) => { if (form) { if (fc) fc(e); } else listClicks(e); });
     if (ctx.resume) { form = ctx.resume; draw(); }
+    else if (ctx.draft && Array.isArray(ctx.draft.lines)) open("buy", { book: ctx.defBook, ...ctx.draft, lines: ctx.draft.lines.map((l) => ({ ...l })) });   // a whole buy (a lot): nothing is saved until Save buy
     else if (ctx.draft) open("buy", { book: ctx.defBook, lines: [ctx.draft] });
     else draw();
     return { redraw: draw, open };

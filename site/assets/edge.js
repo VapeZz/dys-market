@@ -1254,6 +1254,225 @@
     toast(`Checked ${blPlural(run.done, "card")} · ${run.credits.toLocaleString("en-US")} credits`);
   }
 
+  /* ---------- Binder / lot offers (edge-lot.js): several cards bought as one purchase ----------
+     Each card is valued by the Deal check (live sold prices read this visit, in memory) or by its saved rounded estimate;
+     weak evidence, missing prices, unconfirmed printings and cards under $20 count $0. The whole lot must clear the
+     per-purchase limit, the cash reserve and $5 / 20%: only a live check can say BUY candidate. */
+  const LOTM = part("edge-lot.js", "EdgeLot");
+  let LOTS = null;
+  const LIVE = new Map();   // card key -> { data, tcg, tcgDay }: live sold prices read this visit, never saved
+  const LV = { id: null, adding: false, q: "", prep: false, budget: 500, run: null, confirm: null, paid: "", name: "" };
+  const lotPrintings = (id, n) => (ROWS || []).filter((r) => r[0] === id && r[1] !== n && r[3] !== "s").map((r) => printingOfRow(r[1], r[3])).filter((p, i, a) => p && a.indexOf(p) === i);
+  async function lotMods() {
+    const [lt, bl, deal] = await Promise.all([LOTM, BUYL, DEAL]);
+    if (lt && bl && !LOTS) LOTS = lt.Store(window.localStorage, bl);
+    return { lt, bl, deal };
+  }
+  async function drawLot(el) {
+    const { lt, bl, deal } = await lotMods();
+    if (!lt || !bl || !deal) { el.innerHTML = `<div class="empty">Lot offers didn't load. Reopen Edge.</div>`; return; }
+    const lot = LV.id && LOTS.get(LV.id);
+    if (!lot) { LV.id = null; return drawLotList(el, lt); }
+    return drawLotOne(el, lt, bl, deal, lot);
+  }
+  function drawLotList(el, lt) {
+    const lots = LOTS.all();
+    el.innerHTML = `<p class="muted small" style="margin:0 0 8px">Buying a binder page, a box or a stack? Add the cards, type the seller's price, and Edge adds up what each card would net on resale with the Deal check, then gives you a <b>max safe offer</b> and an <b>opening offer</b> for the whole lot. Cards with weak sales evidence count $0. Your rules apply to the whole purchase: ${money(S.set.buyLimit ?? 7500)} most, ${money(S.set.cashReserve ?? 10000)} kept back, ${money(S.set.minProfit)} and ${S.set.roi}% profit.</p>
+      <div class="panel lot-new"><b>New lot</b><div class="lot-newrow"><input class="field" id="lot-name" maxlength="60" placeholder="Name (optional), like Blue binder" value="${esc(LV.name)}"><button type="button" class="btn sm primary" id="lot-create"${lots.length >= lt.MAX_LOTS ? " disabled" : ""}>Start</button></div>
+        ${lots.length >= lt.MAX_LOTS ? `<p class="small muted" style="margin:4px 0 0">You have ${lt.MAX_LOTS} lots saved: delete one to start another.</p>` : ""}</div>
+      <div class="sc-list lot-lots">${lots.length ? lots.map((x) => { const copies = x.lines.reduce((s, l) => s + (l.qty || 1), 0);
+        return `<button type="button" class="sc-hit lot-pick" data-id="${esc(x.id)}"><span class="sc-hn"><b>${esc(x.name || "Untitled lot")}</b><small class="muted">${x.lines.length} card${x.lines.length === 1 ? "" : "s"}${copies > x.lines.length ? ` · ${copies} copies` : ""} · started ${fmtDay(new Date(x.created).toISOString().slice(0, 10))}</small></span><span class="sc-hp"><b>Open</b></span></button>`; }).join("")
+        : `<div class="empty">No lots yet. Start one above, then add the cards the seller is offering.</div>`}</div>`;
+    const nm = $("#lot-name", el); nm.oninput = () => { LV.name = nm.value; };
+    $("#lot-create", el).onclick = () => {
+      const id = LOTS.create(nm.value.trim() || `Lot ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}`);
+      if (!id) { toast("Too many lots saved"); return; }
+      LV.id = id; LV.name = ""; LV.adding = true; LV.q = ""; LV.run = null; LV.confirm = null; drawLot(el);
+    };
+    $$(".lot-pick", el).forEach((b) => { b.onclick = () => { LV.id = b.dataset.id; LV.adding = false; LV.run = null; LV.confirm = null; drawLot(el); }; });
+  }
+  function lotCfg(deal) { const c = dealCfg(0); c.budget = { ...c.budget, cash: CASH_NOW }; return c; }
+  function drawLotOne(el, lt, bl, deal, lot) {
+    const now = Date.now(), cfg = lotCfg(deal), live = (k) => LIVE.get(k) || null;
+    const R = lt.evaluate(deal, bl, lot, live, cfg, now), byL = new Map(R.rows.map((r) => [r.l, r]));
+    const conn = pkmnConn(), online = navigator.onLine !== false;
+    const need = lt.liveNeed(lot, (k) => LIVE.has(k)), P = lt.plan(bl, lot, LV.budget, now, (k) => LIVE.has(k)), run = LV.run, busy = run && !run.over;
+    const copies = lot.lines.reduce((s, l) => s + (l.qty || 1), 0), each = lot.askMode === "each";
+    const nLive = new Set(lot.lines.filter((x) => LIVE.has(x.k)).map((x) => x.k)).size, nCards = new Set(lot.lines.map((x) => x.k)).size;
+    el.innerHTML = `<div class="lot-top"><button type="button" class="btn sm ghost lot-back">← Lots</button><input class="field lot-title" maxlength="60" value="${esc(lot.name || "")}" aria-label="Lot name"><button type="button" class="btn sm ghost danger lot-del">Delete</button></div>
+      <div class="sec lot-sec"><div class="lot-h"><h3>1 · Cards in this lot</h3><span class="chip">${lot.lines.length} card${lot.lines.length === 1 ? "" : "s"}${copies > lot.lines.length ? ` · ${copies} copies` : ""}</span></div>
+        <div class="btns"><button type="button" class="btn sm${LV.adding ? "" : " primary"} lot-add-open">${LV.adding ? "Done adding" : "+ Add cards"}</button></div>
+        <div id="lot-add"></div>
+        <div class="lot-lines">${lot.lines.length ? lot.lines.map((x) => lotLineHTML(x, byL.get(x.l), each)).join("") : `<div class="empty">No cards yet. Tap <b>+ Add cards</b> and pick each card the seller is offering: exact set, number and printing.</div>`}</div></div>
+      <div class="sec lot-sec"><div class="lot-h"><h3>2 · Sold prices</h3><span class="chip ${nLive === nCards && nCards ? "hot" : ""}" data-live="${nLive}" data-cards="${nCards}">${nLive} of ${nCards} checked live</span></div>
+        <p class="small muted" style="margin:0 0 6px">Before you go: <b>Check prices</b> saves an estimate for each card on this phone (works with no signal later). At the table: <b>Check live</b> reads today's sold prices for every card. Only a live check can say BUY.</p>
+        <div class="btns"><button type="button" class="btn sm lot-prep-open"${lot.lines.length ? "" : " disabled"}>Check prices (estimate)</button><button type="button" class="btn sm primary lot-live-open"${need.length && conn && online && !busy ? "" : " disabled"}>${need.length ? `Check live · ${need.length} card${need.length === 1 ? "" : "s"}` : nCards ? "All checked live ✓" : "Check live"}</button></div>
+        ${!conn ? `<p class="small muted lot-off">Sold prices aren't set up on this phone: pair it in Mine → Settings. Until then only saved estimates are used.</p>` : !online ? `<p class="small muted lot-off">No connection: using saved estimates only. Check live when you have signal.</p>` : ""}
+        ${LV.prep && conn ? `<div class="panel lot-prepp"><label class="f">Credit budget<select class="select lot-budget"${busy ? " disabled" : ""}>${[250, 500, 1000, 2000, 5000].map((c) => `<option value="${c}"${c === LV.budget ? " selected" : ""}>${c.toLocaleString("en-US")} credits</option>`).join("")}</select></label>
+          <p class="small lot-plan" data-need="${P.need.length}" data-take="${P.take.length}">${P.need.length ? `${P.need.length} card${P.need.length === 1 ? "" : "s"} without a fresh estimate; this budget covers up to ${P.take.length}${P.take.length < P.need.length ? " (the rest stay unchecked)" : ""}. About ${bl.CREDITS_PER_CARD} credits a card at most.` : "Every card has a fresh estimate or a live check: nothing to spend."}</p>
+          ${busy ? "" : `<div class="btns"><button type="button" class="btn sm primary lot-prep-go"${P.take.length && online ? "" : " disabled"}>Check ${P.take.length} card${P.take.length === 1 ? "" : "s"} · up to ${(P.take.length * bl.CREDITS_PER_CARD).toLocaleString("en-US")} credits</button></div>`}</div>` : ""}
+        ${LV.confirm === "live" ? `<div class="panel lot-confirm"><b>Check ${need.length} card${need.length === 1 ? "" : "s"} live?</b><p class="small" style="margin:4px 0 8px">Reads today's eBay sold prices (raw copies) for each card not checked this visit: up to ${(need.length * bl.CREDITS_PER_CARD).toLocaleString("en-US")} credits, usually less, of your 20,000 a day.</p><div class="btns"><button type="button" class="btn sm primary lot-live-go">Check now · up to ${(need.length * bl.CREDITS_PER_CARD).toLocaleString("en-US")} credits</button><button type="button" class="btn sm lot-live-no">Cancel</button></div></div>` : ""}
+        ${run ? `<p class="small lot-run" data-done="${run.done}" data-credits="${run.credits}" data-kind="${run.kind}">${run.over ? "Done" : "Checking"}: ${run.done} of ${run.total} cards · ${run.credits.toLocaleString("en-US")} credits${run.msg ? ` · ${esc(run.msg)}` : ""}${busy ? ` <button type="button" class="btn sm lot-stop">Stop</button>` : ""}</p>` : ""}</div>
+      <div class="sec lot-sec"><div class="lot-h"><h3>3 · Seller's price</h3></div>
+        <div id="lot-mode"></div>
+        <div class="lot-form">${each ? `<p class="small muted lot-sum-each" style="grid-column:1/-1;margin:0">Type each card's price on its row above${R.ask != null ? `: total ${money(R.ask)}` : ""}.</p>` : `<label class="f">Total for the lot $<input class="field lot-total" inputmode="decimal" enterkeyhint="done" placeholder="0.00" value="${lot.total ? dollars(lot.total) : ""}"></label>`}
+          <label class="f">Cash on hand $<input class="field lot-cash" inputmode="decimal" placeholder="0.00" value="${CASH_NOW != null ? dollars(CASH_NOW) : ""}"><small class="muted">this visit only, not saved</small></label>
+          <details class="lot-more"${lot.shipIn || lot.taxIn ? " open" : ""}><summary class="small">Shipped to you, or sales tax?</summary><div class="lot-form">
+            <label class="f">Shipping you pay $<input class="field lot-ship" inputmode="decimal" placeholder="0" value="${lot.shipIn ? dollars(lot.shipIn) : ""}"></label>
+            <label class="f">Sales tax %<input class="field lot-tax" inputmode="decimal" placeholder="0" value="${lot.taxIn || ""}"></label></div></details></div></div>
+      <div class="sec lot-sec"><div class="lot-h"><h3>4 · Offer</h3></div><div id="lot-out"></div></div>
+      <div class="sec lot-sec"><div class="lot-h"><h3>5 · Bought it?</h3></div>${LV.confirm === "ledger" ? `<div class="panel lot-ledger"><label class="f">Total you paid for the lot $<input class="field lot-paid" inputmode="decimal" value="${esc(LV.paid)}" placeholder="0.00"></label>
+          <p class="small muted" style="margin:6px 0">Opens the Ledger's buy form with all ${copies} card${copies === 1 ? "" : "s"} filled in (condition, quantity, and the price split over the cards by TCGplayer market). Check it, then tap <b>Save buy</b>. Nothing is recorded until you do.</p>
+          <div class="btns"><button type="button" class="btn sm primary lot-ledger-go">Open the buy form</button><button type="button" class="btn sm lot-ledger-no">Cancel</button></div></div>`
+        : `<div class="btns"><button type="button" class="btn sm lot-ledger-open"${lot.lines.length ? "" : " disabled"}>I bought this lot: record it</button></div>`}</div>`;
+    const redraw = () => drawLot(el);
+    seg($("#lot-mode", el), [["total", "One price for the lot"], ["each", "Price per card"]], lot.askMode, (v) => { LOTS.set(lot.id, { askMode: v }); redraw(); });
+    $(".lot-back", el).onclick = () => { LV.id = null; LV.confirm = null; redraw(); };
+    const ti = $(".lot-title", el); ti.onchange = () => { LOTS.set(lot.id, { name: ti.value.trim() }); };
+    $(".lot-del", el).onclick = (e) => { const b = e.currentTarget; if (b.dataset.armed) { LOTS.remove(lot.id); LV.id = null; LV.confirm = null; toast("Lot deleted"); redraw(); } else { b.dataset.armed = "1"; b.textContent = "Tap again to delete"; } };
+    $(".lot-add-open", el).onclick = () => { LV.adding = !LV.adding; redraw(); };
+    if (LV.adding) drawLotAdd($("#lot-add", el), el, lot, bl);
+    // card rows
+    $$(".lot-line", el).forEach((row) => {
+      const l = row.dataset.l;
+      const c = $(".lot-cond", row); if (c) c.onchange = () => { LOTS.setLine(lot.id, l, { cond: c.value }); redraw(); };
+      const q = $(".lot-qty", row); if (q) q.onchange = () => { LOTS.setLine(lot.id, l, { qty: Math.max(1, Math.min(lt.MAX_QTY, parseInt(q.value, 10) || 1)) }); redraw(); };
+      $$(".lot-step", row).forEach((b) => { b.onclick = () => { const x = LOTS.get(lot.id).lines.find((y) => y.l === l); LOTS.setLine(lot.id, l, { qty: Math.max(1, Math.min(lt.MAX_QTY, (x.qty || 1) + +b.dataset.d)) }); redraw(); }; });
+      const pr = $(".lot-pr-ok", row); if (pr) pr.onchange = () => { LOTS.setLine(lot.id, l, { prOk: pr.checked }); redraw(); };
+      const a = $(".lot-ask", row); if (a) a.oninput = () => { LOTS.setLine(lot.id, l, { ask: cents(a.value) || null }); out(); };
+      $(".lot-rm", row).onclick = () => { LOTS.removeLine(lot.id, l); redraw(); };
+    });
+    const tot = $(".lot-total", el); if (tot) tot.oninput = () => { LOTS.set(lot.id, { total: cents(tot.value) }); out(); };
+    const sh = $(".lot-ship", el); sh.oninput = () => { LOTS.set(lot.id, { shipIn: cents(sh.value) }); out(); };
+    const tx = $(".lot-tax", el); tx.oninput = () => { LOTS.set(lot.id, { taxIn: parseFloat(tx.value) || 0 }); out(); };
+    const ca = $(".lot-cash", el); ca.oninput = () => { CASH_NOW = ca.value.trim() === "" ? null : cents(ca.value); out(); };
+    // prices
+    $(".lot-prep-open", el).onclick = () => { LV.prep = !LV.prep; LV.confirm = null; redraw(); };
+    const bs = $(".lot-budget", el); if (bs) bs.onchange = () => { LV.budget = +bs.value; redraw(); };
+    const pg = $(".lot-prep-go", el); if (pg) pg.onclick = () => lotRun(el, "prep", P.take.slice());
+    $(".lot-live-open", el).onclick = () => { LV.confirm = "live"; LV.prep = false; redraw(); };
+    const lg = $(".lot-live-go", el); if (lg) lg.onclick = () => { LV.confirm = null; lotRun(el, "live", need.slice()); };
+    const ln = $(".lot-live-no", el); if (ln) ln.onclick = () => { LV.confirm = null; redraw(); };
+    const st = $(".lot-stop", el); if (st) st.onclick = () => { if (LV.run) LV.run.stop = true; };
+    // ledger
+    const lo = $(".lot-ledger-open", el); if (lo) lo.onclick = () => { const r = out(); LV.confirm = "ledger"; LV.paid = r && r.ask ? dollars(r.ask) : ""; redraw(); };
+    const lno = $(".lot-ledger-no", el); if (lno) lno.onclick = () => { LV.confirm = null; redraw(); };
+    const lgo = $(".lot-ledger-go", el); if (lgo) lgo.onclick = () => {
+      const paid = cents($(".lot-paid", el).value);
+      if (!(paid > 0)) { toast("Type what you paid for the lot"); return; }
+      if (!LG || !LS) { toast("The Ledger didn't load"); return; }
+      LEDGER_DRAFT = lt.ledgerDraft(deal, LOTS.get(lot.id), paid); LV.confirm = null;
+      SUB.mine = "ledger"; location.hash = "mine";
+    };
+    function out() {
+      const L2 = LOTS.get(lot.id), c2 = lotCfg(deal), r = lt.evaluate(deal, bl, L2, live, c2, Date.now());
+      const box = $("#lot-out", el); if (!box) return r;
+      box.innerHTML = lotOutHTML(r, L2, c2, bl);
+      box.dataset.result = r.result; box.dataset.mode = r.mode; box.dataset.value = r.value; box.dataset.max = r.max; box.dataset.walk = r.walk ?? ""; box.dataset.open = r.open ?? "";
+      const se = $(".lot-sum-each", el); if (se) se.textContent = `Type each card's price on its row above${r.ask != null ? `: total ${money(r.ask)}` : ""}.`;
+      return r;
+    }
+    out();
+  }
+  const LOT_FLAG_CHIP = { printing: "check printing", missing: "no sold prices", "not-checked": "not checked", "too-old": "estimate too old", scope: "under $20", evidence: "weak evidence", "no-value": "no resale value" };
+  function lotLineHTML(x, r, each) {
+    const flagged = r && r.flags.length, alts = x.alts || [];
+    const val = !r ? "" : flagged ? `<b class="muted">$0</b><small class="lot-flag-chip">${esc(LOT_FLAG_CHIP[r.flags[0]] || "counted $0")}</small>`
+      : `<b>${money(r.value)}</b><small class="muted">${r.mode === "live" ? "net resale · live" : "net resale · est."}</small>${r.slow ? `<small class="bl-stale">${r.counted} of ${r.qty} counted</small>` : ""}`;
+    return `<div class="lot-line panel${flagged ? " flagged" : ""}" data-l="${esc(x.l)}" data-k="${esc(x.k)}" data-flags="${esc(r ? r.flags.join(",") : "")}" data-value="${r ? r.value : 0}">
+      <div class="lot-lh">${img(x.id)}<span class="sc-hn"><b>${esc(blName(x.n))}</b><small class="muted">${esc(x.setN || setName(x.g))}</small><small><span class="chip bl-pr">${esc(printingOf(x.n))}</span></small></span><span class="sc-hp lot-val">${val}</span></div>
+      ${alts.length ? `<label class="lot-prl small"><input type="checkbox" class="lot-pr-ok"${x.prOk ? " checked" : ""}><span>I checked it's <b>${esc(printingOf(x.n))}</b> <span class="muted">(this card also comes as ${esc(alts.join(", "))})</span></span></label>` : ""}
+      ${flagged ? `<p class="small lot-why">${esc(r.why)}</p>` : r && r.slow ? `<p class="small lot-why bl-stale">${r.slow} extra cop${r.slow === 1 ? "y" : "ies"} counted $0: more than sell in about a month.</p>` : ""}
+      <div class="lot-ctl"><label class="f">Condition<select class="select lot-cond">${["NM", "LP", "MP", "HP", "DMG"].map((c) => `<option${c === (x.cond || "NM") ? " selected" : ""}>${c}</option>`).join("")}</select></label>
+        <label class="f">Qty<span class="lot-qtyw"><button type="button" class="btn sm lot-step" data-d="-1" aria-label="One fewer">−</button><input class="field lot-qty" type="number" inputmode="numeric" min="1" max="99" value="${x.qty || 1}"><button type="button" class="btn sm lot-step" data-d="1" aria-label="One more">+</button></span></label>
+        ${each ? `<label class="f">Price each $<input class="field lot-ask" inputmode="decimal" placeholder="0.00" value="${x.ask ? dollars(x.ask) : ""}"></label>` : ""}
+        <button type="button" class="btn sm ghost danger lot-rm" aria-label="Remove ${esc(blName(x.n))}">Remove</button></div></div>`;
+  }
+  function lotOutHTML(r, lot, cfg, bl) {
+    const name = (k) => { const x = lot.lines.find((y) => y.l === k); return x ? `${blName(x.n)}${x.cond && x.cond !== "NM" ? ` (${x.cond})` : ""}${x.qty > 1 ? ` ×${x.qty}` : ""}` : ""; };
+    if (r.result === "empty") return `<p class="small muted">Add the cards to see an offer.</p>`;
+    const live = r.mode === "live";
+    const badge = live ? `<span class="bl-badge lot-live">LIVE · today's sold prices</span>` : `<span class="bl-badge">ESTIMATE${r.notes.includes("stale") ? " · STALE" : ""} · not a verified BUY</span>`;
+    const head = { buy: "BUY candidate", fits: "Fits your rules (estimate)", over: "Price too high", limit: "Over your per-purchase limit", reserve: "Breaks your cash reserve", "need-cash": "Enter your cash on hand", "need-ask": "Type the seller's price", "no-value": "Nothing Edge can value", "need-prices": "Check sold prices first" }[r.result] || "";
+    const cls2 = r.result === "buy" || r.result === "fits" ? "fits" : ["over", "limit", "reserve", "no-value"].includes(r.result) ? "no" : "";
+    const tile = (l, v, s) => `<div class="lot-tile"><span>${l}</span><b>${v}</b>${s ? `<small class="muted">${s}</small>` : ""}</div>`;
+    const tiles = `<div class="lot-tiles">${tile("Net resale (counted cards)", money(r.value), "after fees, shipping, supplies")}
+      ${tile("Max safe offer", r.walk ? money(r.walk) : "—", r.walk ? (r.capBy === "limit" ? `your ${money(cfg.budget.limit)} limit` : r.capBy === "reserve" ? "keeps your reserve" : `${money(cfg.minProfit)} and ${cfg.roi}% profit`) : "nothing safe")}
+      ${tile("Opening offer", r.open ? money(r.open) : "—", r.open ? "start here" : "")}
+      ${tile("At the seller's price", r.profit != null ? signed(r.profit) : "—", r.profit != null ? `${pct(r.roi, 0)} ROI · all-in ${money(r.cost)}` : "type a price")}</div>`;
+    const chk = (ok, t) => `<li class="${ok === true ? "ok" : ok === false ? "no" : "info"}"><i aria-hidden="true">${ok === true ? "✓" : ok === false ? "✕" : "•"}</i><span>${t}</span></li>`;
+    const rules = r.cost == null ? "" : `<ul class="dl-gates lot-rules">${chk(r.marginOk, `Profit ${signed(r.profit)} (${pct(r.roi, 0)}) on the whole lot: needs ${money(cfg.minProfit)} and ${cfg.roi}%`)}
+      ${chk(r.limitOk, `All-in ${money(r.cost)} ${r.limitOk ? "within" : "over"} your ${money(cfg.budget.limit)} per-purchase limit (the whole lot counts as one purchase)`)}
+      ${chk(r.reserveOk, r.reserveOk == null ? `Cash on hand not entered: needed to check your ${money(cfg.budget.reserve)} reserve` : `${r.reserveOk ? "Leaves" : "Would leave"} ${money(cfg.budget.cash - r.cost)} cash (reserve ${money(cfg.budget.reserve)})`)}
+      ${chk(live ? true : null, live ? "Every counted card checked on today's sold prices" : "Values from saved estimates (low end of each range): check live before you pay")}</ul>`;
+    if (r.result === "need-prices") return `<div class="bl-call lot-call"><b>${esc(head)}</b><p class="small" style="margin:2px 0 0">${esc(r.text)}</p></div>`;
+    const top = r.top.length ? `<div class="lot-top-list"><b class="small">Where the value is</b>${r.top.slice(0, 8).map((t) => `<div class="lot-bar" data-l="${esc(t.l)}"><span class="lot-bar-n">${esc(name(t.l))}</span><span class="lot-bar-v">${money(t.value)} · ${Math.round(t.share * 100)}%</span><i style="width:${Math.max(2, Math.round(t.share * 100))}%"></i></div>`).join("")}</div>` : "";
+    const zero = r.flagged.length ? `<div class="lot-zero"><b class="small">Counted at $0 (${r.flagged.length})</b><ul class="small">${r.flagged.map((f) => `<li data-l="${esc(f.l)}"><b>${esc(name(f.l))}</b>: ${esc(f.why)}</li>`).join("")}</ul><p class="small muted" style="margin:2px 0 0">Treat these as free extras. Don't pay for them unless you check them yourself.</p></div>` : "";
+    const notes = [r.notes.includes("top") ? `Most of the value (${Math.round(r.top[0].share * 100)}%) is one card: ${esc(name(r.top[0].l))}. Check that copy's condition and printing closely.` : "",
+      r.notes.includes("slow") ? "Some copies are more than sell in about a month: the extras count $0." : ""].filter(Boolean).map((t) => `<p class="small bl-stale" style="margin:4px 0 0">${t}</p>`).join("");
+    return `<div class="bl-call lot-call ${cls2}">${badge}<b>${esc(head)}</b><p class="small" style="margin:2px 0 0">${esc(r.text)}</p></div>${tiles}
+      <p class="small muted lot-neg">Opening and max safe offers are negotiation suggestions for the whole lot, not valuations.</p>${rules}${notes}${top}${zero}`;
+  }
+  async function drawLotAdd(box, el, lot, bl) {
+    const onList = BLS ? BLS.all() : [];
+    box.innerHTML = `<div class="panel bl-addp lot-addp"><b>Add a card</b><p class="small muted" style="margin:2px 0 0">Type the name and number, or the name and set. Add the same card again for a second condition.</p>
+      <div class="searchbox" style="margin-top:6px"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+        <input id="lot-q" class="field" type="search" placeholder="Card name and number" autocomplete="off" aria-label="Find a card to add" value="${esc(LV.q)}"></div>
+      <div id="lot-res"></div>
+      ${onList.length ? `<p class="small" style="margin:8px 0 4px"><b>From your buy list</b></p><div class="sc-list">${onList.slice(0, 30).map((x) => `<button type="button" class="sc-hit lot-bl" data-k="${esc(x.k)}"><span class="sc-hn"><b>${esc(blName(x.n))}</b><small class="muted">${esc(x.setN || setName(x.g))} · ${esc(printingOf(x.n))}</small></span><span class="sc-hp"><b>+ Add</b></span></button>`).join("")}</div>` : ""}</div>`;
+    const add = async (c) => {
+      await loadIndex().catch(() => null);
+      const k = keyOf(c.id, c.n), b = BLS && BLS.get(k);
+      const est = b && b.est && bl.ageState(b.est) !== "expired" ? b.est : undefined;   // reuse the Buy list's estimate for the same card
+      const ok = LOTS.addLine(lot.id, { id: c.id, g: c.g, n: c.n, setN: c.setN || setName(c.g), t: c.t || "c", r: c.r || "", cond: "NM", qty: 1, alts: lotPrintings(c.id, c.n), tcg: c.p ?? marketOf(c), est });
+      toast(ok ? `Added ${blName(c.n)}` : "This lot is full (40 cards)");
+      if (ok) drawLot(el);
+    };
+    $$(".lot-bl", box).forEach((b) => { b.onclick = () => { const x = BLS.get(b.dataset.k); if (x) add(x); }; });
+    const q = $("#lot-q", box), res = $("#lot-res", box);
+    const results = () => {
+      LV.q = q.value; const t = q.value.trim().toLowerCase();
+      if (!t || !ROWS) { res.innerHTML = t && !ROWS ? `<p class="small muted">The card list needs a connection the first time.</p>` : ""; return; }
+      const hits = findCards(t, (r) => r[3] !== "s" && gameOk(gameOfSet(r[2])));
+      if (!hits.length) { res.innerHTML = `<p class="small muted">Nothing found. Try the card number or fewer words.</p>`; return; }
+      pagedList(res, hits, 10, (r) => `<button type="button" class="sc-hit lot-s" data-id="${r[0]}" data-g="${r[2]}" data-n="${esc(r[1])}" data-t="${r[3]}" data-p="${r[4] ?? ""}">${img(r[0])}<span class="sc-hn"><b>${esc(blName(r[1]))}</b><small class="muted">${esc(setName(r[2]))} · ${esc(printingOf(r[1]))}</small></span><span class="sc-hp"><b>+ Add</b><small class="muted">${money(r[4])}</small></span></button>`,
+        (nodes) => nodes.forEach((b) => { b.onclick = () => add({ id: +b.dataset.id, g: +b.dataset.g, n: b.dataset.n, t: b.dataset.t, p: b.dataset.p ? +b.dataset.p : null }); }));
+    };
+    let tm; q.addEventListener("input", () => { clearTimeout(tm); tm = setTimeout(results, 140); });
+    loadIndex().then(results).catch(() => results());
+    if (!LV.q) q.focus({ preventScroll: true });
+  }
+  // read sold prices for the given cards (raw copies only): live data stays in memory for this visit; the rounded estimate is
+  // saved on the lot (and on the Buy list when the card is there too)
+  async function lotRun(el, kind, cards) {
+    const [{ lt, bl, deal }, pkmn] = await Promise.all([lotMods(), PKMN]), conn = pkmnConn();
+    if (!deal || !pkmn || !conn) { toast("Sold prices aren't available"); return; }
+    const id = LV.id, budget = kind === "prep" ? LV.budget : Infinity;
+    const run = LV.run = { kind, done: 0, total: cards.length, credits: 0, stop: false, over: false, msg: "" };
+    LV.prep = kind === "prep";
+    const redraw = () => { if (SUB.deals === "lot" && TAB === "deals" && LV.id === id && document.body.contains(el)) drawLot(el); };
+    redraw();
+    for (const x of cards) {
+      if (run.stop) { run.msg = "stopped"; break; }
+      if (run.credits + bl.CREDITS_PER_CARD > budget) { run.msg = "budget reached"; break; }
+      let d = null; try { d = await detail(x.id, x.g, x.n); } catch { d = null; }
+      if (!d || !d.it) { run.msg = "card list unavailable: check your connection"; break; }
+      const { it, set } = d, tcgDay = dayNum(set.dates?.[set.dates.length - 1]);
+      const item = { id: it.id, n: it.n, name: it.n, t: it.t, r: it.r, setN: set.n, tcg: it.p, tcgDay };
+      const res = await pkmn.lookup(item, { ...conn, rawOnly: true });
+      run.credits += res.meta ? res.meta.credits || 0 : 0;
+      if (!res.ok && (res.reason === "network" || res.reason === "denied" || res.reason === "error")) { run.msg = SOLD_WHY[res.reason] || "sold prices unavailable"; break; }
+      const data = res.ok ? res.data : { asOf: Math.floor(Date.now() / 864e5), source: "none", comps: [] };
+      LIVE.set(x.k, { data, tcg: it.p, tcgDay });
+      const est = res.ok ? bl.derive(deal, item, res.data, dealCfg(it.p)) : { at: Date.now(), tcg: it.p || null, grade: null, pace: null, resale: null, walk: {}, issue: "not-found" };
+      LOTS.setEst(id, x.k, est, it.p);
+      if (BLS && BLS.has(x.k)) BLS.setEst(x.k, est);
+      run.done++; redraw();
+    }
+    run.over = true; redraw();
+    toast(`Checked ${run.done} card${run.done === 1 ? "" : "s"} · ${run.credits.toLocaleString("en-US")} credits`);
+  }
+
   /* ---------- Deals ---------- */
   let D_BUDGET = 0, D_MV = { win: "7", min: null, dir: "up" };
   async function viewDeals(v) {
@@ -1265,9 +1484,10 @@
     const draw = async () => {
       const sub = SUB.deals, ok = (r) => gameOk(r.k) && (!D_BUDGET || (r.lo || r.p) <= D_BUDGET);
       const note = $("#d-note"), out = $("#d-list");
-      const listy = !["check", "list", "daily"].includes(sub); $("#d-game").hidden = !listy; $(".filters", v).hidden = !listy;
+      const listy = !["check", "list", "lot", "daily"].includes(sub); $("#d-game").hidden = !listy; $(".filters", v).hidden = !listy;
       if (sub === "check") { note.textContent = ""; await drawShowCheck(out); return; }
       if (sub === "list") { note.textContent = ""; await drawBuyList(out); return; }
+      if (sub === "lot") { note.textContent = ""; await drawLot(out); return; }
       if (sub === "daily") { note.textContent = ""; await drawDaily(out); return; }
       out.innerHTML = `<p class="muted">Loading…</p>`;
       const [scout, buyer] = await listsP;
@@ -1300,7 +1520,7 @@
           <div class="sec"><h3>Rising this week</h3>${listOrEmpty(rising.map((x) => rowHTML(x, `<b>${money(x.p)}</b><small class="up">${pct(x.ch, 0)} · yours ${money(x.dys)}</small>`)), "None of your stock is rising fast.")}</div>`;
       }
     };
-    seg($("#d-seg"), [["check", "Show check"], ["list", "Buy list"], ["daily", "Daily deals"], ["flip", "Flips"], ["ride", "Momentum"], ["dip", "Dips"], ["under", "Under market"], ["movers", "Movers"], ["fall", "Falling"], ["store", "My store"]], SUB.deals, (k) => { SUB.deals = k; draw(); });
+    seg($("#d-seg"), [["check", "Show check"], ["list", "Buy list"], ["lot", "Lot offer"], ["daily", "Daily deals"], ["flip", "Flips"], ["ride", "Momentum"], ["dip", "Dips"], ["under", "Under market"], ["movers", "Movers"], ["fall", "Falling"], ["store", "My store"]], SUB.deals, (k) => { SUB.deals = k; draw(); });
     gamePick($("#d-game"), () => draw());
     $("#d-budget").onchange = (e) => { D_BUDGET = +e.target.value; draw(); };
     draw();
