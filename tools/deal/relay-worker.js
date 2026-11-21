@@ -56,6 +56,20 @@ function same(a, b) {   // constant-time compare
 /* ---------- Daily deals: the newest finder phone extract from the private research repo ---------- */
 const FINDER_REPO = "VapeZz/dys-research", FINDER_PREFIX = "finder-phone-";
 const json = (o, status, head, cache = "no-store") => { const h = new Headers(head); h.set("Content-Type", "application/json"); h.set("Cache-Control", cache); return new Response(JSON.stringify(o), { status, headers: h }); };
+// Only these fields ever reach a phone, whatever the file holds: the finder's own summary (labels, reasons, our max
+// price, evidence bands, the TCGplayer link). No listing details, no PkmnPrices data. Same list as dys-research finder.py.
+const CARD_KEYS = ["tcgplayer_id", "name", "set", "number", "printing", "label", "reasons", "max_listing_price", "allowed_all_in", "profit_if_bought_at_max", "tcgplayer_url"];
+const EVIDENCE_KEYS = ["ebay_raw_sales_30d", "ebay_clean_sales_kept", "ebay_median_vs_nm", "nm_price_vs_ours"];
+const COUNT_KEYS = ["seen", "shortlist", "screened", "nm_under_max", "candidates", "uncertain", "rejects"];
+const LABELS = new Set(["CANDIDATE", "UNCERTAIN", "REJECT"]);
+const pick = (o, keys) => Object.fromEntries(keys.filter((k) => o && o[k] !== undefined).map((k) => [k, o[k]]));
+const okUrl = (u) => typeof u === "string" && /^https:\/\/www\.tcgplayer\.com\/product\/\d+(\?[\w=&+%.-]*)?$/.test(u) ? u : null;
+function phoneOnly(j) {
+  return { kind: j.kind, format: j.format, rules_version: j.rules_version ?? null, data_day: j.data_day ?? null, run: j.run ?? null, finished: j.finished ?? null, status: j.status ?? null,
+    counts: pick(j.counts || {}, COUNT_KEYS),
+    reasons_top: (Array.isArray(j.reasons_top) ? j.reasons_top : []).filter((r) => Array.isArray(r) && typeof r[0] === "string" && Number.isFinite(r[1])).slice(0, 8).map((r) => [r[0], r[1]]),
+    cards: j.cards.filter((c) => c && LABELS.has(c.label)).slice(0, 200).map((c) => ({ ...pick(c, CARD_KEYS), tcgplayer_url: okUrl(c.tcgplayer_url), evidence: pick(c.evidence || {}, EVIDENCE_KEYS) })) };
+}
 async function finder(env, head) {
   if (!env.FINDER_READ_TOKEN) return json({ error: "not-connected" }, 503, head);
   const gh = (url, accept) => fetch(url, { redirect: "manual", headers: { Authorization: `Bearer ${env.FINDER_READ_TOKEN}`, Accept: accept,
@@ -75,7 +89,7 @@ async function finder(env, head) {
     if (want && want !== await sha256hex(body)) return json({ error: "digest" }, 502, head);
     let j; try { j = JSON.parse(body); } catch { return json({ error: "format" }, 502, head); }
     if (!j || j.kind !== "nm-finder-phone" || j.format !== 1 || !Array.isArray(j.cards)) return json({ error: "format" }, 502, head);
-    return json({ ...j, release: rel.name, published: rel.published_at || null }, 200, head, "private, max-age=300");
+    return json({ ...phoneOnly(j), release: rel.name, published: rel.published_at || null }, 200, head, "private, max-age=300");
   }
   return json({ error: "none" }, 404, head);
 }

@@ -68,4 +68,19 @@ await test("the sold-price routes are unchanged; unknown paths still 404; only G
   r = await call("/edge/finder/../v1/x"); assert.notStrictEqual(r.status, 200);
   r = await W.fetch(new Request("https://relay.example/edge/finder", { method: "POST", headers: { "X-Edge-Pass": DEVICE } }), ENV); assert.strictEqual(r.status, 405);
 });
+await test("only the finder summary fields reach the phone, whatever the file holds", async () => {
+  const card = { tcgplayer_id: 7, name: "X", label: "UNCERTAIN", reasons: ["r"], max_listing_price: 10, tcgplayer_url: "https://www.tcgplayer.com/product/7?Language=English&Condition=Near+Mint",
+    evidence: { ebay_raw_sales_30d: "8–19", ebay_comps: [[1, 2, "raw", 1]], seller: "bob" }, listing_price: 9.5, seller_name: "bob", sold_prices: [1, 2, 3], market_tcgcsv: 20 };
+  const evil = { tcgplayer_id: 8, label: "REJECT", tcgplayer_url: "javascript:alert(1)" };
+  const odd = { tcgplayer_id: 9, label: "SOMETHING" };
+  const b = JSON.stringify(ext({ cards: [card, evil, odd], comps: [[1, 2]], pkmnprices: { key: "x" }, counts: { candidates: 1, secret: 5 }, reasons_top: [["seller under 98%", 3], ["bad"], { x: 1 }] }));
+  github([rel(9, "finder-phone-x", b)], { 9: b });
+  const j = await (await call()).json(), txt = JSON.stringify(j);
+  assert.deepStrictEqual(Object.keys(j).sort(), ["cards", "counts", "data_day", "finished", "format", "kind", "published", "reasons_top", "release", "rules_version", "run", "status"]);
+  assert.strictEqual(j.cards.length, 2, "unknown labels dropped");
+  assert.deepStrictEqual(j.cards[0].evidence, { ebay_raw_sales_30d: "8–19" });
+  for (const bad of ['"listing_price"', '"seller"', "bob", "sold_prices", "market_tcgcsv", '"comps"', "pkmnprices", "secret", "ebay_comps"]) assert.ok(!txt.includes(bad), bad);
+  assert.strictEqual(j.cards[1].tcgplayer_url, null, "only tcgplayer.com product links pass");
+  assert.deepStrictEqual(j.reasons_top, [["seller under 98%", 3]]);
+});
 console.log(`${n} relay Daily deals tests passed`);
