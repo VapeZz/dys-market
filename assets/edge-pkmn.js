@@ -24,7 +24,37 @@
 
   const dayOf = (ts) => { if (!ts) return null; const s = String(ts), t = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(s) ? s + "T00:00:00Z" : s); return isFinite(t) ? Math.floor(t / DAY) : null; };
   // the printing in an Edge item name, as PkmnPrices names variants
-  const variantOf = (name) => { for (const v of ["1st Edition Holofoil", "Reverse Holofoil", "Holofoil"]) if (String(name || "").endsWith(`(${v})`)) return v; return "Normal"; };
+  // PkmnPrices names printings as TCGplayer does (the finder's Near Mint price lookups match "1st Edition" exactly). Before
+  // Nov 20, 2026 "(1st Edition)" and "(Unlimited)" were read as "Normal", so their own sales were dropped as another printing.
+  const PRINTINGS = ["1st Edition Holofoil", "1st Edition Normal", "1st Edition", "Unlimited Holofoil", "Unlimited", "Reverse Holofoil", "Holofoil", "Normal"];
+  const variantOf = (name) => { const m = /\(([^()]*)\)\s*$/.exec(String(name || "")); return m && PRINTINGS.includes(m[1]) ? m[1] : "Normal"; };
+
+  /* Title rules for one sold row (Nov 20, 2026; the finder's v3 rules): PkmnPrices attributes same-number reprints and
+     some other printings as "exact", and raw sales carry no condition field, so the title is the only check left.
+     Returns a reason to drop the row, or "" to keep it. raw: also drop graded, played and damaged copies. */
+  const T_FOREIGN = /\b(chinese|japanese|japan|korean|korea|italian|italiano|french|fran[cç]ais|german|deutsch|spanish|espa[nñ]ol|portuguese|thai|indonesian|simplified|traditional|jpn?|cn|chn|kr|kor|ita|fr|ger|de|esp?)\b|\b(sv|sm|s)\d{1,2}[a-z]{1,2}\b/i;
+  const T_GRADED = /\b(psa|bgs|cgc|sgc|beckett|graded|slab(bed)?|bvg)\b|\btag ?\d/i;
+  const T_FAKE = /\b(proxy|proxies|custom art|fan ?art|orica|replica|fake|metal card|not real)\b/i;
+  const T_LOT = /\b(lot|bundle|playset|set of \d+)\b|\b(choose|pick|select)\s+(your|a|any)\b|\byou\s*(pick|choose)\b|\bcomplete your\b|\bsingles\b/i;
+  const T_PLAYED = /\b(lp\+?|mp|vlp|hp|dmg|damaged|played|creased?|bent|scratch(ed|es)?|heavily|heavy|moderately|lightly|poor|good condition)\b/i;
+  const T_REPRINT = /\b(celebrations?|30th|classic collection|anniversary|jumbo|oversized?|mcdonald'?s|trick or trade|reprint|world championships?|wcd)\b/i;
+  const T_HOLO = /\bholo(foil|graphic)?\b/i, T_NONHOLO = /\b(non|no)[\s-]?holo\b/i;
+  function compDrop(title, item, raw) {
+    const t = String(title || ""), pr = variantOf(item.n), low = t.toLowerCase();
+    const rev = /\breverse\b/i.test(t), first = /\b1st\b|first edition/i.test(t);
+    if (pr.includes("Reverse") ? !rev : rev) return "printing";
+    if (pr.startsWith("1st Edition") ? !first : first) return "printing";
+    const own = `${item.n || ""} ${item.setN || ""}`;
+    if (T_REPRINT.test(t) && !T_REPRINT.test(own)) return "reprint";
+    if (T_FOREIGN.test(t)) return "foreign";
+    if (T_LOT.test(t) || T_FAKE.test(t)) return "lot";
+    const nonHolo = ["Normal", "Unlimited", "1st Edition", "1st Edition Normal"].includes(pr) && item.r && !/holo/i.test(item.r);
+    if (nonHolo && T_HOLO.test(t) && !T_NONHOLO.test(t)) return "printing";
+    if (raw && T_GRADED.test(t)) return "graded";
+    // "HP" alone is a card's hit points ("120 HP"); only the condition words count
+    if (raw && T_PLAYED.test(t.replace(/\b\d+\s*hp\b|\bhp\s*\d+\b/gi, ""))) return "played";
+    return "";
+  }
 
   /* one call through the relay: { status, body, credits } */
   async function call(cfg, path, q = {}) {
@@ -83,7 +113,7 @@
   /* everything the Deal check needs for one Edge item: { id (TCGplayer product), n (name), t ("c" | "s") } */
   async function lookup(item, cfg) {
     const day = cfg.today ?? Math.floor(Date.now() / DAY);
-    const meta = { calls: 0, credits: 0, errors: [], undated: 0, future: 0, otherCurrency: 0, otherPrinting: 0, capped: [], found: false };
+    const meta = { calls: 0, credits: 0, errors: [], undated: 0, future: 0, otherCurrency: 0, otherPrinting: 0, titleDrops: {}, capped: [], found: false };
     if (!cfg.relay) return { ok: false, reason: "not-set-up", meta };
     let base = null;
     if (item.t === "s") {
@@ -104,7 +134,10 @@
     meta.found = true;
     const comps = [];
     if (item.t === "s") comps.push(...await sales(cfg, base, "sealed", day, meta, null));
-    else for (const g of ["raw", "PSA 10", "PSA 9"]) comps.push(...await sales(cfg, base, g, day, meta, variantOf(item.n)));
+    else for (const g of ["raw", "PSA 10", "PSA 9"]) {
+      const keep = (x, m) => { const k = compDrop(x.title, item, g === "raw"); if (!k) return true; m.titleDrops[k] = (m.titleDrops[k] || 0) + 1; return false; };
+      comps.push(...await sales(cfg, base, g, day, meta, variantOf(item.n), { keep }));
+    }
     let pop = null;
     if (item.t === "c") {
       const r = await call(cfg, `${base}/population`);
@@ -158,8 +191,9 @@
 
   /* memory-only cache for this page: one lookup per item per page load unless asked again */
   const mem = new Map();
+  const memKey = (item) => `${item.t}|${item.id}|${item.n || ""}`;   // every printing of a card shares the TCGplayer product id
   async function get(item, cfg, fresh = false) {
-    const k = `${item.t}|${item.id}`;
+    const k = memKey(item);
     if (!fresh && mem.has(k)) return mem.get(k);
     const p = lookup(item, cfg);
     mem.set(k, p);
@@ -179,7 +213,7 @@
     return r;
   }
 
-  const api = { v: VERSION, lookup, get, lookupGrade, getGrade, titleCheck, GRADERS, popOf, variantOf, dayOf, K: { PAGE, MAX_PAGES, WINDOW, GRADED_PAGES }, SOURCE, _mem: mem, _memG: memG };
+  const api = { v: VERSION, lookup, get, lookupGrade, getGrade, titleCheck, compDrop, memKey, GRADERS, popOf, variantOf, dayOf, K: { PAGE, MAX_PAGES, WINDOW, GRADED_PAGES }, SOURCE, _mem: mem, _memG: memG };
   if (typeof window !== "undefined") window.EdgePkmn = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();
