@@ -134,12 +134,12 @@
     meta.found = true;
     const comps = [];
     if (item.t === "s") comps.push(...await sales(cfg, base, "sealed", day, meta, null));
-    else for (const g of ["raw", "PSA 10", "PSA 9"]) {
+    else for (const g of cfg.rawOnly ? ["raw"] : ["raw", "PSA 10", "PSA 9"]) {   // rawOnly: the buy list needs the resale only
       const keep = (x, m) => { const k = compDrop(x.title, item, g === "raw"); if (!k) return true; m.titleDrops[k] = (m.titleDrops[k] || 0) + 1; return false; };
       comps.push(...await sales(cfg, base, g, day, meta, variantOf(item.n), { keep }));
     }
     let pop = null;
-    if (item.t === "c") {
+    if (item.t === "c" && !cfg.rawOnly) {
       const r = await call(cfg, `${base}/population`);
       meta.calls++; meta.credits += r.credits;
       if (r.status === 200) pop = popOf(r.body, variantOf(item.n)); else meta.errors.push(`population: HTTP ${r.status}`);

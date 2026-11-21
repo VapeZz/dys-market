@@ -33,6 +33,11 @@
   // the ledger (edge-ledger.js, M2): buys, sales, expenses, cash and inventory in two books, kept in the owner's Google
   // Sheet through its web app (tools/ledger/Code.gs), with a copy and a queue of changes on this phone
   const LEDGER = part("edge-ledger.js", "EdgeLedger");
+  // the card-show buy list (edge-buylist.js): walk-away prices prepared before a show, kept on this phone as rounded
+  // estimates only (never sold prices); at the table only a live Deal check can say BUY
+  const BUYL = part("edge-buylist.js", "EdgeBuyList");
+  let BLS = null;
+  BUYL.then((b) => { if (b) BLS = b.Store(window.localStorage); });
   let LG = null, LS = null, LEDGER_DRAFT = null, LEDGER_RESUME = null;
   LEDGER.then((l) => { if (!l) return; LG = l; LS = l.Store(window.localStorage); ledgerSync(); });
   // how each strategy rule did in the backtest (a fixed file, rebuilt when the rules change); without it the box says "not backtested"
@@ -386,13 +391,16 @@
   let PICK = null;     // adding cards to a trade side or a lot from Search
   const TABS = { today: viewToday, search: viewSearch, sets: viewSets, deals: viewDeals, grade: viewGrade, tools: viewTools, mine: viewMine };
   let TAB = "today", SUB = { deals: "check", tools: "flip", mine: "inv", grade: "board" };
+  let ROUTE_N = 0;
   function route() {
     const h = (location.hash || "").slice(1).split("/")[0];
     TAB = TABS[h] ? h : "today";
     if (TAB !== "search") PICK = null;
     $$(".tabs a, .hd-acts a").forEach((a) => a.setAttribute("aria-current", a.dataset.tab === TAB ? "page" : "false"));
     const v = $("#view"); v.innerHTML = ""; window.scrollTo(0, 0);
-    TABS[TAB](v).catch((err) => { console.error(err); v.innerHTML = `<div class="empty"><b>Couldn't load the market data</b>Check your connection and reopen the app.</div>`; });
+    // a view still loading when he moves on (a slow connection) must not overwrite the next one with its error
+    const n = ++ROUTE_N;
+    TABS[TAB](v).catch((err) => { if (n !== ROUTE_N) return; console.error(err); v.innerHTML = `<div class="empty"><b>Couldn't load the market data</b>Check your connection and reopen the app.</div>`; });
   }
   window.addEventListener("hashchange", route);
 
@@ -407,8 +415,10 @@
       <section class="sec" id="t-grade" hidden></section>
       <section class="sec" id="t-store" hidden></section>
       <p class="muted small">Market prices are TCGplayer's, updated nightly. Profits use your selling platform, fees and shipping from Mine → Settings.</p>`;
+    const n = ROUTE_N;
     const [intel, buyer] = await Promise.all([getJSON("intel.json").catch(() => null), getJSON("buyer.json").catch(() => null)]);
     await loadIndex();
+    if (n !== ROUTE_N) return;      // he moved to another tab while this loaded (slow connection)
     drawAdvisor($("#t-adv"));
     drawBuy($("#t-buy"));
     if (intel) {
@@ -466,6 +476,7 @@
      TCGplayer's market or lowest listing (any condition), so it says so and points at the Deal check, which is the only
      place Edge says "BUY candidate" (real sold prices, every gate). The Near Mint finder's list joins here once connected. */
   async function drawBuy(el) {
+    if (!el) return;
     const hits = [];
     for (const w of S.watch) {
       const d = await detail(w.id, w.g, w.n).catch(() => null);
@@ -474,6 +485,7 @@
       if (isFinite(now) && now <= w.target) hits.push(rowHTML({ ...w, n: it.n }, `<b>${money(now)}</b><small class="muted">target ${money(w.target)}</small>`,
         `<span class="why">${it.lo && it.lo <= w.target ? "Lowest listing (any condition)" : "Market price"} at or under your target. Not checked against sold prices yet. ${dcChip(w, now)}</span>`));
     }
+    if (!el.isConnected) return;
     el.innerHTML = `<div class="sec-head"><h2>What to consider buying</h2>${hits.length ? `<span class="chip hot">${hits.length}</span>` : ""}</div>
       ${hits.length ? `<div class="list">${hits.join("")}</div>` : `<div class="empty adv-empty">${S.watch.length ? `None of your ${S.watch.length} watched card${S.watch.length === 1 ? " is" : "s are"} at your target price today.` : "Watch a card's price (open it → Watch price) and it shows here when it reaches your number."}</div>`}
       <p class="muted small adv-note">Edge only calls something a <b>BUY candidate</b> in a card's Deal check, after real sold prices clear every check (sales, freshness, spread, trend and your ${S.set.roi}% target). Near Mint deals from the daily finder will show here once it's connected.</p>`;
@@ -876,13 +888,15 @@
       if (!it) { box.innerHTML = `<div class="empty">No TCGplayer listing for this one: Edge can't match it to sold prices.</div>`; return; }
       box.innerHTML = `<div class="sc-head">${img(it.id)}<div><b>${esc(cleanN(it.n))}</b><small class="muted">${esc(set.n)}${it.p ? ` · TCGplayer market ${money(it.p)}` : ""}</small></div></div>
         <div class="sc-deal" id="sc-deal"></div>
-        <div class="btns sc-acts"><button type="button" class="btn sm sc-open">Open full card</button><button type="button" class="btn sm sc-watch">Watch at max to pay</button>${LS ? `<button type="button" class="btn sm sc-buy">Bought it</button>` : ""}</div>`;
+        <div class="btns sc-acts"><button type="button" class="btn sm sc-open">Open full card</button><button type="button" class="btn sm sc-watch">Watch at max to pay</button><button type="button" class="btn sm sc-blist">${BLS && BLS.has(keyOf(it.id, it.n)) ? "On your buy list" : "Add to buy list"}</button>${LS ? `<button type="button" class="btn sm sc-buy">Bought it</button>` : ""}</div>`;
       const item = { id: it.id, n: it.n, name: it.n, t: it.t, r: it.r, setN: set.n, tcg: it.p, tcgDay: dayNum(set.dates?.[set.dates.length - 1]) };
       const had = pkmn && conn ? pkmn._mem.get(pkmn.memKey(it)) : null, first = had ? await had : null;
       const offer = { ask: SC.ask === "" ? 0 : Math.round(parseFloat(SC.ask) * 100) || 0, cond: it.t === "s" ? "NM" : SC.cond, shipIn: 0, taxIn: 0 };
       let lastR = null;
       const after = (r, data) => {
         lastR = r; SC.ask = offer.ask ? (offer.ask / 100).toFixed(2) : ""; SC.cond = offer.cond;
+        // a live read of a card on the buy list refreshes its saved estimate (rounded; no sold prices kept)
+        if (data && BLS && BLS.has(keyOf(it.id, it.n))) BUYL.then((bl) => { if (bl && deal) BLS.setEst(keyOf(it.id, it.n), bl.derive(deal, item, data, dealCfg(it.p))); });
         if (data && offer.ask) {
           const F = r.routes.flip, key = `${it.id}|${offer.ask}|${offer.cond}`;
           if (!SC.log.length || SC.log[0].key !== key) SC.log = [{ key, id: it.id, g: x.g, n: it.n, ask: offer.ask, cond: offer.cond, verdict: r.verdict, why: r.why, profit: F.profit, max: F.max }, ...SC.log.filter((y) => y.key !== key)].slice(0, 20);
@@ -896,6 +910,7 @@
       if (askBox()) askBox().focus({ preventScroll: true });
       if (load && lb && !(first && first.ok)) { lb.click(); const a = askBox(); if (a) a.focus({ preventScroll: true }); }      // picking a card reads its sold prices once (memory only for this visit)
       $(".sc-open", box).onclick = () => openCard(it.id, x.g, it.n);
+      $(".sc-blist", box).onclick = (e) => { if (blAdd({ id: it.id, g: x.g, n: it.n, t: it.t, r: it.r, setN: set.n })) e.target.textContent = "On your buy list"; };
       $(".sc-watch", box).onclick = () => {
         const F = lastR && lastR.routes.flip, tgt = F && F.max ? F.max : null;
         if (!tgt) { toast("No max to pay yet: needs sold prices that clear your rules"); return; }
@@ -992,19 +1007,200 @@
       SC.ask = +b.dataset.ask ? (+b.dataset.ask / 100).toFixed(2) : ""; SC.cond = "NM"; SC.auto = true; SUB.deals = "check"; route(); }; });
   }
 
+  /* ---------- Buy list: prepare before a show, check at the table (estimates), verify live (Show check) ----------
+     Prices are read once per card within a credit budget he picks; what stays on the phone is rounded (walk-away floored
+     to a step, resale as a range, pace as a count band) so no sold price can be worked back from it. At the table the
+     saved estimate can only say "fits your rules"; "Verify now" opens Show check, where fresh sold prices decide BUY. */
+  const blPlural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  const BLV = { open: null, ask: {}, adding: false, prep: false, budget: 500, run: null, q: "" };
+  const BL_PR = ["1st Edition Holofoil", "1st Edition Normal", "1st Edition", "Unlimited Holofoil", "Unlimited", "Reverse Holofoil", "Holofoil", "Normal"];
+  const printingOf = (n) => { const m = /\(([^()]*)\)\s*$/.exec(n || ""); return m && BL_PR.includes(m[1]) ? m[1] : "Normal"; };
+  const blName = (n) => String(n || "").replace(/\s*\((1st Edition Holofoil|1st Edition Normal|1st Edition|Unlimited Holofoil|Unlimited|Reverse Holofoil|Holofoil|Normal)\)\s*$/, "");
+  function blAdd(x) {
+    if (!BLS) { toast("The buy list didn't load"); return false; }
+    const k = keyOf(x.id, x.n);
+    if (BLS.has(k)) { toast("Already on your buy list"); return false; }
+    const ok = BLS.add({ k, id: x.id, g: x.g, n: x.n, setN: x.setN || setName(x.g), t: x.t || "c", r: x.r || "", cond: "NM" });
+    toast(ok ? "Added to your buy list" : "Your buy list is full (60 cards)");
+    return ok;
+  }
+  async function drawBuyList(el) {
+    const bl = await BUYL;
+    if (!bl) { el.innerHTML = `<div class="empty">The buy list didn't load. Reopen Edge.</div>`; return; }
+    if (!BLS) BLS = bl.Store(window.localStorage);
+    const conn = pkmnConn(), now = Date.now(), items = BLS.all();
+    const lim = S.set.buyLimit ?? 7500, res = S.set.cashReserve ?? 10000;
+    const withEst = items.filter((x) => x.est), oldest = withEst.length ? Math.min(...withEst.map((x) => x.est.at)) : null;
+    const st = (x) => bl.ageState(x.est, now);
+    const nStale = items.filter((x) => st(x) === "stale").length, nOld = items.filter((x) => st(x) === "expired").length, nNone = items.filter((x) => st(x) === "none").length;
+    const ready = items.filter((x) => st(x) !== "expired" && x.est && x.est.walk && x.est.walk[x.cond]).length;
+    const ageWarn = nOld ? `<p class="small bl-warn bl-old">${blPlural(nOld, "card")}: estimate older than 3 days, not used. Check prices again or verify each card live.</p>`
+      : nStale ? `<p class="small bl-warn">${blPlural(nStale, "estimate")} older than a day: prices may have moved. Verify before you pay.</p>` : "";
+    el.innerHTML = `<p class="muted small" style="margin:0 0 8px">Prepare before a show: add cards, check their sold prices once within a credit budget, and Edge keeps a walk-away price per condition on this phone (works with poor signal). At the table, type the seller's price. Saved numbers are <b>estimates</b>; only <b>Verify now</b> (live sold prices) can say BUY. Your rules: ${money(lim)} most per purchase, ${money(res)} kept back, ${money(S.set.minProfit)} and ${S.set.roi}% profit.</p>
+      <div class="panel bl-sum" data-n="${items.length}" data-ready="${ready}">
+        <div class="bl-sum-row"><b>${blPlural(items.length, "card")}</b><span class="chip ${ready ? "hot" : ""}">${ready} with a walk-away</span><span class="chip bl-age${nOld ? " bl-old" : nStale ? " bl-stale" : ""}">${oldest ? `oldest ${bl.ageTxt({ at: oldest }, now)}` : "not checked yet"}</span></div>
+        ${ageWarn}${nNone && items.length ? `<p class="small muted" style="margin:4px 0 0">${blPlural(nNone, "card")} not checked yet.</p>` : ""}
+        <div class="btns"><button type="button" class="btn sm bl-add-open">${BLV.adding ? "Done adding" : "Add cards"}</button><button type="button" class="btn sm primary bl-prep-open"${items.length ? "" : " disabled"}>Check prices</button></div>
+      </div>
+      <div id="bl-add"></div><div id="bl-prep"></div>
+      <div class="sc-list bl-list">${items.length ? items.map((x) => blRow(bl, x, now)).join("") : `<div class="empty">Your buy list is empty. Add cards from your watchlist or search, or tap <b>Add to buy list</b> in Show check.</div>`}</div>`;
+    $(".bl-add-open", el).onclick = () => { BLV.adding = !BLV.adding; BLV.prep = false; drawBuyList(el); };
+    $(".bl-prep-open", el).onclick = () => { BLV.prep = !BLV.prep; BLV.adding = false; drawBuyList(el); };
+    if (BLV.adding) drawBlAdd($("#bl-add", el), el);
+    if (BLV.prep) drawBlPrep($("#bl-prep", el), el, bl);
+    $$(".bl-head", el).forEach((b) => { b.onclick = () => { const k = b.closest(".bl-row").dataset.k; BLV.open = BLV.open === k ? null : k; drawBuyList(el); }; });
+    const openRow = BLV.open && $(`.bl-row[data-k="${CSS.escape(BLV.open)}"]`, el);
+    if (openRow) wireBlTable(bl, openRow, el);
+  }
+  function blRow(bl, x, now) {
+    const s = bl.ageState(x.est, now), w = x.est && x.est.walk ? x.est.walk[x.cond] : null, usable = s === "fresh" || s === "stale";
+    const right = !x.est ? `<b class="muted">—</b><small class="muted">not checked</small>`
+      : !usable ? `<b class="muted">${w ? money(w) : "—"}</b><small class="bl-old">too old: verify</small>`
+      : w ? `<b>${money(w)}</b><small class="muted">walk-away (est.)</small><small class="muted">open ${money(bl.opening(w))}</small>`
+      : `<b class="muted">no buy</b><small class="muted">${esc((bl.ISSUE[x.est.issue] || "No price clears your rules.").replace(/\.$/, ""))}</small>`;
+    const ev = x.est ? [x.est.grade ? `Evidence ${x.est.grade}` : null, x.est.pace != null ? `${x.est.pace} sold in 30 days` : null, bl.ageTxt(x.est, now)].filter(Boolean).join(" · ") : "Not checked yet";
+    const open = BLV.open === x.k;
+    return `<div class="bl-row${open ? " open" : ""}" data-k="${esc(x.k)}" data-state="${s}">
+      <button type="button" class="sc-hit bl-head" aria-expanded="${open}">${img(x.id)}<span class="sc-hn"><b>${esc(blName(x.n))}</b>
+        <small class="muted">${esc(x.setN || setName(x.g))}</small><small><span class="chip bl-pr">${esc(printingOf(x.n))}</span> <span class="chip bl-cond">${esc(x.cond)}</span></small>
+        <small class="bl-ev ${s === "stale" ? "bl-stale" : s === "expired" ? "bl-old" : "muted"}">${esc(ev)}</small></span>
+        <span class="sc-hp">${right}</span></button>
+      ${open ? `<div class="bl-table">${blTableHTML(bl, x, now)}</div>` : ""}</div>`;
+  }
+  function blTableHTML(bl, x, now) {
+    const ask = BLV.ask[x.k] ?? "", s = bl.ageState(x.est, now), e = x.est;
+    const w = e && e.walk ? e.walk[x.cond] : null, usable = s === "fresh" || s === "stale";
+    return `<div class="bl-neg${usable && w ? "" : " muted"}"><span class="lab">Negotiation suggestions, not valuations</span>
+        ${usable && w ? `<div class="bl-neg-row"><span>Opening offer</span><b>${money(bl.opening(w))}</b></div><div class="bl-neg-row"><span>Walk away above</span><b>${money(w)}</b></div>` : `<p class="small" style="margin:2px 0">No walk-away for ${esc(x.cond)} on the saved estimate.</p>`}
+        ${e && e.tcg ? `<div class="bl-neg-row muted"><span>TCGplayer market (what sellers often quote)</span><span>${money(e.tcg)}</span></div>` : ""}
+        ${usable && e && e.resale ? `<div class="bl-neg-row muted"><span>Resells for about (NM, range)</span><span>${money(e.resale[0])}–${money(e.resale[1])}</span></div>` : ""}</div>
+      <div class="bl-form">
+        <label class="f">Seller's price $<input class="field bl-ask" inputmode="decimal" enterkeyhint="done" placeholder="0.00" value="${esc(ask)}"></label>
+        <label class="f">Condition<select class="select bl-cnd">${["NM", "LP", "MP", "HP", "DMG"].map((c) => `<option${c === x.cond ? " selected" : ""}>${c}</option>`).join("")}</select></label>
+        <label class="f">Cash on hand $<input class="field bl-cash" inputmode="decimal" placeholder="0.00" value="${CASH_NOW != null ? (CASH_NOW / 100).toFixed(2) : ""}"><small class="muted">this visit only, not saved</small></label>
+      </div>
+      <div class="bl-out"></div>
+      <div class="btns"><button type="button" class="btn sm primary bl-verify">Verify now</button><button type="button" class="btn sm bl-remove">Remove</button></div>
+      <p class="small muted bl-vnote"></p>`;
+  }
+  function wireBlTable(bl, row, el) {
+    const k = row.dataset.k, x = BLS.get(k); if (!x) return;
+    const cfg = dealCfg(x.est && x.est.tcg), askI = $(".bl-ask", row), cashI = $(".bl-cash", row), condS = $(".bl-cnd", row), out = $(".bl-out", row);
+    const cents = (v) => { const n = parseFloat(String(v || "").replace(/[$,\s]/g, "")); return isFinite(n) && n > 0 ? Math.round(n * 100) : 0; };
+    const draw = async () => {
+      const deal = await DEAL; if (!deal) { out.innerHTML = `<p class="small muted">The deal engine didn't load.</p>`; return; }
+      const ask = cents(askI.value), r = bl.atTable(deal, x.est, x.cond, ask, CASH_NOW, cfg, x.t || "c");
+      const line = (ok, txt) => `<li class="${ok === true ? "ok" : ok === false ? "no" : "info"}"><i aria-hidden="true">${ok === true ? "✓" : ok === false ? "✕" : "•"}</i><span>${txt}</span></li>`;
+      const head = { fits: "Fits your rules (estimate)", over: "Over your walk-away", limit: "Over your limit", reserve: "Breaks your reserve", "need-cash": "Within your walk-away", "need-ask": "Saved estimate", "no-walk": "No buy on the saved estimate", expired: "Estimate too old", none: "Not checked yet" }[r.result] || "Saved estimate";
+      const lines = [];
+      if (r.walk) lines.push(line(ask > 0 ? ask <= r.walk : null, `Walk-away ${money(r.walk)} for ${esc(x.cond)}: the most that still clears ${money(S.set.minProfit)} and ${S.set.roi}% at the sold prices checked (rounded down)`));
+      if (r.cost != null) {
+        lines.push(line(r.limitOk, `All-in ${money(r.cost)} ${r.limitOk ? "within" : "over"} your ${money(cfg.budget.limit)} limit`));
+        lines.push(line(r.reserveOk, r.reserveOk == null ? `Cash on hand not entered: enter it to check your ${money(cfg.budget.reserve)} reserve` : `${r.reserveOk ? "Leaves" : "Would leave"} ${money(CASH_NOW - r.cost)} cash (reserve ${money(cfg.budget.reserve)})`));
+        if (r.profit) lines.push(line(null, `Estimated net profit ${signed(r.profit[0])} to ${signed(r.profit[1])} (${pct(r.roi[0], 0)} to ${pct(r.roi[1], 0)}) from the resale range, after fees and shipping`));
+      }
+      out.dataset.result = r.result; out.dataset.state = r.state;
+      out.innerHTML = `<div class="bl-call ${r.result === "fits" ? "fits" : ["over", "limit", "reserve", "no-walk", "expired"].includes(r.result) ? "no" : ""}"><span class="bl-badge">ESTIMATE · ${esc(bl.ageTxt(x.est))}${r.state === "stale" ? " · STALE" : ""} · not a verified BUY</span><b>${esc(head)}</b><p class="small" style="margin:2px 0 0">${esc(r.text)}</p></div>${lines.length ? `<ul class="dl-gates">${lines.join("")}</ul>` : ""}`;
+      BLV.ask[k] = askI.value;
+    };
+    askI.oninput = draw; askI.onchange = draw;
+    cashI.oninput = () => { const c = cents(cashI.value); CASH_NOW = cashI.value.trim() === "" ? null : c; draw(); };
+    condS.onchange = () => { BLS.setCond(k, condS.value); BLV.ask[k] = askI.value; drawBuyList(el); };
+    $(".bl-remove", row).onclick = () => { BLS.remove(k); BLV.open = null; toast("Removed from your buy list"); drawBuyList(el); };
+    const vb = $(".bl-verify", row), vn = $(".bl-vnote", row), conn = pkmnConn();
+    const online = navigator.onLine !== false;
+    if (!conn || !online) { vb.disabled = true; vn.textContent = !conn ? "Verify needs sold prices: pair this phone in Mine → Settings." : "No connection: verify when you have signal. Until then this is an estimate only."; }
+    else vn.textContent = `Reads live sold prices for this exact card (about ${bl.CREDITS_PER_CARD + 40} credits at most) and opens Show check with your price.`;
+    vb.onclick = () => {
+      const ask = cents(askI.value);
+      SC.pick = { id: x.id, g: x.g, n: x.n, q: cleanN(x.n).toLowerCase() }; SC.q = cleanN(x.n);
+      SC.ask = ask ? (ask / 100).toFixed(2) : ""; SC.cond = condS.value; SC.auto = true; SUB.deals = "check";
+      if (location.hash === "#deals") route(); else location.hash = "deals";
+    };
+    draw();
+    if (!askI.value) askI.focus({ preventScroll: true });
+  }
+  async function drawBlAdd(box, el) {
+    const watch = S.watch.filter((w) => (w.t || "c") === "c" || w.t === "s");
+    box.innerHTML = `<div class="panel bl-addp"><b>Add cards</b>
+      <div class="searchbox" style="margin-top:6px"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+        <input id="bl-q" class="field" type="search" placeholder="Card name and number" autocomplete="off" aria-label="Find a card to add" value="${esc(BLV.q)}"></div>
+      <div id="bl-res"></div>
+      ${watch.length ? `<p class="small" style="margin:8px 0 4px"><b>From your watchlist</b></p><div class="sc-list">${watch.slice(0, 40).map((w) => {
+        const on = BLS && BLS.has(w.k || keyOf(w.id, w.n));
+        return `<button type="button" class="sc-hit bl-w" data-id="${w.id}" data-g="${w.g}" data-n="${esc(w.n)}" data-t="${w.t || "c"}"${on ? " disabled" : ""}><span class="sc-hn"><b>${esc(blName(w.n))}</b><small class="muted">${esc(setName(w.g))} · ${esc(printingOf(w.n))}</small></span><span class="sc-hp"><b>${on ? "✓ on list" : "+ Add"}</b></span></button>`; }).join("")}</div>` : `<p class="small muted" style="margin:8px 0 0">Your watchlist is empty: search above instead.</p>`}</div>`;
+    $$(".bl-w", box).forEach((b) => { b.onclick = () => { if (blAdd({ id: +b.dataset.id, g: +b.dataset.g, n: b.dataset.n, t: b.dataset.t })) drawBuyList(el); }; });
+    const q = $("#bl-q", box), resBox = $("#bl-res", box);
+    const results = () => {
+      BLV.q = q.value; const t = q.value.trim().toLowerCase();
+      if (!t || !ROWS) { resBox.innerHTML = t && !ROWS ? `<p class="small muted">The card list needs a connection the first time.</p>` : ""; return; }
+      const toks = t.split(/\s+/), hits = [];
+      for (let i = 0; i < ROWS.length && hits.length < 200; i++) { const r = ROWS[i]; if (!gameOk(gameOfSet(r[2]))) continue; if (toks.every((k) => HAY[i].includes(k))) hits.push(r); }
+      hits.sort((a, b) => (b[1].toLowerCase().startsWith(toks[0]) - a[1].toLowerCase().startsWith(toks[0])) || (b[4] || 0) - (a[4] || 0));
+      resBox.innerHTML = hits.length ? `<div class="sc-list">${hits.slice(0, 10).map((r) => { const on = BLS && BLS.has(keyOf(r[0], r[1]));
+        return `<button type="button" class="sc-hit bl-s" data-id="${r[0]}" data-g="${r[2]}" data-n="${esc(r[1])}" data-t="${r[3]}"${on ? " disabled" : ""}>${img(r[0])}<span class="sc-hn"><b>${esc(blName(r[1]))}</b><small class="muted">${esc(setName(r[2]))} · ${esc(printingOf(r[1]))}</small></span><span class="sc-hp"><b>${on ? "✓ on list" : "+ Add"}</b><small class="muted">${money(r[4])}</small></span></button>`; }).join("")}</div>` : `<p class="small muted">Nothing found. Try the card number or fewer words.</p>`;
+      $$(".bl-s", resBox).forEach((b) => { b.onclick = () => { if (blAdd({ id: +b.dataset.id, g: +b.dataset.g, n: b.dataset.n, t: b.dataset.t })) { BLV.q = q.value; drawBuyList(el); } }; });
+    };
+    let tm; q.addEventListener("input", () => { clearTimeout(tm); tm = setTimeout(results, 140); });
+    loadIndex().then(results).catch(() => results());
+    if (!BLV.q) q.focus({ preventScroll: true });
+  }
+  function drawBlPrep(box, el, bl) {
+    const conn = pkmnConn(), P = bl.plan(BLS.all(), BLV.budget), run = BLV.run;
+    if (!conn) { box.innerHTML = `<div class="panel sc-off"><b>Sold prices aren't set up on this phone</b><p class="small muted" style="margin:4px 0 8px">Pair it once in Mine → Settings to check prices.</p><div class="btns"><button type="button" class="btn sm primary bl-pair">Go to Settings</button></div></div>`;
+      $(".bl-pair", box).onclick = () => { SUB.mine = "set"; location.hash = "mine"; }; return; }
+    const busy = run && !run.over;
+    box.innerHTML = `<div class="panel bl-prepp"><b>Check sold prices</b>
+      <p class="small" style="margin:4px 0 6px">Reads recent eBay sold prices (raw copies only) for cards not checked in the last day, oldest first. About ${bl.CREDITS_PER_CARD} credits a card at most, usually less. Your plan has 20,000 credits a day.</p>
+      <label class="f">Credit budget<select class="select bl-budget"${busy ? " disabled" : ""}>${[250, 500, 1000, 2000, 5000].map((c) => `<option value="${c}"${c === BLV.budget ? " selected" : ""}>${c.toLocaleString("en-US")} credits</option>`).join("")}</select></label>
+      <p class="small bl-plan" data-need="${P.need.length}" data-take="${P.take.length}">${P.need.length ? `${blPlural(P.need.length, "card")} need a check; this budget covers up to ${P.take.length}${P.take.length < P.need.length ? ` (the rest stay unchecked)` : ""}.` : "Every card was checked in the last day: nothing to spend."}</p>
+      ${run ? `<p class="small bl-run" data-done="${run.done}" data-credits="${run.credits}">${run.over ? "Done" : "Checking"}: ${run.done} of ${run.total} cards · ${run.credits.toLocaleString("en-US")} credits${run.msg ? ` · ${esc(run.msg)}` : ""}</p>` : ""}
+      <div class="btns">${busy ? `<button type="button" class="btn sm bl-stop">Stop</button>` : `<button type="button" class="btn sm primary bl-go"${P.take.length ? "" : " disabled"}>Check ${blPlural(P.take.length, "card")} · up to ${(P.take.length * bl.CREDITS_PER_CARD).toLocaleString("en-US")} credits</button>`}</div></div>`;
+    const bsel = $(".bl-budget", box); if (bsel) bsel.onchange = () => { BLV.budget = +bsel.value; BLV.run = null; drawBuyList(el); };
+    const go = $(".bl-go", box); if (go) go.onclick = () => blRun(el, bl);
+    const stop = $(".bl-stop", box); if (stop) stop.onclick = () => { if (BLV.run) BLV.run.stop = true; };
+  }
+  async function blRun(el, bl) {
+    const [deal, pkmn] = await Promise.all([DEAL, PKMN]), conn = pkmnConn();
+    if (!deal || !pkmn || !conn) { toast("Sold prices aren't available"); return; }
+    const budget = BLV.budget, P = bl.plan(BLS.all(), budget);
+    const run = BLV.run = { done: 0, total: P.take.length, credits: 0, stop: false, over: false, msg: "" };
+    const redraw = () => { if (SUB.deals === "list" && TAB === "deals" && document.body.contains(el)) drawBuyList(el); };
+    redraw();
+    for (const x of P.take) {
+      if (run.stop) { run.msg = "stopped"; break; }
+      if (run.credits + bl.CREDITS_PER_CARD > budget) { run.msg = "budget reached"; break; }
+      let d = null; try { d = await detail(x.id, x.g, x.n); } catch { d = null; }
+      if (!d || !d.it) { run.msg = "card list unavailable: check your connection"; break; }
+      const { it, set } = d;
+      const item = { id: it.id, n: it.n, name: it.n, t: it.t, r: it.r, setN: set.n, tcg: it.p, tcgDay: dayNum(set.dates?.[set.dates.length - 1]) };
+      const res = await pkmn.lookup(item, { ...conn, rawOnly: true });
+      run.credits += res.meta ? res.meta.credits || 0 : 0;
+      if (!res.ok && (res.reason === "network" || res.reason === "denied" || res.reason === "error")) { run.msg = SOLD_WHY[res.reason] || "sold prices unavailable"; break; }
+      BLS.setEst(x.k, res.ok ? bl.derive(deal, item, res.data, dealCfg(it.p)) : { at: Date.now(), tcg: it.p || null, grade: null, pace: null, resale: null, walk: {}, issue: "not-found" });
+      run.done++; redraw();
+    }
+    run.over = true; redraw();
+    toast(`Checked ${blPlural(run.done, "card")} · ${run.credits.toLocaleString("en-US")} credits`);
+  }
+
   /* ---------- Deals ---------- */
   let D_BUDGET = 0, D_MV = { win: "7", min: null, dir: "up" };
   async function viewDeals(v) {
     v.innerHTML = `<div id="d-seg"></div><div id="d-game"></div><div class="filters"><label class="f" style="flex:1">Budget<select class="select" id="d-budget">
         ${[[0, "Any price"], [2500, "Under $25"], [5000, "Under $50"], [10000, "Under $100"], [25000, "Under $250"], [50000, "Under $500"], [100000, "Under $1,000"]].map(([c, l]) => `<option value="${c}"${c === D_BUDGET ? " selected" : ""}>${l}</option>`).join("")}</select></label></div>
       <p class="muted small" id="d-note"></p><div id="d-list"><p class="muted">Loading…</p></div>`;
-    const [scout, buyer] = await Promise.all([getJSON("scout.json").catch(() => null), getJSON("buyer.json").catch(() => null)]);
+    // the nightly lists load only for the list views: Show check, Buy list and Daily deals never wait on them (poor signal)
+    const listsP = Promise.all([getJSON("scout.json").catch(() => null), getJSON("buyer.json").catch(() => null)]);
     const draw = async () => {
       const sub = SUB.deals, ok = (r) => gameOk(r.k) && (!D_BUDGET || (r.lo || r.p) <= D_BUDGET);
       const note = $("#d-note"), out = $("#d-list");
-      const listy = sub !== "check" && sub !== "daily"; $("#d-game").hidden = !listy; $(".filters", v).hidden = !listy;
+      const listy = !["check", "list", "daily"].includes(sub); $("#d-game").hidden = !listy; $(".filters", v).hidden = !listy;
       if (sub === "check") { note.textContent = ""; await drawShowCheck(out); return; }
+      if (sub === "list") { note.textContent = ""; await drawBuyList(out); return; }
       if (sub === "daily") { note.textContent = ""; await drawDaily(out); return; }
+      out.innerHTML = `<p class="muted">Loading…</p>`;
+      const [scout, buyer] = await listsP;
       if (["flip", "ride", "dip"].includes(sub)) {
         if (!scout) { out.innerHTML = `<div class="empty">The deal list builds with the nightly update.</div>`; return; }
         note.textContent = { flip: "Listed far enough under market to resell for your target profit after fees and shipping.", ride: "Steady climbs: rising most days this week.", dip: "Off their usual price and no longer falling." }[sub]
@@ -1034,7 +1230,7 @@
           <div class="sec"><h3>Rising this week</h3>${listOrEmpty(rising.map((x) => rowHTML(x, `<b>${money(x.p)}</b><small class="up">${pct(x.ch, 0)} · yours ${money(x.dys)}</small>`)), "None of your stock is rising fast.")}</div>`;
       }
     };
-    seg($("#d-seg"), [["check", "Show check"], ["daily", "Daily deals"], ["flip", "Flips"], ["ride", "Momentum"], ["dip", "Dips"], ["under", "Under market"], ["movers", "Movers"], ["fall", "Falling"], ["store", "My store"]], SUB.deals, (k) => { SUB.deals = k; draw(); });
+    seg($("#d-seg"), [["check", "Show check"], ["list", "Buy list"], ["daily", "Daily deals"], ["flip", "Flips"], ["ride", "Momentum"], ["dip", "Dips"], ["under", "Under market"], ["movers", "Movers"], ["fall", "Falling"], ["store", "My store"]], SUB.deals, (k) => { SUB.deals = k; draw(); });
     gamePick($("#d-game"), () => draw());
     $("#d-budget").onchange = (e) => { D_BUDGET = +e.target.value; draw(); };
     draw();

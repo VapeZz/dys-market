@@ -538,3 +538,33 @@ a.row{text-decoration:none;color:inherit}
   border: 1px solid var(--line-strong); background: transparent; color: var(--accent, #7dd3fc); }
 .dd-acts .chip.dd-dc { background: color-mix(in srgb, var(--accent, #7dd3fc) 16%, transparent); border-color: color-mix(in srgb, var(--accent, #7dd3fc) 45%, transparent); }
 .dd-acts .chip.muted { color: var(--muted, #888); font-weight: 500; }
+
+/* ---------- Buy list (card shows): estimates prepared before, checked at the table ---------- */
+.bl-sum{margin-bottom:10px}
+.bl-sum-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.bl-sum .btns{margin-top:8px}
+.bl-warn{margin:6px 0 0;color:var(--warn);font-weight:600}
+.bl-warn.bl-old,.bl-old{color:var(--down)}
+.bl-stale{color:var(--warn)}
+.chip.bl-stale{background:color-mix(in srgb,var(--warn) 18%,transparent)}
+.chip.bl-old{background:color-mix(in srgb,var(--down) 15%,transparent)}
+.bl-list{display:grid;gap:8px}
+.bl-row{border-radius:12px}
+.bl-row.open{outline:1px solid color-mix(in srgb,var(--accent) 45%,transparent);border-radius:12px}
+.bl-row .sc-hn small{display:block}
+.bl-row .chip{font-size:11px;padding:1px 6px}
+.bl-ev{font-size:12px}
+.bl-table{padding:8px 10px 10px}
+.bl-neg{border:1px dashed var(--line);border-radius:10px;padding:8px 10px;margin-bottom:8px}
+.bl-neg .lab{display:block;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted,#8a8fa3);margin-bottom:4px}
+.bl-neg-row{display:flex;justify-content:space-between;gap:10px;font-size:14px;padding:2px 0}
+.bl-form{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.bl-form label:last-child{grid-column:1 / -1}
+.bl-form small{display:block;margin-top:2px}
+.bl-out{margin:8px 0}
+.bl-call{border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.bl-call.fits{border-color:color-mix(in srgb,var(--up) 50%,transparent);background:color-mix(in srgb,var(--up) 8%,transparent)}
+.bl-call.no{border-color:color-mix(in srgb,var(--down) 45%,transparent);background:color-mix(in srgb,var(--down) 7%,transparent)}
+.bl-badge{display:block;font-size:11px;font-weight:700;letter-spacing:.03em;color:var(--warn);margin-bottom:2px}
+.bl-addp,.bl-prepp{margin-bottom:10px}
+.bl-addp .sc-hit:disabled{opacity:.6;cursor:default}
