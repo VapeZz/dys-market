@@ -118,7 +118,8 @@ def check_one(page, i, ask, cond, tag, cash=None, extra=None):
     page.type("#sc-q", clean(it["n"]).split(" - ")[0][:24], delay=5)
     page.wait_for_selector(f"#sc-res .sc-hit[data-sc='{i}']", timeout=8000)
     hits = page.query_selector_all("#sc-res .sc-hit")
-    ok(0 < len(hits) <= 12, f"{tag}: search shows up to 12 matches ({len(hits)})")
+    total = page.eval_on_selector("#sc-res .sr-count", "e => +e.dataset.n")           # Nov 21: every match, 20 at a time
+    ok(0 < len(hits) == min(20, total), f"{tag}: search shows the first {min(20, total)} of {total} matches ({len(hits)})")
     n0 = calls["n"]
     page.click(f"#sc-res .sc-hit[data-sc='{i}']")
     page.wait_for_function("() => /Sold prices read today/.test(document.querySelector('#sc-deal .dl-beta')?.textContent || '')", timeout=20000)
