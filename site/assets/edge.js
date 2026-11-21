@@ -959,7 +959,7 @@
         ${r ? img(r[0]) : `<span class="ph"></span>`}<span class="sc-hn"><b>${esc(name)}</b><small class="muted">${esc([x.set, x.number].filter(Boolean).join(" · "))}</small>
           <small class="dd-why">${esc((x.reasons || [])[0] || (x.label === "CANDIDATE" ? "Every finder check cleared" : ""))}</small>
           <span class="dd-acts">${x.tcgplayer_url ? `<a class="chip x" href="${esc(x.tcgplayer_url)}" target="_blank" rel="noopener">TCGplayer NM ↗</a>` : ""}${r ? `<span class="chip x dd-dc" role="button" tabindex="0" data-id="${r[0]}" data-g="${r[2]}" data-n="${esc(r[1])}" data-ask="${Math.round((x.max_listing_price || 0) * 100)}">Deal check</span>` : `<span class="chip muted">not in Edge's card list</span>`}</span></span>
-        <span class="sc-hp"><b>${usd(x.max_listing_price)}</b><small class="muted">max listing</small>${x.profit_if_bought_at_max != null ? `<small class="${x.profit_if_bought_at_max > 0 ? "up" : ""}">${signed(Math.round(x.profit_if_bought_at_max * 100))} at max</small>` : ""}</span></div>`;
+        <span class="sc-hp"><b>${usd(x.max_listing_price)}</b><small class="muted">max listing</small><small class="muted">profit unverified</small></span></div>`;   // the finder's own profit figure rests on TCGplayer's NM price, which runs stale: only the Deal check (sold prices) shows profit
     };
     const cand = grp("CANDIDATE"), unc = grp("UNCERTAIN"), rej = grp("REJECT");
     el.innerHTML = `<div class="panel dd-head"><b>Finder results · prices from ${esc(d.data_day || "?")}</b>

@@ -112,6 +112,7 @@ def main():
                 ok("BUY" not in t, f"{tag}: a finder row never says BUY ({idx})")
                 c = next(x for x in PHONE["cards"] if x["tcgplayer_id"] == idx)
                 ok(f"${c['max_listing_price']:,.2f}" in t, f"{tag}: {idx} shows its max listing price")
+                ok("profit unverified" in t and " at max" not in t, f"{tag}: {idx} shows no profit figure (only Deal check does)")
                 in_edge = idx in INDEX
                 ok(("Deal check" in t) == in_edge and ("not in Edge's card list" in t) == (not in_edge), f"{tag}: {idx} Deal check link only when Edge knows the card")
             ok(page.is_hidden(".dd-rej .sc-list") and "Rejected (20)" in page.inner_text(".dd-rej summary"), f"{tag}: rejects collapsed, counted")
