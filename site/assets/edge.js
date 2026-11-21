@@ -942,6 +942,17 @@
     if (!j || j.kind !== "nm-finder-phone" || !Array.isArray(j.cards)) return { err: "bad" };
     DD.data = j; DD.at = Date.now(); return { data: j };
   }
+  /* The finder's card is one printing; TCGplayer gives every printing of a card the same product id, so the id alone can
+     pick the wrong printing (Unlimited vs 1st Edition, Normal vs Reverse Holofoil). Match id + exact name, else id + the
+     finder's printing; no match -> no Deal check rather than a guess. */
+  const DD_PR = ["1st Edition Holofoil", "1st Edition Normal", "1st Edition", "Unlimited Holofoil", "Unlimited", "Reverse Holofoil", "Holofoil", "Normal"];
+  const prOf = (n) => { const m = /\(([^()]*)\)\s*$/.exec(n || ""); return m && DD_PR.includes(m[1]) ? m[1] : "Normal"; };
+  function ddRow(x) {
+    const exact = IDX.get(keyOf(x.tcgplayer_id, x.name));
+    if (exact) return exact;
+    const same = (ROWS || []).filter((r) => r[0] === +x.tcgplayer_id && prOf(r[1]) === (x.printing || "Normal"));
+    return same.length === 1 ? same[0] : null;
+  }
   const usd = (x) => x == null ? "—" : money(Math.round(x * 100));
   async function drawDaily(el, force) {
     el.innerHTML = `<p class="muted small">Getting the finder's latest results…</p>`;
@@ -954,7 +965,7 @@
     const today = localDay(), age = d.data_day ? Math.round((Date.parse(today) - Date.parse(d.data_day)) / 864e5) : null, c = d.counts || {};
     const grp = (lab) => d.cards.filter((x) => x.label === lab);
     const row = (x) => {
-      const r = IDX.get(String(x.tcgplayer_id)), name = cleanN(x.name || (r && r[1]) || "Card");
+      const r = ddRow(x), name = cleanN(x.name || (r && r[1]) || "Card");
       return `<div class="sc-hit dd-row" data-label="${esc(x.label)}" data-id="${x.tcgplayer_id}">
         ${r ? img(r[0]) : `<span class="ph"></span>`}<span class="sc-hn"><b>${esc(name)}</b><small class="muted">${esc([x.set, x.number].filter(Boolean).join(" · "))}</small>
           <small class="dd-why">${esc((x.reasons || [])[0] || (x.label === "CANDIDATE" ? "Every finder check cleared" : ""))}</small>

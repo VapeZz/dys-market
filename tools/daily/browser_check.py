@@ -94,7 +94,16 @@ def main():
     rej = [c for c in PHONE["cards"] if c["label"] == "REJECT"]
     items = {it["id"]: g for g in (23821, 23237, 604) for it in json.load(open(f"{DIR}/data/set/{g}.json"))["items"]}
     global INDEX
-    INDEX = {r[0] for r in json.load(open(f"{DIR}/data/search.json"))}   # Edge's card list (every card), as the page loads it
+    SEARCH = json.load(open(f"{DIR}/data/search.json"))                  # Edge's card list (every card), as the page loads it
+    INDEX = {r[0] for r in SEARCH}
+    PRS = ["1st Edition Holofoil", "1st Edition Normal", "1st Edition", "Unlimited Holofoil", "Unlimited", "Reverse Holofoil", "Holofoil", "Normal"]
+    pr_of = lambda n: (lambda m: m.group(1) if m and m.group(1) in PRS else "Normal")(__import__("re").search(r"\(([^()]*)\)\s*$", n or ""))
+    def edge_row(c):                                                        # the exact printing, never just the shared product id
+        ex = [r for r in SEARCH if r[0] == c["tcgplayer_id"] and r[1] == c["name"]]
+        if ex: return ex[0]
+        same = [r for r in SEARCH if r[0] == c["tcgplayer_id"] and pr_of(r[1]) == (c.get("printing") or "Normal")]
+        return same[0] if len(same) == 1 else None
+    multi = [c for c in PHONE["cards"] if sum(1 for r in SEARCH if r[0] == c["tcgplayer_id"]) > 1]
     with sync_playwright() as p:
         b = p.chromium.launch()
         for width, theme in ((390, "dark"), (360, "light")):
@@ -113,8 +122,11 @@ def main():
                 c = next(x for x in PHONE["cards"] if x["tcgplayer_id"] == idx)
                 ok(f"${c['max_listing_price']:,.2f}" in t, f"{tag}: {idx} shows its max listing price")
                 ok("profit unverified" in t and " at max" not in t, f"{tag}: {idx} shows no profit figure (only Deal check does)")
-                in_edge = idx in INDEX
-                ok(("Deal check" in t) == in_edge and ("not in Edge's card list" in t) == (not in_edge), f"{tag}: {idx} Deal check link only when Edge knows the card")
+                er = edge_row(c); in_edge = er is not None
+                ok(("Deal check" in t) == in_edge and ("not in Edge's card list" in t) == (not in_edge), f"{tag}: {idx} Deal check link only when Edge knows that printing")
+                if in_edge:
+                    dn = page.eval_on_selector(f".dd-row[data-id='{idx}'][data-label='{lab}'] .dd-dc", "e => e.dataset.n") if len([x for x in PHONE["cards"] if x["tcgplayer_id"] == idx]) == 1 else er[1]
+                    ok(dn == er[1] and pr_of(dn) == (c.get("printing") or "Normal"), f"{tag}: {idx} Deal check opens the finder's printing ({dn!r} vs {c.get('printing')})")
             ok(page.is_hidden(".dd-rej .sc-list") and "Rejected (20)" in page.inner_text(".dd-rej summary"), f"{tag}: rejects collapsed, counted")
             page.click(".dd-rej summary")
             ok(page.is_visible(".dd-rej .sc-list") and "seller under 98% or 100 sales" in page.inner_text(".dd-rej .kv"), f"{tag}: rejection reasons listed when opened")
@@ -151,6 +163,14 @@ def main():
             page.click("#d-seg >> text=Daily deals"); page.wait_for_selector(".dd-row")
             page.click(f".dd-row[data-id='{u0['tcgplayer_id']}'] .dd-dc"); page.wait_for_selector("#sc-deal .dl-call", timeout=15000)
             ok(str(u0["tcgplayer_id"]) == page.eval_on_selector("#sc-card .sc-head", "e => document.querySelector('#sc-deal') ? 'x' : ''") or True, "")
+            ok(len(multi) >= 6, f"{tag}: the run has cards whose printings share one product id ({len(multi)})")
+            for mc in multi[:2]:
+                page.click("#d-seg >> text=Daily deals"); page.wait_for_selector(".dd-row")
+                if mc["label"] == "REJECT" and page.is_hidden(".dd-rej .sc-list"): page.click(".dd-rej summary")
+                page.click(f".dd-row[data-id='{mc['tcgplayer_id']}'] .dd-dc"); page.wait_for_function("() => (document.querySelector('#sc-card')?.textContent || '').trim().length > 0", timeout=15000)
+                head = page.inner_text("#sc-card")
+                ok(mc["name"].split(" - ")[0] in head and (pr_of(mc["name"]) == "Normal" or f"({pr_of(mc['name'])})" in head)
+                   and not any(f"({p})" in head for p in PRS if p != pr_of(mc["name"])), f"{tag}: {mc['name']!r} opens that printing in Deal check ({head[:70]!r})")
             ok(page.evaluate("() => document.documentElement.scrollWidth <= innerWidth + 1"), f"{tag}: fits the phone width")
             ok(not errors, f"{tag}: no script errors {errors[:2]}")
             page.context.close()
