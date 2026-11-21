@@ -1,0 +1,23 @@
+{
+  "name": "Drive Your Style Market",
+  "short_name": "DYS Market",
+  "description": "Pokémon and One Piece card and sealed prices, your collection, and a grading calculator.",
+  "id": "./",
+  "start_url": "collection.html?source=app",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0d14",
+  "theme_color": "#0b0d14",
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "assets/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "My Collection", "url": "collection.html", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Search", "url": "search.html", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Trends", "url": "trends.html", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

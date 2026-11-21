@@ -1,0 +1,53 @@
+{
+ "date": "2026-11-16",
+ "mode": "recap",
+ "title": "Did it flip? Thu Nov 5",
+ "first": "Did it flip? 📈 0 of last week's 2 drops made money on eBay after fees",
+ "caption": "Did it flip? 📈 0 of last week's 2 drops made money on eBay after fees\n\n1. Nike Air Foamposite Pro \"Ohio State\": $250 retail → $330 eBay (+$19) · Wash\n2. Air Jordan 1 Low \"Magic Ball\": $130 retail → $123 eBay (−$49) · Bricked\n\neBay = median sold price (5+ sales) or the low end of new pairs listed. Profit after ~8% tax, eBay fees and shipping. Prices vary by size and change fast.\n\nDid you cop any of these? 👇\n\n🛒 Links for every pair (eBay links are affiliate links): market.driveyourstyle.net/social-kicks (link in bio)\n\n#sneakers #sneakerreleases #copordrop #resell #sneakerhead #jordan #nike #kicks #sneakernews #lasvegas #driveyourstyle",
+ "caption_tiktok": "Did it flip? 📈 0 of last week's 2 drops made money on eBay after fees Did you cop any of these? 👇 Links in bio #sneakers #copordrop #resell #jordan #nike",
+ "short_title": "Did these sneakers flip? Retail vs resale 👟",
+ "slides": [
+  "https://market.driveyourstyle.net/social-kicks/2026-11-16/slide-1.jpg",
+  "https://market.driveyourstyle.net/social-kicks/2026-11-16/slide-2.jpg",
+  "https://market.driveyourstyle.net/social-kicks/2026-11-16/slide-3.jpg",
+  "https://market.driveyourstyle.net/social-kicks/2026-11-16/slide-4.jpg"
+ ],
+ "slides_tiktok": [
+  "https://market.driveyourstyle.net/social-kicks/2026-11-16/tt-1.jpg",
+  "https://market.driveyourstyle.net/social-kicks/2026-11-16/tt-2.jpg",
+  "https://market.driveyourstyle.net/social-kicks/2026-11-16/tt-3.jpg",
+  "https://market.driveyourstyle.net/social-kicks/2026-11-16/tt-4.jpg"
+ ],
+ "short": "https://market.driveyourstyle.net/social-kicks/2026-11-16/short.mp4",
+ "page": "https://market.driveyourstyle.net/social-kicks/2026-11-16/",
+ "pairs": [
+  {
+   "c": "IX2094-100",
+   "n": "Nike Air Foamposite Pro \"Ohio State\"",
+   "d": "2026-11-05",
+   "r": 250,
+   "v": 329.99,
+   "src": "sold",
+   "call": "wear",
+   "profit": 18.5908,
+   "said": null,
+   "right": null
+  },
+  {
+   "c": "IX6375-001",
+   "n": "Air Jordan 1 Low \"Magic Ball\"",
+   "d": "2026-11-05",
+   "r": 130,
+   "v": 123.0,
+   "src": "sold",
+   "call": "drop",
+   "profit": -48.667,
+   "said": null,
+   "right": null
+  }
+ ],
+ "score": {
+  "right": 0,
+  "of": 0
+ }
+}
