@@ -37,6 +37,23 @@ for h in HOLD:
                   "cond": h.get("cond", "") if h["kind"] == "Raw" else "", "grader": h.get("grader", ""), "grade": h.get("grade", ""), "cert": "", "qty": h.get("qty", 1),
                   "price": h["cost"], "status": "", "note": "SAMPLE"})
 LEDGER = {"v": 1, "T": {"buys": [], "items": items, "sales": [], "costs": [], "cash": []}, "q": [], "pulled": 0, "err": "", "migrated": True, "sheet": ""}
+# real-profit scorecard (Nov 21): a few SAMPLE buys and sales, two of them carrying an Edge estimate line, so the
+# scorecard has something to show; every name says SAMPLE
+import datetime
+def _d(n): return (datetime.date.today() - datetime.timedelta(days=n)).isoformat()
+_T = LEDGER["T"]
+_T["buys"] += [{"id": "sb1", "day": _d(60), "book": "Business", "where": "Card show", "pay": "Cash", "tax": 838, "ship": 0, "fees": 0, "note": "SAMPLE"},
+               {"id": "sb2", "day": _d(50), "book": "Business", "where": "Online", "pay": "Card", "tax": 0, "ship": 500, "fees": 0, "note": "SAMPLE"},
+               {"id": "sb3", "day": _d(35), "book": "Business", "where": "Local", "pay": "Cash", "tax": 0, "ship": 0, "fees": 0, "note": "SAMPLE"}]
+_T["items"] += [{"id": "si1", "buy": "sb1", "day": _d(60), "book": "Business", "kind": "Raw", "name": "SAMPLE Pikachu ex", "cond": "NM", "qty": 2, "price": 2000, "note": f"Edge est: net $35.00–$40.00/copy (Show check · NM · B · {_d(60)})"},
+                {"id": "si2", "buy": "sb1", "day": _d(60), "book": "Business", "kind": "Raw", "name": "SAMPLE Charmander", "cond": "LP", "qty": 1, "price": 1000, "note": ""},
+                {"id": "si3", "buy": "sb2", "day": _d(50), "book": "Business", "kind": "Graded", "grader": "PSA", "grade": "10", "name": "SAMPLE Umbreon", "qty": 1, "price": 6000, "note": f"Edge est: net $75.00–$80.00/copy (Deal check · B · {_d(50)})"},
+                {"id": "si4", "buy": "sb3", "day": _d(35), "book": "Business", "kind": "Sealed", "name": "SAMPLE Booster Bundle", "qty": 2, "price": 2500, "note": ""}]
+_T["costs"] += [{"id": "sc1", "day": _d(20), "book": "Business", "item": "", "kind": "Show table", "amount": 4000, "note": "SAMPLE"}]
+_T["sales"] += [{"id": "ss1", "day": _d(19), "item": "si1", "book": "Business", "qty": 1, "plat": "eBay", "price": 4500, "shipIn": 0, "fees": 650, "shipOut": 100, "supplies": 50, "other": 0, "note": "SAMPLE"},
+                {"id": "ss2", "day": _d(10), "item": "si2", "book": "Business", "qty": 1, "plat": "Card show", "price": 1200, "shipIn": 0, "fees": 0, "shipOut": 0, "supplies": 0, "other": 0, "note": "SAMPLE"},
+                {"id": "ss3", "day": _d(8), "item": "si3", "book": "Business", "qty": 1, "plat": "eBay", "price": 8500, "shipIn": 0, "fees": 1200, "shipOut": 500, "supplies": 100, "other": 0, "note": "SAMPLE"},
+                {"id": "ss4", "day": _d(5), "item": "si4", "book": "Business", "qty": 2, "plat": "Facebook Marketplace", "price": 6400, "shipIn": 0, "fees": 0, "shipOut": 0, "supplies": 0, "other": 0, "note": "SAMPLE"}]
 umb, leaf = names[610516], names[610499]
 # card-show buy list (Nov 20): four sample cards on the watchlist and on the buy list, not checked yet, so "Check prices"
 # can be tried (the synthetic relay answers; nothing is spent)
@@ -67,7 +84,7 @@ LOTS = {"v": 1, "lots": [{"id": "lotdemo", "name": "Sample binder page", "create
 
 DEMO = """/* Edge demo shim: sample ledger + synthetic sold-price relay answered in the page. Nothing real is called. */
 (() => {
-  const V = "lot-demo-1", SEED = %s, LEDGER = %s, BUYLIST = %s, LOTS = %s;
+  const V = "score-demo-1", SEED = %s, LEDGER = %s, BUYLIST = %s, LOTS = %s;
   const seed = (paired) => { try { localStorage.clear(); localStorage.setItem("dys-theme", "dark"); localStorage.setItem("dys-edge-v1", JSON.stringify(SEED)); localStorage.setItem("dys-edge-buylist", JSON.stringify(BUYLIST)); localStorage.setItem("dys-edge-lots", JSON.stringify(LOTS));
     localStorage.setItem("dys-edge-ledger", JSON.stringify(LEDGER)); if (paired) localStorage.setItem("dys-edge-relay", JSON.stringify({ relay: "https://relay.test", pass: "sample" }));
     localStorage.setItem("dys-demo", V); } catch (e) {} };
@@ -95,7 +112,7 @@ DEMO = """/* Edge demo shim: sample ledger + synthetic sold-price relay answered
   addEventListener("DOMContentLoaded", () => {
     const paired = (() => { try { return !!localStorage.getItem("dys-edge-relay"); } catch (e) { return true; } })();
     const b = document.createElement("div"); b.className = "demo-bar";
-    b.innerHTML = `<b>Preview · sample cards, made-up sales.</b> Try Deals → Lot offer. Daily deals shows the real Nov 19 finder run. Nothing real is called and no credits are spent.
+    b.innerHTML = `<b>Preview · sample cards, made-up sales.</b> Try Mine → Scorecard (sample sales) and Deals → Lot offer. Daily deals shows the real Nov 19 finder run. Nothing real is called and no credits are spent.
       <span><button type="button" data-d="pair">${paired ? "Unpair this phone" : "Pair again"}</button><button type="button" data-d="reset">Reset preview</button></span>`;
     b.onclick = (e) => { const d = e.target.dataset.d; if (!d) return; seed(d === "reset" ? true : !paired); location.hash = "#deals"; location.reload(); };
     document.body.prepend(b);
@@ -106,7 +123,7 @@ open(os.path.join(OUT, "assets/demo.js"), "w").write(DEMO)
 
 html = open(os.path.join(SITE, "edge/index.html")).read()
 html = html.replace("../assets/", "assets/").replace('href="manifest.webmanifest"', 'href="data:,"')
-html = html.replace("<title>DYS Edge</title>", "<title>DYS Edge preview: Lot offers (sample data)</title>")
+html = html.replace("<title>DYS Edge</title>", "<title>DYS Edge preview: Scorecard (sample data)</title>")
 html = html.replace("</head>", """<style>.demo-bar{padding:8px 12px;font:13px/1.4 Inter,system-ui,sans-serif;background:#3b2a05;color:#ffd77a;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
 .demo-bar span{display:flex;gap:6px}.demo-bar button{font:inherit;font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid #ffd77a66;background:transparent;color:#ffd77a}</style>
 <script src="assets/demo.js"></script>

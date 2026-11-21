@@ -600,3 +600,14 @@ a.row{text-decoration:none;color:inherit}
 .lot-bar-n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lot-bar-v{flex:none;font-weight:600}
 .lot-bar i{position:absolute;left:0;bottom:0;height:3px;border-radius:2px;background:var(--accent)}
 .lot-zero{border:1px dashed color-mix(in srgb,var(--warn) 50%,transparent);border-radius:10px;padding:8px 10px;margin:8px 0}.lot-zero ul{margin:4px 0 0;padding-left:18px}
+/* real-profit scorecard (Mine → Scorecard) */
+.sc-tiles{margin-top:10px}
+.sc-sec{margin:12px 0}.sc-sec h3{margin:0 0 6px;font-size:15px}
+.sc-tbl{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.sc-tr{display:grid;grid-template-columns:minmax(0,1.6fr) .9fr .9fr .6fr;gap:6px;padding:7px 10px;font-size:13px;border-top:1px solid var(--line);align-items:center}
+.sc-tr:first-child{border-top:0}.sc-tr span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sc-tr>:not(:first-child){text-align:right}
+.sc-th{font-size:11px;color:var(--muted,#8a8fa3);text-transform:uppercase;letter-spacing:.03em}
+.sc-list{display:grid;gap:6px}
+.sc-sale{display:flex;justify-content:space-between;gap:10px;border:1px solid var(--line);border-radius:10px;padding:7px 10px}
+.sc-sn{min-width:0}.sc-sn small,.sc-sv small{display:block;font-size:12px}.sc-sv{text-align:right;flex:none}
+.sc-exp{margin:8px 0}.sc-empty{margin-top:10px}

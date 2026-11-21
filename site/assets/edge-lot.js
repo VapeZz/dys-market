@@ -155,18 +155,25 @@
   const fmt = (c) => `$${(c / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   /* ---------- a Ledger buy for a lot he bought ----------
-     paid: the total paid (cents). Each card's cost is its share of the price, split by TCGplayer market × condition × qty
-     (the same basis for every card, so a $0 extra still carries a cost); the shares add up exactly. */
+     paid: the total paid (cents). Each card's cost is its share of the price: by the seller's per-card prices when he typed
+     one for every card, else by TCGplayer market × condition × qty (the same basis for every card, so a $0 extra still
+     carries a cost); the shares add up exactly.
+     opt.rows (evaluate()'s rows) and opt.tag(net, cond, src, grade, day) (edge-score.js): each counted card's note gets
+     Edge's estimate as a band, so the scorecard can compare it with what the card really sold for. */
   function ledgerDraft(deal, lot, paid, opt = {}) {
     const lines = (lot.lines || []).map((x) => ({ x, qty: Math.min(MAX_QTY, Math.max(1, int(x.qty) || 1)) }));
+    const asks = lot.askMode === "each" && lines.length && lines.every(({ x }) => pos(x.ask) > 0);
     const w = lines.map(({ x, qty }) => {
+      if (asks) return pos(x.ask) * qty;
       const m = x.tcg ?? (x.est && x.est.tcg) ?? 0, cm = (x.t || "c") === "s" ? 1 : deal.COND[x.cond || "NM"] ?? 1;
       return Math.max(1, Math.round(m * cm)) * qty;
     });
+    const rowOf = new Map((opt.rows || []).map((r) => [r.l, r]));
     const shares = split(pos(paid), w);
     const out = [];
     lines.forEach(({ x, qty }, i) => {
-      const base = { kind: (x.t || "c") === "s" ? "Sealed" : "Raw", tcg: x.id, g: x.g, n: x.n, name: x.n, set: x.setN || "", cond: x.cond || "NM" };
+      const r = rowOf.get(x.l), tag = r && r.unit > 0 && opt.tag ? opt.tag(r.unit, x.cond || "NM", r.mode === "live" ? "Lot offer" : "Lot offer est.", r.grade, opt.day) : "";
+      const base = { kind: (x.t || "c") === "s" ? "Sealed" : "Raw", tcg: x.id, g: x.g, n: x.n, name: x.n, set: x.setN || "", cond: x.cond || "NM", ...(tag ? { note: tag } : {}) };
       const each = Math.floor(shares[i] / qty), rest = shares[i] - each * qty;
       // a share that doesn't divide by the quantity: one copy carries the extra cents, so the buy adds up to the cent
       if (rest && qty > 1) { out.push({ ...base, qty: qty - 1, price: each }); out.push({ ...base, qty: 1, price: each + rest }); }

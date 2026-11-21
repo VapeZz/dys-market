@@ -859,6 +859,7 @@
       box.hidden = false;
     } catch (err) { console.error(err); box.remove(); }
     const dbox = $("#c-deal");
+    let cardR = null, cardOffer = null;   // the card's Deal check result and offer, for the estimate line on a buy
     if (dbox) try {
       const item = { id: it.id, n: it.n, name: it.n, t: it.t, r: it.r, setN: set.n, tcg: p, tcgDay: dayNum(set.dates?.[set.dates.length - 1]) };
       const warning = reading && !reading.demoted ? { id: reading.id, verdict: reading.verdict, name: reading.name } : null;
@@ -867,14 +868,17 @@
       // the comparison follows the Deal check: cost = what this copy would cost you, starting price = the eBay sold value used above
       const cbox = $("#c-ch"); let cm = null;
       const chOf = (r) => { const F = r.routes.flip; return { cost: F.cost, ref: F.exit ?? null, refLabel: F.exit ? `${F.grade === "sealed" ? "sealed" : "raw"} sold median${F.grade === "raw" ? ", condition applied" : ""}` : null }; };
-      const after = (r) => { if (!cbox || !chan) return; try { cm ? cm.update(chOf(r)) : (cm = chan.mount(cbox, { ...chanOpts(it.t === "s" ? "sealed" : "raw", it.n), ...chOf(r) })); } catch (err) { console.error(err); cbox.remove(); } };
-      deal.mount(dbox, item, first && first.ok ? first.data : null, { ask: lo || p || 0, cond: "NM", shipIn: shipIn(it.t), taxIn: S.set.taxIn }, dealCfg(p), { warning },
+      const after = (r) => { cardR = r; if (!cbox || !chan) return; try { cm ? cm.update(chOf(r)) : (cm = chan.mount(cbox, { ...chanOpts(it.t === "s" ? "sealed" : "raw", it.n), ...chOf(r) })); } catch (err) { console.error(err); cbox.remove(); } };
+      cardOffer = { ask: lo || p || 0, cond: "NM", shipIn: shipIn(it.t), taxIn: S.set.taxIn };
+      deal.mount(dbox, item, first && first.ok ? first.data : null, cardOffer, dealCfg(p), { warning },
         pkmn && conn ? { load: (fresh) => pkmn.get(item, conn, fresh).then(soldNote), after, cash: (c) => { CASH_NOW = c; } } : { off: true, note: pkmn ? "Sold prices aren't set up yet: add your PkmnPrices relay in Mine → Settings. Until then this stays a PASS." : "The sold-price reader didn't load.", after, cash: (c) => { CASH_NOW = c; } });
     } catch (err) { console.error(err); dbox.remove(); }
     const form = $("#c-form");
     const cb = $("#c-buy"); if (cb) cb.onclick = () => {
       // a buy for this card at the lowest listing (change it to what you paid); the Ledger opens with it filled in
-      LEDGER_DRAFT = LG.lineFromCard({ id: it.id, g, n: it.n, t: it.t, price: lo || p || 0, set: set.n });
+      LEDGER_DRAFT = LG.lineFromCard({ id: it.id, g, n: it.n, t: it.t, price: (cardOffer && cardOffer.ask) || lo || p || 0, set: set.n });
+      if (cardOffer && it.t !== "s") LEDGER_DRAFT.cond = cardOffer.cond || "NM";
+      const tg = cardR && cardOffer ? estNote(cardR, cardOffer.cond || "NM", "Deal check") : ""; if (tg) LEDGER_DRAFT.note = tg;   // Edge's estimate as a band, for the scorecard
       SUB.mine = "ledger"; sheet.hidden = true; document.body.style.overflow = "";
       if (location.hash === "#mine") route(); else location.hash = "mine";
     };
@@ -991,6 +995,8 @@
       };
       const bb = $(".sc-buy", box); if (bb) bb.onclick = () => {
         LEDGER_DRAFT = LG.lineFromCard({ id: it.id, g: x.g, n: it.n, t: it.t, price: offer.ask || it.p || 0, set: set.n });
+        if (it.t !== "s") LEDGER_DRAFT.cond = offer.cond || "NM";
+        const tg = estNote(lastR, offer.cond || "NM", "Show check"); if (tg) LEDGER_DRAFT.note = tg;   // Edge's estimate as a band, for the scorecard
         SUB.mine = "ledger"; location.hash = "mine";
       };
       return mounted;
@@ -1259,6 +1265,11 @@
      weak evidence, missing prices, unconfirmed printings and cards under $20 count $0. The whole lot must clear the
      per-purchase limit, the cash reserve and $5 / 20%: only a live check can say BUY candidate. */
   const LOTM = part("edge-lot.js", "EdgeLot");
+  // the real-profit scorecard (edge-score.js): Ledger results, and the estimate line a buy carries from a Deal check
+  const SCORE = part("edge-score.js", "EdgeScore");
+  let SCM = null; SCORE.then((m) => { SCM = m; });
+  const today_ = () => localDay();
+  const estNote = (r, cond, src) => { try { return SCM ? SCM.tagFromCheck(r, cond, src, today_()) : ""; } catch { return ""; } };
   let LOTS = null;
   const LIVE = new Map();   // card key -> { data, tcg, tcgDay }: live sold prices read this visit, never saved
   const LV = { id: null, adding: false, q: "", prep: false, budget: 500, run: null, confirm: null, paid: "", name: "" };
@@ -1361,7 +1372,8 @@
       const paid = cents($(".lot-paid", el).value);
       if (!(paid > 0)) { toast("Type what you paid for the lot"); return; }
       if (!LG || !LS) { toast("The Ledger didn't load"); return; }
-      LEDGER_DRAFT = lt.ledgerDraft(deal, LOTS.get(lot.id), paid); LV.confirm = null;
+      const L3 = LOTS.get(lot.id), r3 = lt.evaluate(deal, bl, L3, live, lotCfg(deal), Date.now());
+      LEDGER_DRAFT = lt.ledgerDraft(deal, L3, paid, { rows: r3.rows, tag: SCM ? SCM.tagFromNet : null, day: today_() }); LV.confirm = null;
       SUB.mine = "ledger"; location.hash = "mine";
     };
     function out() {
@@ -2072,12 +2084,45 @@
     v.innerHTML = `<div id="m-seg"></div><div id="m-body"></div>`;
     await loadIndex();
     await Promise.all([LEDGER, loadGraded()]);
-    if (SUB.mine === "ledger" && !LS) SUB.mine = "inv";
-    const draw = () => { const el = fresh($("#m-body")); ({ inv: mineInv, ledger: mineLedger, watch: mineWatch, set: mineSettings }[SUB.mine] || mineInv)(el); };
-    seg($("#m-seg"), [["inv", "Inventory"], ...(LS ? [["ledger", "Ledger"]] : []), ["watch", "Watchlist"], ["set", "Settings"]], SUB.mine, (k) => { SUB.mine = k; draw(); });
-    ledgerSync().then((r) => { if (r && r.ok && SUB.mine === "ledger" && LMOUNT) LMOUNT.redraw(); });
+    if ((SUB.mine === "ledger" || SUB.mine === "score") && !LS) SUB.mine = "inv";
+    const draw = () => { const el = fresh($("#m-body")); ({ inv: mineInv, ledger: mineLedger, score: mineScore, watch: mineWatch, set: mineSettings }[SUB.mine] || mineInv)(el); };
+    seg($("#m-seg"), [["inv", "Inventory"], ...(LS ? [["ledger", "Ledger"], ["score", "Scorecard"]] : []), ["watch", "Watchlist"], ["set", "Settings"]], SUB.mine, (k) => { SUB.mine = k; draw(); });
+    ledgerSync().then((r) => { if (r && r.ok && SUB.mine === "ledger" && LMOUNT) LMOUNT.redraw(); if (r && r.ok && SUB.mine === "score" && TAB === "mine") draw(); });
     draw();
   }
+  /* ---------- Real-profit scorecard (edge-score.js): what the Ledger's recorded sales actually made ---------- */
+  const SCV = { book: "All", period: "all", open: null };
+  async function mineScore(el) {
+    const sc = await SCORE;
+    if (!sc || !LG || !LS) { el.innerHTML = `<div class="empty">The scorecard didn't load. Reopen Edge.</div>`; return; }
+    const R = LG.compute(LS.T, { priceOf, today: localDay() }), C = sc.score(R, { book: SCV.book, period: SCV.period, today: localDay() }), T = C.total;
+    const tile = (l, v, s, c) => `<div class="lot-tile sc-tile"><span>${l}</span><b class="${c || ""}">${v}</b>${s ? `<small class="muted">${s}</small>` : ""}</div>`;
+    const tbl = (title, rows, key) => rows.length ? `<div class="sec sc-sec"><h3>${title}</h3><div class="sc-tbl" data-g="${key}"><div class="sc-tr sc-th"><span></span><span>Sales</span><span>Profit</span><span>ROI</span></div>${rows.map((g) =>
+      `<div class="sc-tr" data-k="${esc(g.key)}"><span>${esc(g.key)}</span><span>${g.sales}${g.units > g.sales ? ` · ${g.units} pcs` : ""}</span><b class="${cls(g.profit)}">${signed(g.profit)}</b><span class="${cls(g.roi)}">${g.roi == null ? "—" : pct(g.roi, 0)}</span></div>`).join("")}</div></div>` : "";
+    const saleRow = (r) => `<div class="sc-sale" data-id="${esc(r.id)}"><span class="sc-sn"><b>${esc(cleanN(r.name) || "Item")}</b><small class="muted">${esc(fmtDay(r.day))} · ${esc(r.plat || "—")} · ${esc(r.type)}${r.qty > 1 ? ` · ×${r.qty}` : ""}${r.held != null ? ` · held ${r.held} d` : ""}</small></span><span class="sc-sv"><b class="${cls(r.profit)}">${signed(r.profit)}</b><small class="muted">${r.roi == null ? "" : pct(r.roi, 0)}</small></span></div>`;
+    const E = C.est;
+    const estHTML = !C.total.sales ? "" : !E.recorded ? `<div class="sec sc-sec"><h3>Edge's estimates vs what happened</h3><p class="small muted sc-noest">None of these ${C.total.sales} sale${C.total.sales === 1 ? "" : "s"} has an Edge estimate recorded, so there's nothing to compare yet. From now on, a buy you record from Show check, a card's Deal check or a lot offer carries Edge's estimate (a range, in the item's note), and its sale is compared here.</p></div>`
+      : `<div class="sec sc-sec"><h3>Edge's estimates vs what happened</h3><p class="small muted" style="margin:0 0 6px">${E.recorded} of ${E.total} sales had an Edge estimate recorded when bought. The rest aren't compared.</p>
+        <div class="lot-tiles">${tile("Within Edge's range", `${E.inBand} of ${E.recorded}`, `${E.above} above · ${E.below} below`)}${tile("Net vs estimate", E.error == null ? "—" : pct(E.error, 0), `actual ${money(E.actualNet)} · est. ${money(E.estNet)}`, cls(E.error))}</div>
+        <div class="sc-list">${E.rows.slice(0, 20).map((r) => `<div class="sc-sale sc-est" data-where="${r.est.where}"><span class="sc-sn"><b>${esc(cleanN(r.name))}</b><small class="muted">est. ${money(r.est.lo)}–${money(r.est.hi)} a copy (${esc(r.est.src || "Edge")}${r.est.day ? `, ${esc(fmtDay(r.est.day))}` : ""}) · sold for ${money(r.est.perCopy)} net</small></span><span class="sc-sv"><b class="${r.est.where === "below" ? "down" : r.est.where === "above" ? "up" : ""}">${r.est.where === "in" ? "in range" : r.est.where}</b><small class="muted">profit ${signed(r.profit)} vs est. ${signed(r.est.estProfit)}</small></span></div>`).join("")}</div></div>`;
+    el.innerHTML = `<p class="muted small" style="margin:0 0 8px">What you actually made, from the sales recorded in your Ledger: money in, minus selling fees, shipping and supplies, minus what each item cost you (its price plus its share of tax, shipping and fees). Nothing here is estimated.</p>
+      <div id="sc-book"></div><div id="sc-per" style="margin-top:6px"></div>
+      ${!T.sales ? `<div class="empty sc-empty"><b>No sales recorded${SCV.period === "all" ? "" : " in this period"} yet</b>When you sell something, record it in Mine → Ledger (open the item → Sell). Your profit, fees and ROI show up here.${C.held.items ? ` You hold ${C.held.units} item${C.held.units === 1 ? "" : "s"} that cost ${money(C.held.cost)}.` : ""}</div>` : `
+      <div class="lot-tiles sc-tiles">${tile("Realized profit", signed(T.profit), `${T.sales} sale${T.sales === 1 ? "" : "s"} · ${T.units} item${T.units === 1 ? "" : "s"}`, cls(T.profit))}${tile("ROI", T.roi == null ? "—" : pct(T.roi, 0), `on ${money(T.cost)} cost`, cls(T.roi))}
+        ${tile("Money in", money(T.proceeds), T.shipIn ? `incl. ${money(T.shipIn)} shipping charged` : "sale prices")}${tile("Selling fees", money(T.fees), T.feeShare == null ? "" : `${T.feeShare.toFixed(1)}% of money in`)}
+        ${tile("Shipping paid", money(T.shipOut), T.supplies ? `+ ${money(T.supplies)} supplies` : "labels you bought")}${tile("Won / lost", `${T.wins} / ${T.sales - T.wins}`, T.avgHeld == null ? "" : `held ${Math.round(T.avgHeld)} days on average`)}</div>
+      ${C.expenses.total ? `<p class="small sc-exp">Other expenses in this period (not tied to an item): <b>${money(C.expenses.total)}</b> (${C.expenses.by.map(([k, a]) => `${esc(k)} ${money(a)}`).join(", ")}). Profit after them: <b class="${cls(C.afterExpenses)}">${signed(C.afterExpenses)}</b>.</p>` : ""}
+      ${tbl("Where you bought it", C.bySource, "source")}${tbl("By type", C.byType, "type")}${tbl("Where you sold it", C.byPlat, "plat")}${tbl("By cost per item", C.byCost, "cost")}
+      ${C.best.length ? `<div class="sec sc-sec"><h3>Best sales</h3><div class="sc-list">${C.best.map(saleRow).join("")}</div></div>` : ""}
+      ${C.worst.length ? `<div class="sec sc-sec"><h3>Losses</h3><div class="sc-list">${C.worst.map(saleRow).join("")}</div></div>` : ""}
+      ${estHTML}
+      ${C.held.items ? `<p class="small muted">Still held: ${C.held.units} item${C.held.units === 1 ? "" : "s"}, ${money(C.held.cost)} cost. Not counted until sold.</p>` : ""}`}
+      ${C.warn.length ? `<p class="small warn">Ledger notes: ${C.warn.slice(0, 3).map(esc).join("; ")}</p>` : ""}
+      <p class="small muted">Records for your own use; not tax advice. Export for taxes: Mine → Ledger → Export.</p>`;
+    seg($("#sc-book", el), [["All", "Both books"], ["Business", "Business"], ["Personal", "Personal"]], SCV.book, (k) => { SCV.book = k; mineScore(el); });
+    seg($("#sc-per", el), [["all", "All time"], ["year", "This year"], ["d90", "90 days"], ["d30", "30 days"]], SCV.period, (k) => { SCV.period = k; mineScore(el); });
+  }
+
   /* ---------- Holdings Advisor: review every holding against real sold prices (this page only) ---------- */
   const ADVIN = new Map(); let ADVAT = null, ADVCRED = 0, ADVBUSY = false;
   const advKey = (x) => x.lid || x.k;

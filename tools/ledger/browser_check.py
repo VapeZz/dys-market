@@ -116,7 +116,7 @@ def run(page, width, theme):
     page.goto(f"http://127.0.0.1:{PORT}/edge/#mine")
     page.wait_for_selector("#m-seg button", timeout=15000)
     segs = [b.inner_text() for b in page.query_selector_all("#m-seg button")]
-    ok(segs == ["Inventory", "Ledger", "Watchlist", "Settings"], f"{tag}: Mine tabs {segs}")
+    ok(segs == ["Inventory", "Ledger", "Scorecard", "Watchlist", "Settings"], f"{tag}: Mine tabs {segs}")
     # the old inventory is still shown, with the move note
     inv_txt = page.inner_text("#m-body")
     ok("Your ledger is ready" in inv_txt and "Umbreon ex" in inv_txt, f"{tag}: old inventory with the move note")
