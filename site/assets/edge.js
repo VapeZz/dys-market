@@ -204,6 +204,8 @@
   }
   /* the PkmnPrices relay (address and passphrase), kept on this phone only and out of backup files */
   const RKEY = "dys-edge-relay", RELAY = "https://dys-edge-relay.keo-llaneza.workers.dev";
+  // the pairing made on this phone (its code is the SHA-256 of its key; the key itself is never shown)
+  const pairedInfo = () => { try { const j = JSON.parse(localStorage.getItem("dys-edge-relay") || "null"); return j && j.device && j.pass && /^[0-9a-f]{64}$/.test(j.hash || "") ? { hash: j.hash, at: j.paired || "" } : null; } catch { return null; } };
   const pkmnConn = () => { try { const j = JSON.parse(localStorage.getItem(RKEY) || "null"); return j && j.relay && j.pass ? { relay: j.relay, pass: j.pass } : null; } catch { return null; } };
   const SOLD_WHY = { "not-set-up": "Sold prices aren't set up yet (Mine → Settings).", network: "No connection to the sold-price relay. Try again.",
     denied: "The relay refused the passphrase. Check it in Mine → Settings.", "not-found": "PkmnPrices doesn't have this exact item, so there are no sold prices to show.", error: "PkmnPrices answered with an error. Try again later." };
@@ -2082,7 +2084,8 @@
         <p class="small" id="pp-st" style="margin:0"></p></section>
       <section class="sec panel"><h2>Sold prices (PkmnPrices)</h2>
         <p class="muted small" style="margin:0">The Deal check reads real eBay sold prices from your PkmnPrices plan on demand, through your private relay. Pair this phone once: it makes its own private key, kept on this phone and out of backup files, and shows a pairing code to send to Claude. Results are kept only while the page is open.</p>
-        <div class="btns"><button type="button" class="btn primary" id="rl-pair">${pkmnConn()?.device ? "Paired ✓ · pair again" : "Pair this phone"}</button></div>
+        ${(() => { const p = pairedInfo(); return p ? `<p class="small" id="rl-paired" style="margin:0 0 6px;word-break:break-all"><b class="up">Paired ✓</b> · this phone's pairing code: <b>${esc(p.hash)}</b> <button type="button" class="btn sm" id="rl-copy0">Copy</button></p>` : ""; })()}
+        <div class="btns"><button type="button" class="btn ${pairedInfo() ? "" : "primary"}" id="rl-pair">${pairedInfo() ? "Pair again (new key)" : "Pair this phone"}</button></div>
         <p class="small" id="rl-code" style="margin:0;word-break:break-all"></p>
         <details><summary class="small muted">Or use a relay address and passphrase</summary>
         <form class="form" id="rl-f"><label class="f full">Relay address<input class="field" id="rl-u" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://…workers.dev" value="${esc(pkmnConn()?.relay || "")}"></label>
@@ -2149,7 +2152,10 @@
       toast("Saved on this phone"); mineSettings(el);
     };
     // pairing: this phone makes a random token and keeps it; only its SHA-256 goes to the relay's EDGE_DEVICE_HASHES
+    const c0 = $("#rl-copy0"); if (c0) c0.onclick = () => navigator.clipboard?.writeText(pairedInfo().hash).then(() => toast("Copied"), () => {});
     $("#rl-pair").onclick = async () => {
+      // a paired phone keeps its key: pairing again replaces it, so the relay and the Sheet stop knowing this phone
+      if (pairedInfo() && !confirm("This phone is already paired. Pairing again makes a new key: sold prices and the Ledger stop working on this phone until Claude adds the new code to the relay and the Sheet. Pair again?")) return;
       const b = crypto.getRandomValues(new Uint8Array(32)), token = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
       const h = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token)))].map((x) => x.toString(16).padStart(2, "0")).join("");
       try { localStorage.setItem(RKEY, JSON.stringify({ relay: RELAY, pass: token, device: "phone", paired: new Date().toISOString(), hash: h })); } catch { toast("This browser won't save it"); return; }
