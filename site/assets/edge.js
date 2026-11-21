@@ -924,6 +924,63 @@
     drawLog();
   }
 
+  /* ---------- Daily deals: the Near Mint finder's newest results, through the relay (paired phones only) ----------
+     The finder's own calls (CANDIDATE / UNCERTAIN / REJECT, reasons, its max price) are leads, never a BUY here: a row's
+     Deal check runs today's sold prices and the owner's rules (limit, reserve, $5 and 20%) before anything says BUY. */
+  const DD = { data: null, at: 0, err: "" };
+  const DD_WHY = { "not-connected": "Daily deals isn't connected yet: the finder's results reach your phone once its read-only key is added to your relay.",
+    none: "No finder results have been published yet.", denied: "The relay didn't recognise this phone. Pair it again in Mine → Settings.",
+    network: "No connection to the relay. Try again.", bad: "Couldn't read the latest finder results. Try again later." };
+  async function loadDaily(force) {
+    const conn = pkmnConn();
+    if (!conn) return { err: "unpaired" };
+    if (DD.data && !force && Date.now() - DD.at < 10 * 6e4) return { data: DD.data };
+    let r; try { r = await fetch(`${conn.relay.replace(/\/$/, "")}/edge/finder`, { headers: { "X-Edge-Pass": conn.pass, Accept: "application/json" }, cache: "no-store" }); } catch { return { err: "network" }; }
+    if (r.status === 401) return { err: "denied" };
+    let j = null; try { j = await r.json(); } catch {}
+    if (!r.ok) return { err: (j && j.error) === "not-connected" ? "not-connected" : (j && j.error) === "none" ? "none" : "bad" };
+    if (!j || j.kind !== "nm-finder-phone" || !Array.isArray(j.cards)) return { err: "bad" };
+    DD.data = j; DD.at = Date.now(); return { data: j };
+  }
+  const usd = (x) => x == null ? "—" : money(Math.round(x * 100));
+  async function drawDaily(el, force) {
+    el.innerHTML = `<p class="muted small">Getting the finder's latest results…</p>`;
+    const { data: d, err } = await loadDaily(force);
+    if (err === "unpaired") { el.innerHTML = `<div class="panel sc-off"><b>Sold prices aren't set up on this phone</b><p class="small muted" style="margin:4px 0 8px">Daily deals and Deal check use your private relay. Pair this phone once in Mine → Settings.</p><div class="btns"><button type="button" class="btn sm primary sc-pair">Go to Settings</button></div></div>`;
+      $(".sc-pair", el).onclick = () => { SUB.mine = "set"; location.hash = "mine"; }; return; }
+    if (err) { el.innerHTML = `<div class="empty dd-err" data-err="${esc(err)}"><b>${err === "not-connected" ? "Not connected yet" : "No results to show"}</b>${esc(DD_WHY[err] || DD_WHY.bad)}</div><div class="btns"><button type="button" class="btn sm dd-ref">Try again</button></div>`;
+      $(".dd-ref", el).onclick = () => drawDaily(el, true); return; }
+    await loadIndex();
+    const today = localDay(), age = d.data_day ? Math.round((Date.parse(today) - Date.parse(d.data_day)) / 864e5) : null, c = d.counts || {};
+    const grp = (lab) => d.cards.filter((x) => x.label === lab);
+    const row = (x) => {
+      const r = IDX.get(String(x.tcgplayer_id)), name = cleanN(x.name || (r && r[1]) || "Card");
+      return `<div class="sc-hit dd-row" data-label="${esc(x.label)}" data-id="${x.tcgplayer_id}">
+        ${r ? img(r[0]) : `<span class="ph"></span>`}<span class="sc-hn"><b>${esc(name)}</b><small class="muted">${esc([x.set, x.number].filter(Boolean).join(" · "))}</small>
+          <small class="dd-why">${esc((x.reasons || [])[0] || (x.label === "CANDIDATE" ? "Every finder check cleared" : ""))}</small>
+          <span class="dd-acts">${x.tcgplayer_url ? `<a class="chip x" href="${esc(x.tcgplayer_url)}" target="_blank" rel="noopener">TCGplayer NM ↗</a>` : ""}${r ? `<span class="chip x dd-dc" role="button" tabindex="0" data-id="${r[0]}" data-g="${r[2]}" data-n="${esc(r[1])}" data-ask="${Math.round((x.max_listing_price || 0) * 100)}">Deal check</span>` : `<span class="chip muted">not in Edge's card list</span>`}</span></span>
+        <span class="sc-hp"><b>${usd(x.max_listing_price)}</b><small class="muted">max listing</small>${x.profit_if_bought_at_max != null ? `<small class="${x.profit_if_bought_at_max > 0 ? "up" : ""}">${signed(Math.round(x.profit_if_bought_at_max * 100))} at max</small>` : ""}</span></div>`;
+    };
+    const cand = grp("CANDIDATE"), unc = grp("UNCERTAIN"), rej = grp("REJECT");
+    el.innerHTML = `<div class="panel dd-head"><b>Finder results · prices from ${esc(d.data_day || "?")}</b>
+        <p class="small muted" style="margin:4px 0 0">${(c.seen || 0).toLocaleString("en-US")} cards seen · ${(c.shortlist || 0).toLocaleString("en-US")} shortlisted · ${(c.screened || 0).toLocaleString("en-US")} checked · ${c.nm_under_max || 0} with a Near Mint copy under your max.</p>
+        ${age != null && age >= 2 ? `<p class="small dd-stale">These are ${age} days old: most cheap listings will be gone. The finder runs only when you start it.</p>` : ""}
+        <div class="btns"><button type="button" class="btn sm dd-ref">Refresh</button></div></div>
+      <p class="muted small">The finder's picks are leads. Tap <b>Deal check</b>: today's sold prices and your rules ($${((S.set.buyLimit ?? 7500) / 100).toFixed(0)} limit, $${((S.set.cashReserve ?? 10000) / 100).toFixed(0)} reserve, ${money(S.set.minProfit)} and ${S.set.roi}%) decide whether it's a BUY candidate. Type the real listing price there.</p>
+      <div class="sec"><div class="sec-head"><h2>Candidates</h2><span class="chip ${cand.length ? "hot" : ""}">${cand.length}</span></div>
+        ${cand.length ? `<div class="sc-list">${cand.map(row).join("")}</div>` : `<div class="empty">No candidates in this run: no Near Mint copy cleared every check. The closest ones are below.</div>`}</div>
+      <div class="sec"><div class="sec-head"><h2>Worth a look</h2><span class="chip">${unc.length}</span></div>
+        <p class="muted small" style="margin:0 0 6px">A Near Mint copy under your max, but the evidence was weak. Not enough to call it; check it yourself.</p>
+        ${unc.length ? `<div class="sc-list">${unc.map(row).join("")}</div>` : `<div class="empty">None.</div>`}</div>
+      <details class="sec dd-rej"><summary><b>Rejected (${c.rejects ?? rej.length})</b> <span class="muted small">why the cheap copies didn't count</span></summary>
+        ${(d.reasons_top || []).length ? `<div class="kv">${d.reasons_top.map(([k, v]) => `<div><span>${esc(k)}</span><span>${v}</span></div>`).join("")}</div>` : ""}
+        <div class="sc-list">${rej.map(row).join("")}</div></details>`;
+    $(".dd-ref", el).onclick = () => drawDaily(el, true);
+    $$(".dd-dc", el).forEach((b) => { b.onclick = (e) => { e.stopPropagation();
+      SC.pick = { id: +b.dataset.id, g: +b.dataset.g, n: b.dataset.n, q: cleanN(b.dataset.n).toLowerCase() }; SC.q = cleanN(b.dataset.n);
+      SC.ask = +b.dataset.ask ? (+b.dataset.ask / 100).toFixed(2) : ""; SC.cond = "NM"; SC.auto = true; SUB.deals = "check"; route(); }; });
+  }
+
   /* ---------- Deals ---------- */
   let D_BUDGET = 0, D_MV = { win: "7", min: null, dir: "up" };
   async function viewDeals(v) {
@@ -934,8 +991,9 @@
     const draw = async () => {
       const sub = SUB.deals, ok = (r) => gameOk(r.k) && (!D_BUDGET || (r.lo || r.p) <= D_BUDGET);
       const note = $("#d-note"), out = $("#d-list");
-      const listy = sub !== "check"; $("#d-game").hidden = !listy; $(".filters", v).hidden = !listy;
+      const listy = sub !== "check" && sub !== "daily"; $("#d-game").hidden = !listy; $(".filters", v).hidden = !listy;
       if (sub === "check") { note.textContent = ""; await drawShowCheck(out); return; }
+      if (sub === "daily") { note.textContent = ""; await drawDaily(out); return; }
       if (["flip", "ride", "dip"].includes(sub)) {
         if (!scout) { out.innerHTML = `<div class="empty">The deal list builds with the nightly update.</div>`; return; }
         note.textContent = { flip: "Listed far enough under market to resell for your target profit after fees and shipping.", ride: "Steady climbs: rising most days this week.", dip: "Off their usual price and no longer falling." }[sub]
@@ -965,7 +1023,7 @@
           <div class="sec"><h3>Rising this week</h3>${listOrEmpty(rising.map((x) => rowHTML(x, `<b>${money(x.p)}</b><small class="up">${pct(x.ch, 0)} · yours ${money(x.dys)}</small>`)), "None of your stock is rising fast.")}</div>`;
       }
     };
-    seg($("#d-seg"), [["check", "Show check"], ["flip", "Flips"], ["ride", "Momentum"], ["dip", "Dips"], ["under", "Under market"], ["movers", "Movers"], ["fall", "Falling"], ["store", "My store"]], SUB.deals, (k) => { SUB.deals = k; draw(); });
+    seg($("#d-seg"), [["check", "Show check"], ["daily", "Daily deals"], ["flip", "Flips"], ["ride", "Momentum"], ["dip", "Dips"], ["under", "Under market"], ["movers", "Movers"], ["fall", "Falling"], ["store", "My store"]], SUB.deals, (k) => { SUB.deals = k; draw(); });
     gamePick($("#d-game"), () => draw());
     $("#d-budget").onchange = (e) => { D_BUDGET = +e.target.value; draw(); };
     draw();

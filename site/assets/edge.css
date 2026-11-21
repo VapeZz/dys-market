@@ -526,3 +526,15 @@ a.row{text-decoration:none;color:inherit}
 .sc-acts { flex-wrap: wrap; margin-top: 8px; }
 .sc-off { padding: 12px; border-radius: 12px; margin-bottom: 8px; }
 .w-dc { cursor: pointer; margin-left: 2px; }
+/* Daily deals */
+.dd-row { cursor: default; align-items: start; }
+.dd-why { color: var(--muted, inherit); white-space: normal; }
+.dd-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.dd-acts .chip { text-decoration: none; cursor: pointer; }
+.dd-head { padding: 12px; border-radius: 12px; margin-bottom: 8px; }
+.dd-stale { color: var(--warn); margin: 6px 0 0; }
+.dd-rej summary { cursor: pointer; padding: 8px 0; }
+.dd-acts .chip { display: inline-flex; align-items: center; font-size: 13px; font-weight: 600; line-height: 1; padding: 7px 11px; border-radius: 999px;
+  border: 1px solid var(--line-strong); background: transparent; color: var(--accent, #7dd3fc); }
+.dd-acts .chip.dd-dc { background: color-mix(in srgb, var(--accent, #7dd3fc) 16%, transparent); border-color: color-mix(in srgb, var(--accent, #7dd3fc) 45%, transparent); }
+.dd-acts .chip.muted { color: var(--muted, #888); font-weight: 500; }

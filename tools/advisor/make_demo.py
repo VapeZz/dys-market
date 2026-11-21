@@ -21,6 +21,8 @@ for f in os.listdir(os.path.join(ROOT, "site/assets")):   # the current Edge cod
     if f.startswith("edge") and f.endswith((".js", ".css", ".json")):
         shutil.copy(os.path.join(ROOT, "site/assets", f), os.path.join(OUT, "assets", f))
 shutil.copy(os.path.join(SITE, "mock-relay.json"), os.path.join(OUT, "mock-relay.json"))
+if os.path.exists(os.path.join(SITE, "finder-phone.json")):
+    shutil.copy(os.path.join(SITE, "finder-phone.json"), os.path.join(OUT, "finder-phone.json"))
 
 names = {}
 for g in (23821, 23237, 604):
@@ -52,6 +54,10 @@ DEMO = """/* Edge demo shim: sample ledger + synthetic sold-price relay answered
   const real = window.fetch.bind(window);
   window.fetch = async (input, init) => {
     const url = typeof input === "string" ? input : input.url;
+    if (url.startsWith("https://relay.test/edge/finder")) {   // Daily deals: a test phone extract, if the site copy has one
+      const f = await real("finder-phone.json"); await new Promise((r) => setTimeout(r, 150));
+      return f.ok ? new Response(await f.text(), { status: 200, headers: { "Content-Type": "application/json" } }) : new Response(JSON.stringify({ error: "not-connected" }), { status: 503 });
+    }
     if (url.startsWith("https://relay.test")) {
       const m = await mock(); await new Promise((r) => setTimeout(r, 120));
       const [status, body] = m.routes[keyOf(url)] || [404, { error: "not found" }];
