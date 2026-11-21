@@ -110,5 +110,48 @@ const routes = () => ({
     assert.strictEqual(P.popOf({ variants: [{ variant: "Normal", graders: { PSA: { total: 5, grades: { 10: 1 } } } }] }, "Holofoil").total, 5);   // one printing only: use it
     assert.strictEqual(P.popOf({ variants: [{ variant: "A", graders: {} }, { variant: "B", graders: {} }] }, "Holofoil"), null);
   });
+  await test("printings (Nov 20): 1st Edition and Unlimited are their own printings; the cache keeps each printing apart", async () => {
+    assert.deepStrictEqual(["A (1st Edition)", "B (Unlimited)", "C (Unlimited Holofoil)", "D (Cosmos Holo) (Holofoil)", "E (Master Ball Pattern) (Holofoil)"].map(P.variantOf),
+      ["1st Edition", "Unlimited", "Unlimited Holofoil", "Holofoil", "Holofoil"]);
+    P._mem.clear();
+    const R = routes();
+    R["/v1/cards/pk-1/listings/ebay?false"] = [200, { data: [sale(5, 40, { variant: "Unlimited", title: "Arcanine 23/62 Unlimited NM" }), sale(6, 200, { variant: "1st Edition", title: "Arcanine 23/62 1st Edition NM" }),
+      sale(7, 210, { variant: null, title: "Arcanine 1st Edition Jungle NM" }), sale(8, 42, { variant: null, title: "Arcanine 23/62 Jungle NM" })], pagination: { has_more: false } }];
+    const r = relay(R), cfg = cfgFor(r);
+    const un = await P.get({ id: 107018, n: "Arcanine (Unlimited)", t: "c", r: "Uncommon", setN: "Jungle" }, cfg);
+    const raw = un.data.comps.filter((c) => c[2] === "raw").map((c) => c[1]);
+    assert.deepStrictEqual(raw.sort((a, b) => a - b), [4000, 4200], "Unlimited keeps its own sales, drops 1st Edition ones (by variant or by title)");
+    assert.ok(un.meta.otherPrinting >= 1); assert.strictEqual(un.meta.titleDrops.printing, 1);   // (the mock PSA rows are Holofoil: other printing too)
+    const calls = r.log.length;
+    const first = await P.get({ id: 107018, n: "Arcanine (1st Edition)", t: "c", r: "Uncommon", setN: "Jungle" }, cfg);
+    assert.ok(r.log.length > calls, "a second printing of the same product is read, not served from the first one's memory");
+    assert.deepStrictEqual(first.data.comps.filter((c) => c[2] === "raw").map((c) => c[1]).sort((a, b) => a - b), [20000, 21000]);
+  });
+  await test("raw sold titles (Nov 20, real eBay titles): same-number reprints, holo on a non-holo card, lots, Japanese, played", async () => {
+    const ty = { n: "Dark Tyranitar - 019/109", r: "Rare", setN: "EX Team Rocket Returns" };
+    const cases = [
+      ["Dark Tyranitar 19/109 Holo 30th Celebration Classic Collection Pokemon NM", "reprint"],
+      ["Dark Tyranitar 19/109 Team Rocket Returns Holo Rare English 2004 Pokémon TCG", "printing"],   // the 2026 reprint is holo; the original isn't
+      ["Dark Tyranitar - 2005 (Takashi Yoneda) 19/109 World Championship Decks Regular", "reprint"],
+      ["2004 Pokemon DARK TYRANITAR 19/109 Non-Holo Rare EX Team Rocket Returns NM", ""],
+      ["Dark Tyranitar 19/109 Team Rocket Returns No Holo 120 HP English 2004", ""],                 // "120 HP" is hit points
+      ["POKEMON TEAM ROCKET RETURNS DARK TYRANITAR 19/109 NON-HOLO RARE HEAVY PLAY CREAS", "played"],
+      ["2004 POKEMON EX TEAM ROCKET RETURNS #19 DARK TYRANITAR PSA 8", "graded"],
+    ];
+    for (const [t, want] of cases) assert.strictEqual(P.compDrop(t, ty, true), want, t);
+    const em = { n: "Emboar (Master Ball Pattern) (Holofoil)", r: "Rare", setN: "SV: White Flare" };
+    assert.strictEqual(P.compDrop("White Flare Pokémon Cards! Poke Ball Master Ball Reverse Holo - Choose Your Card", em, true), "printing");
+    assert.strictEqual(P.compDrop("Pokemon SV10.5 White Flare NM 1-86 YouPICK! Pokeball & Master Ball Holo", em, true), "lot");
+    assert.strictEqual(P.compDrop("Emboar (Master Ball Pattern) 013/086 SV11W: White Flare Holo", em, true), "foreign");
+    assert.strictEqual(P.compDrop("Emboar (Master Ball Pattern) 013/086 Rare White Flare Pokemon Holo Near Mint", em, true), "");
+    // a reprint set's own card keeps its set's words; graded sales are kept for PSA reads
+    assert.strictEqual(P.compDrop("Dark Tyranitar 19/109 30th Celebration Classic Collection NM", { n: "Dark Tyranitar - 019/109", r: "Holo Rare", setN: "ME: 30th Celebration Classic Collection" }, true), "");
+    assert.strictEqual(P.compDrop("Umbreon ex 161/131 PSA 10", { n: "Umbreon ex - 161/131 (Holofoil)", setN: "SV: Prismatic Evolutions" }, false), "");
+    // against the free evidence: the median of what is kept lands near the hand-checked value; before, reprints pulled it to $12
+    const ev = require(path.join(__dirname, "fixtures/worth-a-look-2026-11-20.json")).cards[0];
+    const kept = ev.ebay.filter(([, , t]) => !P.compDrop(t, { n: ev.name, r: ev.r, setN: ev.set }, true)).map((x) => x[1]).sort((a, b) => a - b);
+    const med = kept.length % 2 ? kept[(kept.length - 1) / 2] : (kept[kept.length / 2 - 1] + kept[kept.length / 2]) / 2;
+    assert.ok(Math.abs(med / ev.checked.value - 1) <= 0.15, `median ${med} vs checked ${ev.checked.value}`);
+  });
   console.log(`${n} PkmnPrices adapter tests passed${process.exitCode ? " (with failures above)" : ""}`);
 })();

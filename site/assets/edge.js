@@ -776,9 +776,9 @@
     } catch (err) { console.error(err); box.remove(); }
     const dbox = $("#c-deal");
     if (dbox) try {
-      const item = { id: it.id, n: it.n, name: it.n, t: it.t, tcg: p, tcgDay: dayNum(set.dates?.[set.dates.length - 1]) };
+      const item = { id: it.id, n: it.n, name: it.n, t: it.t, r: it.r, setN: set.n, tcg: p, tcgDay: dayNum(set.dates?.[set.dates.length - 1]) };
       const warning = reading && !reading.demoted ? { id: reading.id, verdict: reading.verdict, name: reading.name } : null;
-      const conn = pkmnConn(), had = pkmn && conn ? pkmn._mem.get(`${it.t}|${it.id}`) : null;
+      const conn = pkmnConn(), had = pkmn && conn ? pkmn._mem.get(pkmn.memKey(it)) : null;
       const first = had ? await had : null;
       // the comparison follows the Deal check: cost = what this copy would cost you, starting price = the eBay sold value used above
       const cbox = $("#c-ch"); let cm = null;
@@ -877,8 +877,8 @@
       box.innerHTML = `<div class="sc-head">${img(it.id)}<div><b>${esc(cleanN(it.n))}</b><small class="muted">${esc(set.n)}${it.p ? ` · TCGplayer market ${money(it.p)}` : ""}</small></div></div>
         <div class="sc-deal" id="sc-deal"></div>
         <div class="btns sc-acts"><button type="button" class="btn sm sc-open">Open full card</button><button type="button" class="btn sm sc-watch">Watch at max to pay</button>${LS ? `<button type="button" class="btn sm sc-buy">Bought it</button>` : ""}</div>`;
-      const item = { id: it.id, n: it.n, name: it.n, t: it.t, tcg: it.p, tcgDay: dayNum(set.dates?.[set.dates.length - 1]) };
-      const had = pkmn && conn ? pkmn._mem.get(`${it.t}|${it.id}`) : null, first = had ? await had : null;
+      const item = { id: it.id, n: it.n, name: it.n, t: it.t, r: it.r, setN: set.n, tcg: it.p, tcgDay: dayNum(set.dates?.[set.dates.length - 1]) };
+      const had = pkmn && conn ? pkmn._mem.get(pkmn.memKey(it)) : null, first = had ? await had : null;
       const offer = { ask: SC.ask === "" ? 0 : Math.round(parseFloat(SC.ask) * 100) || 0, cond: it.t === "s" ? "NM" : SC.cond, shipIn: 0, taxIn: 0 };
       let lastR = null;
       const after = (r, data) => {
@@ -1671,7 +1671,7 @@
         try {
           const d = await detail(x.id, x.g, x.n), it = d.it;
           if (!it) { const note = "No market price for this item right now."; put(x, { own: null, note }, { label: "unknown", text: note }); continue; }
-          const item = { id: it.id, n: it.n, name: it.n, t: it.t, tcg: it.p, tcgDay: dayNum(d.set.dates?.[d.set.dates.length - 1]) };
+          const item = { id: it.id, n: it.n, name: it.n, t: it.t, r: it.r, setN: d.set.n, tcg: it.p, tcgDay: dayNum(d.set.dates?.[d.set.dates.length - 1]) };
           const res = await pkmn.get(item, conn, true); credits += res.meta ? res.meta.credits : 0;
           if (!res.ok) { const note = soldNote(res).note; if (res.reason === "network" || res.reason === "denied") cut = note;
             put(x, { own: null, note }, { label: "unknown", text: note }); continue; }

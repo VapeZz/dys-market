@@ -31,7 +31,7 @@ for (const g of sets) {
     }
     if (k === "none") { out[`/v1/cards|${it.id}`] = [200, { data: [] }]; continue; }
     out[`/v1/cards|${it.id}`] = [200, { data: [{ id, name: it.n }] }];
-    const v = (/\((1st Edition Holofoil|Reverse Holofoil|Holofoil)\)$/.exec(it.n) || [, "Normal"])[1];
+    const v = (/\((1st Edition Holofoil|1st Edition Normal|1st Edition|Unlimited Holofoil|Unlimited|Reverse Holofoil|Holofoil)\)$/.exec(it.n) || [, "Normal"])[1];   // TCGplayer printing names, as PkmnPrices uses them
     out[`/v1/cards/${id}/listings/ebay|false`] = page(main, v);
     const big = it.p >= 2000;
     out[`/v1/cards/${id}/listings/ebay|true10`] = page(big ? S({ grade: "PSA 10", n: 10, mid: mid * 2.6, jitter: 0.06 }) : [], v);
