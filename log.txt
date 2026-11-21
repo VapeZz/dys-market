@@ -1,0 +1,14 @@
+267 sets to check (released since 2025-05-29, upcoming, or new and undated)
+31302 items
+kept 4070 no-photo items from the last audit for sets not checked this time
+5611 cards with no photo of their own; 4347 items still show no photo
+dragon-ball-fusion-world: 1987 items · 5 with no photo · fallbacks: backup 0, sibling 0 · worst sets [('Reach the God', 2), ('Starter Deck 13: The Saiyan Raised on Earth', 1), ('Starter Deck 14: The Prince of Saiyan', 1), ('Manga Booster 01 Release Event Cards', 1)]
+gundam: 1880 items · 9 with no photo · fallbacks: backup 0, sibling 0 · worst sets [('Freedom Ascension', 3), ('Starter Deck 11: Aquatic Assault', 1), ('Starter Deck 12: Raging Onslaught', 1), ('Starter Deck 13: Silent Barrage', 1), ('Starter Deck 14: Heavy Dominion', 1), ('Starter Deck 07: Celestial Drive', 1)]
+lorcana: 3424 items · 6 with no photo · fallbacks: backup 0, sibling 1 · worst sets [("Illumineer's Quest: Palace Heist", 3), ('Into the Inkdark', 2), ('Reign of Jafar', 1)]
+one-piece: 3105 items · 8 with no photo · fallbacks: backup 0, sibling 187 · worst sets [('Extra Booster: East Blue', 3), ('The Dominance of God', 1), ('ST-31: Starter Deck 31 RED Monkey.D.Luffy', 1), ("Adventure on Kami's Island", 1), ('Extra Booster: One Piece Heroines Edition', 1), ('ST-29: Starter Deck 29 Egghead', 1)]
+palworld: 670 items · 6 with no photo · fallbacks: backup 0, sibling 2 · worst sets [('BP03: Eternal Ascent', 3), ('BP01: Dawn of Palpagos', 3)]
+pokemon: 3938 items · 18 with no photo · fallbacks: backup 227, sibling 25 · worst sets [('ME07: Flowing Fists', 7), ('Player Placement Trainer Promos', 4), ('ME: Ascended Heroes', 2), ('ME06: Delta Reign', 1), ('ME04: Chaos Rising', 1), ('ME01: Mega Evolution', 1)]
+pokemon-jp: 3811 items · 85 with no photo · fallbacks: backup 0, sibling 327 · worst sets [('Unnumbered Promotional cards', 67), ('MC: Start Deck 100 Battle Collection', 7), ('Gym Challenge', 4), ('SV11W: White Flare', 2), ('M-P Promotional Cards', 1), ('m1L: Mega Brave', 1)]
+riftbound: 2490 items · 101 with no photo · fallbacks: backup 0, sibling 49 · worst sets [('Riftbound Organized Play Promotional Cards', 71), ('Unleashed', 11), ('Legacy', 7), ('Vendetta', 5), ('Spiritforged', 4), ('Riftbound Promotional Cards', 2)]
+union-arena: 5327 items · 13 with no photo · fallbacks: backup 0, sibling 3 · worst sets [('UEX08BT: BLEACH: Thousand-Year Blood War Vol.3 Release Event Cards', 4), ('UE27BT: Umamusume: Pretty Derby', 3), ('UE27ST: Umamusume: Pretty Derby Starter Deck', 3), ('UE25BT: My Hero Academia Special Booster', 3)]
+yugioh: 4670 items · 26 with no photo · fallbacks: backup 0, sibling 668 · worst sets [('Beyond the Brave', 5), ("Duelist's Advance", 5), ('Chaos Origins', 4), ('Doom of Dimensions', 4), ('Magnificent Maestros', 1), ('Ultimate Tournament Pack 1', 1)]
