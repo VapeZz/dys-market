@@ -193,13 +193,26 @@
   const maxBuy = (p, t) => p ? Math.max(0, Math.floor(net(p, t) / (1 + S.set.roi / 100) - shipIn(t))) : 0;
   /* the Deal check's settings, from Mine → Settings */
   const dayNum = (d) => d ? Math.floor(Date.parse(d + "T00:00:00Z") / 864e5) : null;
-  let CASH_NOW = null;   // cash on hand for buying, typed in any Deal check; kept for this visit only (not saved). No BUY until it's known.
+  /* Cash on hand for buying: one number shared by Show check, every Deal check, Lot offers and the Buy list. Kept on this phone
+     only ("dys-edge-cash", with the time it was typed) for CASH_KEEP_H hours, then it must be typed again, so an old number
+     never confirms the reserve. It is what he types, never his bank balance and never the Ledger's cash; nothing syncs it.
+     No BUY until it's known. Clearing a box clears it everywhere. */
+  const CASH_KEY = "dys-edge-cash", CASH_KEEP_H = 12;
+  const cashRead = () => { try { const j = JSON.parse(localStorage.getItem(CASH_KEY) || "null"); return j && j.v === 1 && Number.isFinite(j.c) && j.c >= 0 && j.at > Date.now() - CASH_KEEP_H * 36e5 && j.at <= Date.now() + 6e4 ? j : null; } catch { return null; } };
+  let CASH_NOW = (cashRead() || {}).c ?? null;
+  const cashNow = () => { const j = cashRead(); CASH_NOW = j ? j.c : null; return CASH_NOW; };
+  const cashAt = () => { const j = cashRead(); return j ? j.at : null; };
+  function setCash(c) {
+    CASH_NOW = c == null || !Number.isFinite(c) ? null : Math.max(0, Math.round(c));
+    try { if (CASH_NOW == null) localStorage.removeItem(CASH_KEY); else localStorage.setItem(CASH_KEY, JSON.stringify({ v: 1, c: CASH_NOW, at: Date.now() })); } catch {}
+  }
+  const CASH_NOTE = "shared by Show check, lots and the Buy list · on this phone only, for 12 hours · not your bank or Ledger cash";
   function dealCfg(value) {
     const { gr, ti, tier } = grader();
     return { today: Math.floor(Date.now() / 864e5), fees: plat(), buyerTax: S.set.platform === "none" ? 0 : S.set.buyerTax,
       shipOut: (x, t) => shipOut(x, t), supplies: (t) => t === "s" ? S.set.supSealed : S.set.supCard, roi: S.set.roi, minProfit: S.set.minProfit, holdRate: S.set.holdRate,
       // buying rules: all-in limit per purchase, and the cash to keep back (cash on hand: what he typed in Show check, this visit only)
-      budget: { limit: S.set.buyLimit ?? 7500, reserve: S.set.cashReserve ?? 10000, cash: CASH_NOW },
+      budget: { limit: S.set.buyLimit ?? 7500, reserve: S.set.cashReserve ?? 10000, cash: cashNow(), cashNote: CASH_NOTE },
       grade: { fee: feeAt(gr, ti, value || 0), ship: S.set.gradeShip, months: Math.max(1, Math.round((parseInt(tier[3], 10) || 60) / 30)) + 1 } };
   }
   /* the PkmnPrices relay (address and passphrase), kept on this phone only and out of backup files */
@@ -488,6 +501,24 @@
   /* ---------- Command center (top of Today): one place to check a buy, plan, find leads, and see inventory and profit ----------
      Each tile reads what Edge already has on this phone (Buy list, lots, watchlist, Ledger) or the free finder route; no sold
      prices are read here and nothing costs credits. Tapping a tile opens the screen that does the work. */
+  // the holdings advisor's calls for the Sell tile: this visit's checks (exact, from sold prices read today) and saved calls
+  // still valid (kept 12 hours, as ranges). Read without writing: advSaved() tidies storage, this doesn't.
+  async function sellSummary() {
+    const adv = await ADV; if (!adv) return null;
+    const inv = invRows(); if (!inv.length) return { inv: 0 };
+    let j = null; try { j = JSON.parse(localStorage.getItem(AKEY) || "null"); } catch { j = null; }
+    const now = Date.now(), valid = j && j.v === 1 && j.sig === advSig() && Array.isArray(j.rows);
+    const M = new Map(valid ? j.rows.filter((r) => r && r.at > now - ADV_KEEP_H * 36e5 && r.at <= now).map((r) => [r.key, r]) : []);
+    const out = { inv: inv.length, reviewed: 0, n: 0, lo: 0, hi: 0, saved: 0, live: 0, oldest: null };
+    for (const x of inv) {
+      const k = advKey(x), live = ADVIN.get(k);
+      if (live) { out.reviewed++; const c = adv.classify(live); if (c.action === "sell" && c.profitNow != null) { out.n++; out.live++; out.lo += c.profitNow; out.hi += c.profitNow; } continue; }
+      const r = advSavedFor(x, M); if (!r) continue;
+      out.reviewed++; out.oldest = out.oldest == null ? r.at : Math.min(out.oldest, r.at);
+      if (r.action === "sell" && r.band != null) { out.n++; out.saved++; out.lo += adv.BANDS[r.band][0]; out.hi += adv.BANDS[r.band][1]; }
+    }
+    return out;
+  }
   async function drawHome(el) {
     if (!el) return;
     const n = ROUTE_N;
@@ -506,6 +537,8 @@
     let held = null, prof = null;
     const sc = SCM || await SCORE;
     if (LG && LS && sc) { try { const C = sc.score(LG.compute(LS.T, { priceOf, today: localDay() }), { period: "d30", today: localDay() }); held = C.held; prof = C.total; } catch { held = null; } }
+    const sell = await sellSummary().catch(() => null);
+    if (n !== ROUTE_N || !el.isConnected) return;
     const conn = pkmnConn(), rules = `${money(S.set.buyLimit ?? 7500)} most per buy · keep ${money(S.set.cashReserve ?? 10000)} · ${money(S.set.minProfit)} and ${S.set.roi}% profit`;
     const tile = (go, k, title, val, sub) => `<button type="button" class="hm-tile" data-go="${go}" data-k="${k}"><span class="hm-t">${title}</span><b class="hm-v">${val}</b><small class="muted">${sub}</small></button>`;
     el.innerHTML = `<div class="sec-head"><h2>Command center</h2></div>
@@ -518,10 +551,24 @@
         ${tile("deals:daily", "daily", "Daily deals", conn ? `<span class="hm-dd">…</span>` : "Not set up", conn ? `<span class="hm-dds">finder leads · not verified</span>` : "pair this phone in Settings")}
         ${tile("mine:watch", "watch", "Watchlist", S.watch.length ? `${hits} at target` : "No cards", S.watch.length ? `of ${S.watch.length} watched · not sold-checked` : "watch a card's price")}
         ${tile(LS ? "mine:ledger" : "mine:inv", "held", "Inventory", held ? `${held.units} item${held.units === 1 ? "" : "s"}` : `${S.inv.length} item${S.inv.length === 1 ? "" : "s"}`, held ? `${money(held.cost)} cost` : "on this phone")}
+        ${(() => { const q = sell;
+          if (!q) return tile("today:adv", "sell", "Sell · estimate", "—", "the advisor didn't load");
+          if (!q.inv) return tile("today:adv", "sell", "Sell · estimate", "Nothing held", "record buys in the Ledger");
+          if (!q.reviewed) return tile("today:adv", "sell", "Sell · estimate", "Review holdings", "credits only when you confirm");
+          const range = q.lo === q.hi ? signed(q.lo) : !isFinite(q.hi) ? `${signed(q.lo)} or more` : `${signed(q.lo)} to ${signed(q.hi)}`;
+          return tile("today:adv", "sell", "Sell · estimate", q.n ? `${q.n} worth selling` : "None right now",
+            q.n ? `est. ${range} at checked eBay prices · not realized${q.saved ? ` · saved ${clock(q.oldest)}` : ""}` : `of ${q.reviewed} reviewed · estimates`); })()}
         ${tile(LS ? "mine:score" : "mine:set", "profit", "Profit · 30 days", prof && prof.sales ? `<span class="${cls(prof.profit)}">${signed(prof.profit)}</span>` : "No sales yet", prof && prof.sales ? `${prof.sales} sale${prof.sales === 1 ? "" : "s"} · realized` : LS ? "record sales in the Ledger" : "connect the Ledger")}
       </div>
-      <p class="small muted hm-rules">Your rules: ${rules}. <a href="#mine" class="hm-set">Change</a></p>`;
-    $$(".hm-tile", el).forEach((b) => { b.onclick = () => { const [tab, sub] = b.dataset.go.split(":"); if (tab === "deals") SUB.deals = sub; else SUB.mine = sub; location.hash = tab; }; });
+      <p class="small muted hm-rules">Your rules: ${rules}. <a href="#mine" class="hm-set">Change</a></p>
+      <div class="panel hm-cash"><label class="f">Cash on hand for buying $<input class="field hm-cash-in" inputmode="decimal" placeholder="not set" value="${cashNow() != null ? dollars(CASH_NOW) : ""}"></label>
+        <small class="muted hm-cash-note">${cashAt() ? `Set ${clock(cashAt())}. ` : ""}${CASH_NOTE}. No BUY until it's set.</small></div>`;
+    $$(".hm-tile", el).forEach((b) => { b.onclick = () => {
+      const [tab, sub] = b.dataset.go.split(":");
+      if (tab === "today") { const t = $("#t-" + sub); if (t) t.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+      if (tab === "deals") SUB.deals = sub; else SUB.mine = sub; location.hash = tab; }; });
+    const ci = $(".hm-cash-in", el); ci.onchange = () => { setCash(ci.value.trim() === "" ? null : cents(ci.value)); ci.value = cashNow() != null ? dollars(CASH_NOW) : "";
+      $(".hm-cash-note", el).textContent = `${cashAt() ? `Set ${clock(cashAt())}. ` : ""}${CASH_NOTE}. No BUY until it's set.`; };
     $(".hm-set", el).onclick = (e) => { e.preventDefault(); SUB.mine = "set"; location.hash = "mine"; };
     // the search: a picked card opens Show check with it
     const q = $("#hm-q", el), res = $("#hm-res", el);
@@ -933,7 +980,7 @@
       const after = (r) => { cardR = r; if (!cbox || !chan) return; try { cm ? cm.update(chOf(r)) : (cm = chan.mount(cbox, { ...chanOpts(it.t === "s" ? "sealed" : "raw", it.n), ...chOf(r) })); } catch (err) { console.error(err); cbox.remove(); } };
       cardOffer = { ask: lo || p || 0, cond: "NM", shipIn: shipIn(it.t), taxIn: S.set.taxIn };
       deal.mount(dbox, item, first && first.ok ? first.data : null, cardOffer, dealCfg(p), { warning },
-        pkmn && conn ? { load: (fresh) => pkmn.get(item, conn, fresh).then(soldNote), after, cash: (c) => { CASH_NOW = c; } } : { off: true, note: pkmn ? "Sold prices aren't set up yet: add your PkmnPrices relay in Mine → Settings. Until then this stays a PASS." : "The sold-price reader didn't load.", after, cash: (c) => { CASH_NOW = c; } });
+        pkmn && conn ? { load: (fresh) => pkmn.get(item, conn, fresh).then(soldNote), after, cash: (c) => { setCash(c); } } : { off: true, note: pkmn ? "Sold prices aren't set up yet: add your PkmnPrices relay in Mine → Settings. Until then this stays a PASS." : "The sold-price reader didn't load.", after, cash: (c) => { setCash(c); } });
     } catch (err) { console.error(err); dbox.remove(); }
     const form = $("#c-form");
     const cb = $("#c-buy"); if (cb) cb.onclick = () => {
@@ -1041,7 +1088,7 @@
         }
       };
       const mounted = deal.mount($("#sc-deal", box), item, first && first.ok ? first.data : null, offer, dealCfg(it.p), {},
-        pkmn && conn ? { load: (fresh) => pkmn.get(item, conn, fresh).then((res) => { if (res && res.meta) SC.credits += res.meta.credits || 0; return soldNote(res); }), after, cash: (c) => { CASH_NOW = c; } } : { off: true, note: "Sold prices aren't set up yet: pair this phone in Mine → Settings.", after, cash: (c) => { CASH_NOW = c; } });
+        pkmn && conn ? { load: (fresh) => pkmn.get(item, conn, fresh).then((res) => { if (res && res.meta) SC.credits += res.meta.credits || 0; return soldNote(res); }), after, cash: (c) => { setCash(c); } } : { off: true, note: "Sold prices aren't set up yet: pair this phone in Mine → Settings.", after, cash: (c) => { setCash(c); } });
       const lb = $("#sc-deal .dl-load", box);
       const askBox = () => $("#sc-deal .dl-ask", box);
       if (askBox()) askBox().focus({ preventScroll: true });
@@ -1217,7 +1264,7 @@
       <div class="bl-form">
         <label class="f">Seller's price $<input class="field bl-ask" inputmode="decimal" enterkeyhint="done" placeholder="0.00" value="${esc(ask)}"></label>
         <label class="f">Condition<select class="select bl-cnd">${["NM", "LP", "MP", "HP", "DMG"].map((c) => `<option${c === x.cond ? " selected" : ""}>${c}</option>`).join("")}</select></label>
-        <label class="f">Cash on hand $<input class="field bl-cash" inputmode="decimal" placeholder="0.00" value="${CASH_NOW != null ? (CASH_NOW / 100).toFixed(2) : ""}"><small class="muted">this visit only, not saved</small></label>
+        <label class="f">Cash on hand $<input class="field bl-cash" inputmode="decimal" placeholder="0.00" value="${cashNow() != null ? dollars(CASH_NOW) : ""}"><small class="muted">${CASH_NOTE}</small></label>
       </div>
       <div class="bl-out"></div>
       <div class="btns"><button type="button" class="btn sm primary bl-verify">Verify now</button><button type="button" class="btn sm bl-remove">Remove</button></div>
@@ -1229,7 +1276,7 @@
     const cents = (v) => { const n = parseFloat(String(v || "").replace(/[$,\s]/g, "")); return isFinite(n) && n > 0 ? Math.round(n * 100) : 0; };
     const draw = async () => {
       const deal = await DEAL; if (!deal) { out.innerHTML = `<p class="small muted">The deal engine didn't load.</p>`; return; }
-      const ask = cents(askI.value), r = bl.atTable(deal, x.est, x.cond, ask, CASH_NOW, cfg, x.t || "c");
+      const ask = cents(askI.value), r = bl.atTable(deal, x.est, x.cond, ask, cashNow(), cfg, x.t || "c");
       const line = (ok, txt) => `<li class="${ok === true ? "ok" : ok === false ? "no" : "info"}"><i aria-hidden="true">${ok === true ? "✓" : ok === false ? "✕" : "•"}</i><span>${txt}</span></li>`;
       const head = { fits: "Fits your rules (estimate)", over: "Over your walk-away", limit: "Over your limit", reserve: "Breaks your reserve", "need-cash": "Within your walk-away", "need-ask": "Saved estimate", "no-walk": "No buy on the saved estimate", expired: "Estimate too old", none: "Not checked yet" }[r.result] || "Saved estimate";
       const lines = [];
@@ -1244,7 +1291,7 @@
       BLV.ask[k] = askI.value;
     };
     askI.oninput = draw; askI.onchange = draw;
-    cashI.oninput = () => { const c = cents(cashI.value); CASH_NOW = cashI.value.trim() === "" ? null : c; draw(); };
+    cashI.oninput = () => { setCash(cashI.value.trim() === "" ? null : cents(cashI.value)); draw(); };
     condS.onchange = () => { BLS.setCond(k, condS.value); BLV.ask[k] = askI.value; drawBuyList(el); };
     $(".bl-remove", row).onclick = () => { BLS.remove(k); BLV.open = null; toast("Removed from your buy list"); drawBuyList(el); };
     const vb = $(".bl-verify", row), vn = $(".bl-vnote", row), conn = pkmnConn();
@@ -1365,7 +1412,7 @@
     };
     $$(".lot-pick", el).forEach((b) => { b.onclick = () => { LV.id = b.dataset.id; LV.adding = false; LV.run = null; LV.confirm = null; drawLot(el); }; });
   }
-  function lotCfg(deal) { const c = dealCfg(0); c.budget = { ...c.budget, cash: CASH_NOW }; return c; }
+  function lotCfg(deal) { return dealCfg(0); }
   function drawLotOne(el, lt, bl, deal, lot) {
     const now = Date.now(), cfg = lotCfg(deal), live = (k) => LIVE.get(k) || null;
     const R = lt.evaluate(deal, bl, lot, live, cfg, now), byL = new Map(R.rows.map((r) => [r.l, r]));
@@ -1390,7 +1437,7 @@
       <div class="sec lot-sec"><div class="lot-h"><h3>3 · Seller's price</h3></div>
         <div id="lot-mode"></div>
         <div class="lot-form">${each ? `<p class="small muted lot-sum-each" style="grid-column:1/-1;margin:0">Type each card's price on its row above${R.ask != null ? `: total ${money(R.ask)}` : ""}.</p>` : `<label class="f">Total for the lot $<input class="field lot-total" inputmode="decimal" enterkeyhint="done" placeholder="0.00" value="${lot.total ? dollars(lot.total) : ""}"></label>`}
-          <label class="f">Cash on hand $<input class="field lot-cash" inputmode="decimal" placeholder="0.00" value="${CASH_NOW != null ? dollars(CASH_NOW) : ""}"><small class="muted">this visit only, not saved</small></label>
+          <label class="f">Cash on hand $<input class="field lot-cash" inputmode="decimal" placeholder="0.00" value="${cashNow() != null ? dollars(CASH_NOW) : ""}"><small class="muted">${CASH_NOTE}</small></label>
           <details class="lot-more"${lot.shipIn || lot.taxIn ? " open" : ""}><summary class="small">Shipped to you, or sales tax?</summary><div class="lot-form">
             <label class="f">Shipping you pay $<input class="field lot-ship" inputmode="decimal" placeholder="0" value="${lot.shipIn ? dollars(lot.shipIn) : ""}"></label>
             <label class="f">Sales tax %<input class="field lot-tax" inputmode="decimal" placeholder="0" value="${lot.taxIn || ""}"></label></div></details></div></div>
@@ -1419,7 +1466,7 @@
     const tot = $(".lot-total", el); if (tot) tot.oninput = () => { LOTS.set(lot.id, { total: cents(tot.value) }); out(); };
     const sh = $(".lot-ship", el); sh.oninput = () => { LOTS.set(lot.id, { shipIn: cents(sh.value) }); out(); };
     const tx = $(".lot-tax", el); tx.oninput = () => { LOTS.set(lot.id, { taxIn: parseFloat(tx.value) || 0 }); out(); };
-    const ca = $(".lot-cash", el); ca.oninput = () => { CASH_NOW = ca.value.trim() === "" ? null : cents(ca.value); out(); };
+    const ca = $(".lot-cash", el); ca.oninput = () => { setCash(ca.value.trim() === "" ? null : cents(ca.value)); out(); };
     // prices
     $(".lot-prep-open", el).onclick = () => { LV.prep = !LV.prep; LV.confirm = null; redraw(); };
     const bs = $(".lot-budget", el); if (bs) bs.onchange = () => { LV.budget = +bs.value; redraw(); };
@@ -1550,8 +1597,9 @@
 
   /* ---------- Deals ---------- */
   let D_BUDGET = 0, D_MV = { win: "7", min: null, dir: "up" };
+  let D_MORE = "flip";   // the last older list opened under More lists
   async function viewDeals(v) {
-    v.innerHTML = `<div id="d-seg"></div><div id="d-game"></div><div class="filters"><label class="f" style="flex:1">Budget<select class="select" id="d-budget">
+    v.innerHTML = `<div id="d-seg"></div><div id="d-seg2" hidden></div><div id="d-game"></div><div class="filters"><label class="f" style="flex:1">Budget<select class="select" id="d-budget">
         ${[[0, "Any price"], [2500, "Under $25"], [5000, "Under $50"], [10000, "Under $100"], [25000, "Under $250"], [50000, "Under $500"], [100000, "Under $1,000"]].map(([c, l]) => `<option value="${c}"${c === D_BUDGET ? " selected" : ""}>${l}</option>`).join("")}</select></label></div>
       <p class="muted small" id="d-note"></p><div id="d-list"><p class="muted">Loading…</p></div>`;
     // the nightly lists load only for the list views: Show check, Buy list and Daily deals never wait on them (poor signal)
@@ -1595,7 +1643,15 @@
           <div class="sec"><h3>Rising this week</h3>${listOrEmpty(rising.map((x) => rowHTML(x, `<b>${money(x.p)}</b><small class="up">${pct(x.ch, 0)} · yours ${money(x.dys)}</small>`)), "None of your stock is rising fast.")}</div>`;
       }
     };
-    seg($("#d-seg"), [["check", "Show check"], ["list", "Buy list"], ["lot", "Lot offer"], ["daily", "Daily deals"], ["flip", "Flips"], ["ride", "Momentum"], ["dip", "Dips"], ["under", "Under market"], ["movers", "Movers"], ["fall", "Falling"], ["store", "My store"]], SUB.deals, (k) => { SUB.deals = k; draw(); });
+    // the four buying tools first; the older lists (TCGplayer prices only, not sold-checked) sit under More lists, unchanged
+    const OLD = [["flip", "Flips"], ["ride", "Momentum"], ["dip", "Dips"], ["under", "Under market"], ["movers", "Movers"], ["fall", "Falling"], ["store", "My store"]];
+    const isOld = (k) => OLD.some(([x]) => x === k);
+    const more = () => { const box = $("#d-seg2"); if (!box) return; box.hidden = !isOld(SUB.deals);
+      if (isOld(SUB.deals)) { box.innerHTML = `<p class="small muted d-more-note">Older lists from TCGplayer market and listing prices only. Not checked against sold prices: run a Deal check before buying.</p><div id="d-seg2s"></div>`;
+        seg($("#d-seg2s"), OLD, SUB.deals, (k) => { SUB.deals = D_MORE = k; draw(); }); } else box.innerHTML = ""; };
+    seg($("#d-seg"), [["check", "Show check"], ["list", "Buy list"], ["lot", "Lot offer"], ["daily", "Daily deals"], ["more", "More lists"]], isOld(SUB.deals) ? "more" : SUB.deals, (k) => {
+      SUB.deals = k === "more" ? (isOld(D_MORE) ? D_MORE : "flip") : k; more(); draw(); });
+    more();
     gamePick($("#d-game"), () => draw());
     $("#d-budget").onchange = (e) => { D_BUDGET = +e.target.value; draw(); };
     draw();

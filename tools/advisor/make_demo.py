@@ -87,7 +87,7 @@ LOTS = {"v": 1, "lots": [{"id": "lotdemo", "name": "Sample binder page", "create
 
 DEMO = """/* Edge demo shim: sample ledger + synthetic sold-price relay answered in the page. Nothing real is called. */
 (() => {
-  const V = "home-demo-1", SEED = %s, LEDGER = %s, BUYLIST = %s, LOTS = %s;
+  const V = "home-demo-2", SEED = %s, LEDGER = %s, BUYLIST = %s, LOTS = %s;
   const seed = (paired) => { try { localStorage.clear(); localStorage.setItem("dys-theme", "dark"); localStorage.setItem("dys-edge-v1", JSON.stringify(SEED)); localStorage.setItem("dys-edge-buylist", JSON.stringify(BUYLIST)); localStorage.setItem("dys-edge-lots", JSON.stringify(LOTS));
     localStorage.setItem("dys-edge-ledger", JSON.stringify(LEDGER)); if (paired) localStorage.setItem("dys-edge-relay", JSON.stringify({ relay: "https://relay.test", pass: "sample" }));
     localStorage.setItem("dys-demo", V); } catch (e) {} };
@@ -115,7 +115,7 @@ DEMO = """/* Edge demo shim: sample ledger + synthetic sold-price relay answered
   addEventListener("DOMContentLoaded", () => {
     const paired = (() => { try { return !!localStorage.getItem("dys-edge-relay"); } catch (e) { return true; } })();
     const b = document.createElement("div"); b.className = "demo-bar";
-    b.innerHTML = `<b>Preview · sample cards, made-up sales.</b> Today opens on the new Command center. Mine → Scorecard has sample sales. Daily deals shows the real Nov 19 finder run. Nothing real is called and no credits are spent.
+    b.innerHTML = `<b>Preview · sample cards, made-up sales.</b> Today opens on the Command center (Sell tile: tap Review in the holdings panel first). Mine → Scorecard has sample sales. Daily deals shows the real Nov 19 finder run. Nothing real is called and no credits are spent.
       <span><button type="button" data-d="pair">${paired ? "Unpair this phone" : "Pair again"}</button><button type="button" data-d="reset">Reset preview</button></span>`;
     b.onclick = (e) => { const d = e.target.dataset.d; if (!d) return; seed(d === "reset" ? true : !paired); location.hash = "#deals"; location.reload(); };
     document.body.prepend(b);

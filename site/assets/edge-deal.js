@@ -322,7 +322,7 @@
       <form class="dl-form" onsubmit="return false">
         <label class="f">Price $<input class="field dl-ask" type="number" inputmode="decimal" min="0" step="0.01" value="${(offer.ask / 100).toFixed(2)}"></label>
         <label class="f">Shipping to you $<input class="field dl-ship" type="number" inputmode="decimal" min="0" step="0.01" value="${((offer.shipIn || 0) / 100).toFixed(2)}"></label>
-        ${cfg.budget && cfg.budget.reserve ? `<label class="f dl-full">Cash on hand $ <small class="muted">(this visit only, not saved)</small><input class="field dl-cash" type="number" inputmode="decimal" min="0" step="1" value="${cfg.budget.cash != null ? (cfg.budget.cash / 100).toFixed(0) : ""}" placeholder="needed to confirm your ${money(cfg.budget.reserve)} reserve"></label>` : ""}
+        ${cfg.budget && cfg.budget.reserve ? `<label class="f dl-full">Cash on hand $ <small class="muted">(${esc(cfg.budget.cashNote || "this visit only, not saved")})</small><input class="field dl-cash" type="number" inputmode="decimal" min="0" step="1" value="${cfg.budget.cash != null ? (cfg.budget.cash / 100).toFixed(0) : ""}" placeholder="needed to confirm your ${money(cfg.budget.reserve)} reserve"></label>` : ""}
         ${item.t === "c" ? `<label class="f dl-full">Condition<select class="select dl-cond">${Object.keys(COND).map((c) => `<option${c === offer.cond ? " selected" : ""}>${c}</option>`).join("")}</select></label>` : ""}
       </form>
       ${head}
@@ -368,6 +368,7 @@
       const r = check(item, data, offer, cfg, ctx);
       const det = root.querySelector(".dl-more"); if (det) state.open = det.open;
       const focused = document.activeElement && root.contains(document.activeElement) ? document.activeElement.className : null;
+      const typed = focused && document.activeElement.tagName === "INPUT" ? document.activeElement.value : null;   // what he's typing right now
       root.classList.add("dl"); root.dataset.verdict = r.verdict; root.dataset.reason = r.reason || ""; root.innerHTML = html(r, item, data, offer, cfg, state);
       const a = root.querySelector(".dl-ask"), s = root.querySelector(".dl-ship"), c = root.querySelector(".dl-cond"), b = root.querySelector(".dl-load");
       const num = (el) => Math.max(0, Math.round((parseFloat(el.value) || 0) * 100));
@@ -384,7 +385,10 @@
         if (res && res.ok) { data = res.data; state.status = "ready"; } else state.status = "error";
         state.note = (res && res.note) || ""; draw();
       };
-      if (focused) { const f = root.querySelector("." + focused.split(" ").filter((c) => c.startsWith("dl-"))[0]); if (f && f.focus) f.focus({ preventScroll: true }); }
+      if (focused) { const f = root.querySelector("." + focused.split(" ").filter((c) => c.startsWith("dl-"))[0]); if (f && f.focus) { f.focus({ preventScroll: true });
+        // the box being typed in keeps exactly what he typed (not a reformatted value), with the cursor at the end, so digits
+        // typed while sold prices arrive go in order
+        try { if (f.tagName === "INPUT" && typed != null) { f.value = ""; f.value = typed; } } catch {} } }
       last = r; if (hooks && hooks.after) try { hooks.after(r, data); } catch (e) { console.error(e); }
       return r;
     };

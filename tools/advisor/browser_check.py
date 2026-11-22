@@ -163,6 +163,14 @@ def run(page, width, theme, mode):
     ok(calls["n"] > n0, f"{tag}: the review read sold prices through the relay")
     tiles = dict(page.eval_on_selector_all("#t-adv .adv-tile", "ts => ts.map(t => [t.dataset.jump, +t.querySelector('b').textContent])"))
     ok(tiles == EXP["counts"], f"{tag}: action counts {tiles} vs {EXP['counts']}")
+    # the command center's Sell tile (Today): this visit's calls, exact, labelled an estimate and not realized; no new reads
+    nS = calls["n"]
+    page.evaluate("() => { location.hash = 'search'; }"); page.wait_for_timeout(300); page.evaluate("() => { location.hash = 'today'; }")
+    page.wait_for_selector(".hm-tile[data-k=sell]", timeout=15000); page.wait_for_timeout(400)
+    stile = page.inner_text(".hm-tile[data-k=sell]")
+    ns = EXP["counts"].get("sell", 0)
+    ok("Sell · estimate" in stile and (f"{ns} worth selling" in stile and signed(EXP["sellProfit"]) in stile and "not realized" in stile if ns else "None right now" in stile), f"{tag}: Sell tile {stile!r} vs {ns} / {signed(EXP['sellProfit'] or 0)}")
+    ok(calls["n"] == nS, f"{tag}: the Sell tile read nothing")
     rows = page.eval_on_selector_all("#t-adv .adv-row", "rs => rs.map(r => ({ key: r.dataset.key, act: r.dataset.act, rt: r.querySelector('.adv-rt').innerText, txt: r.innerText, open: r.dataset.open }))")
     ok(len(rows) == len(HOLD) and len({r["key"] for r in rows}) == len(HOLD), f"{tag}: each holding listed once ({len(rows)})")
     for r in rows:
@@ -237,6 +245,9 @@ def run(page, width, theme, mode):
     kept = page.inner_text("#t-adv .adv-kept")
     ok("kept on this phone until" in kept and "exact sold prices aren't stored" in kept, f"{tag}: saved calls are labelled {kept!r}")
     ok(page.inner_text("#t-adv .adv-go").strip() == "Review all again", f"{tag}: nothing left to check after a reload")
+    stile = page.inner_text(".hm-tile[data-k=sell]")
+    ns = EXP["counts"].get("sell", 0)
+    ok(("worth selling" in stile and "saved" in stile and "est." in stile and "not realized" in stile) if ns else "None right now" in stile, f"{tag}: Sell tile from saved calls {stile!r}")
     rows2 = page.eval_on_selector_all("#t-adv .adv-row", "rs => rs.map(r => ({ key: r.dataset.key, act: r.dataset.act, rt: r.querySelector('.adv-rt').innerText, txt: r.innerText }))")
     for r in rows2:
         e = EXPK[r["key"]]

@@ -239,7 +239,8 @@ def main():
             if width == 390:
                 page.fill("#st-lim", "250"); page.click("#st-f button[type=submit]"); page.wait_for_timeout(200)
                 page.goto(f"http://127.0.0.1:{PORT}/edge/#deals"); page.wait_for_selector("#sc-q")
-                check_one(page, big, int(bexit * 0.5), "NM", f"{tag} limit 250 pre", extra={"buyLimit": 25000})   # cash on hand was cleared by the earlier reload
+                ok(page.evaluate("() => JSON.parse(localStorage.getItem('dys-edge-cash') || 'null')?.c") == 25000, f"{tag}: cash on hand kept on this phone across a reload (shared, 12 hours)")
+                check_one(page, big, int(bexit * 0.5), "NM", f"{tag} limit 250 pre", cash=25000, extra={"buyLimit": 25000})   # the $250 typed earlier is still set
                 page.fill("#sc-deal .dl-cash", "1000"); page.dispatch_event("#sc-deal .dl-cash", "change"); page.wait_for_timeout(200)
                 e2 = expect([(big, int(bexit * 0.5), "NM")], {"buyLimit": 25000, "cashNow": 100000})[str(big)]
                 ok(verdict(page)[0] == e2["verdict"] == "buy", f"{tag}: with a $250 limit the big card is a BUY candidate {verdict(page)} {e2['verdict']}")

@@ -63,12 +63,14 @@ def main():
             tag = f"{width} {theme}"
             ctx, page = LB.new_page(b, width, theme, errors=errors)
             page.unroute("https://relay.test/**"); page.route("https://relay.test/**", relay)
+            n_open = LB.calls["n"]
             # an empty phone first
             S.seed_ledger(page, {"buys": [], "items": [], "sales": [], "costs": [], "cash": []})
             page.goto(f"http://127.0.0.1:{PORT}/edge/#today"); page.reload(); page.wait_for_selector(".hm-tile")
             t0 = {e.get_attribute("data-k"): e.inner_text().replace("\n", " | ") for e in page.query_selector_all(".hm-tile")}
             ok("Plan a show" in t0["buylist"] and "Binder or stack" in t0["lots"] and "No cards" in t0["watch"] and "No sales yet" in t0["profit"], f"{tag}: empty tiles {t0}")
-            ok("Latest run" in t0["daily"] and LB.calls.get("finder", 0) == 0, f"{tag}: Daily deals tile calls nothing from Today ({t0['daily']})")
+            ok("Latest run" in t0["daily"] and LB.calls.get("finder", 0) == 0 and LB.calls["n"] == n_open, f"{tag}: opening Today calls nothing ({t0['daily']})")
+            ok("Nothing held" in t0["sell"] or "Review holdings" in t0["sell"], f"{tag}: Sell tile with nothing reviewed ({t0['sell']})")
             ok(page.evaluate("() => localStorage.getItem('dys-edge-lots')") is None, f"{tag}: looking at Today writes no lot record (the Buy list's own start-up write is older)")
             ok("$75.00 most per buy" in page.inner_text(".hm-rules") and "keep $100.00" in page.inner_text(".hm-rules"), f"{tag}: rules shown")
             # a filled phone
@@ -120,9 +122,65 @@ def main():
             page.goto(f"http://127.0.0.1:{PORT}/edge/#today"); page.wait_for_selector(".hm-tile")
             ok(page.evaluate("() => document.documentElement.scrollWidth") <= width, f"{tag}: no sideways scroll")
             page.screenshot(path=f"/tmp/home-{width}.png")
+            # Deals: the four buying tools first; the older lists under More lists, still working
+            page.goto(f"http://127.0.0.1:{PORT}/edge/#deals"); page.wait_for_selector("#d-seg")
+            labels = page.eval_on_selector_all("#d-seg button", "bs => bs.map(b => b.textContent)")
+            ok(labels == ["Show check", "Buy list", "Lot offer", "Daily deals", "More lists"], f"{tag}: Deals tabs {labels}")
+            ok(page.is_hidden("#d-seg2"), f"{tag}: older lists hidden until asked")
+            page.click("#d-seg >> text=More lists"); page.wait_for_selector("#d-seg2s button")
+            old_tabs = page.eval_on_selector_all("#d-seg2s button", "bs => bs.map(b => b.textContent)")
+            ok(old_tabs == ["Flips", "Momentum", "Dips", "Under market", "Movers", "Falling", "My store"], f"{tag}: older lists {old_tabs}")
+            ok("Not checked against sold prices" in page.inner_text("#d-seg2"), f"{tag}: older lists labelled")
+            for t in ("Flips", "Under market", "Movers", "Falling"):
+                page.click(f"#d-seg2s >> text={t}"); page.wait_for_function("() => !/Loading/.test(document.querySelector('#d-list').innerText)", timeout=10000)
+                ok(len(page.inner_text("#d-list").strip()) > 10 and not page.is_hidden("#d-game"), f"{tag}: {t} still works")
+            page.click("#d-seg >> text=Show check"); page.wait_for_selector("#sc-q")
+            ok(page.is_hidden("#d-seg2"), f"{tag}: back to a buying tool hides the older lists")
+            page.click("#d-seg >> text=More lists"); page.wait_for_selector("#d-seg2s button")
+            ok(page.eval_on_selector("#d-seg2s", "e => (e.querySelector('[aria-pressed=true], .on, .active')||{}).textContent || ''") == "Falling", f"{tag}: More lists reopens the last list")
+            # one shared cash on hand: set on the command center, seen and edited in Show check, Lot offer and the Buy list
+            led0 = page.evaluate("() => localStorage.getItem('dys-edge-ledger')")
+            page.goto(f"http://127.0.0.1:{PORT}/edge/#today"); page.wait_for_selector(".hm-cash-in")
+            ok(page.input_value(".hm-cash-in") == "" and page.evaluate("() => localStorage.getItem('dys-edge-cash')") is None, f"{tag}: cash not set, nothing saved")
+            ok("not your bank or Ledger cash" in page.inner_text(".hm-cash"), f"{tag}: cash labelled")
+            page.fill(".hm-cash-in", "300"); page.dispatch_event(".hm-cash-in", "change"); page.wait_for_timeout(150)
+            cj = page.evaluate("() => JSON.parse(localStorage.getItem('dys-edge-cash'))")
+            ok(cj["c"] == 30000 and abs(cj["at"] - time.time() * 1000) < 60000 and set(cj) == {"v", "c", "at"}, f"{tag}: cash saved on the phone {cj}")
+            ok("Set " in page.inner_text(".hm-cash-note"), f"{tag}: shows when it was set")
+            # Show check
+            page.fill("#hm-q", LB.IVY[2]); page.wait_for_selector(f".hm-hit[data-id='{LB.IVY[0]}']", timeout=8000); page.click(f".hm-hit[data-id='{LB.IVY[0]}']")
+            page.wait_for_function("() => /Sold prices read today/.test(document.querySelector('#sc-deal .dl-beta')?.textContent || '')", timeout=20000)
+            ok(page.input_value("#sc-deal .dl-cash") == "300" and "not your bank or Ledger cash" in page.inner_text("#sc-deal"), f"{tag}: Show check uses the shared cash")
+            # typing on while the check redraws keeps the digits in order (cursor stays at the end)
+            page.fill("#sc-deal .dl-ask", ""); page.click("#sc-deal .dl-ask"); page.keyboard.type("1"); page.dispatch_event("#sc-deal .dl-ask", "change"); page.wait_for_timeout(150)
+            page.keyboard.type("5"); page.wait_for_timeout(100)
+            ok(page.input_value("#sc-deal .dl-ask") in ("15", "15.00"), f"{tag}: typing across a redraw keeps order ({page.input_value('#sc-deal .dl-ask')})")
+            page.click("#sc-deal .dl-cash"); page.wait_for_timeout(150)   # tap the box first (leaving the price box redraws the check)
+            page.fill("#sc-deal .dl-cash", "250"); page.dispatch_event("#sc-deal .dl-cash", "change"); page.wait_for_timeout(200)
+            # Lot offer sees the edit
+            LB.open_lots(page); page.click(".lot-pick"); page.wait_for_selector(".lot-top")
+            ok(page.input_value(".lot-cash") == "250", f"{tag}: Lot offer sees the Show check edit ({page.input_value('.lot-cash')})")
+            page.fill(".lot-cash", "220"); page.wait_for_timeout(150)
+            # Buy list's at-the-table panel sees it
+            page.click("#d-seg >> text=Buy list"); page.wait_for_selector(".bl-row")
+            page.click(".bl-row .bl-head"); page.wait_for_selector(".bl-cash")
+            ok(page.input_value(".bl-cash") == "220", f"{tag}: Buy list sees the lot edit ({page.input_value('.bl-cash')})")
+            page.fill(".bl-cash", ""); page.wait_for_timeout(150)
+            ok(page.evaluate("() => localStorage.getItem('dys-edge-cash')") is None, f"{tag}: clearing it clears it everywhere")
+            page.goto(f"http://127.0.0.1:{PORT}/edge/#today"); page.wait_for_selector(".hm-cash-in")
+            ok(page.input_value(".hm-cash-in") == "", f"{tag}: command center shows it cleared")
+            # an old number (over 12 hours) never confirms the reserve
+            page.evaluate("() => localStorage.setItem('dys-edge-cash', JSON.stringify({ v: 1, c: 50000, at: Date.now() - 13 * 36e5 }))")
+            page.reload(); page.wait_for_selector(".hm-cash-in")
+            ok(page.input_value(".hm-cash-in") == "", f"{tag}: cash older than 12 hours isn't used")
+            LB.open_lots(page); page.click(".lot-pick"); page.wait_for_selector(".lot-top")
+            page.fill(".lot-total", "5"); page.wait_for_timeout(150)
+            res = page.eval_on_selector("#lot-out", "e => e.dataset.result")
+            ok(res in ("need-cash", "need-prices", "no-value", "over"), f"{tag}: lot with expired cash isn't a BUY ({res})")
+            ok(page.evaluate("() => localStorage.getItem('dys-edge-ledger')") == led0, f"{tag}: Ledger unchanged by the cash entry")
             # unpaired: the Daily deals tile says so and reads nothing
             page.evaluate("() => localStorage.removeItem('dys-edge-relay')"); f0 = LB.calls.get("finder", 0)
-            page.reload(); page.wait_for_selector(".hm-tile")
+            page.goto(f"http://127.0.0.1:{PORT}/edge/#today"); page.reload(); page.wait_for_selector(".hm-tile")
             ok("Not set up" in page.inner_text(".hm-tile[data-k=daily]") and LB.calls.get("finder", 0) == f0, f"{tag}: unpaired Daily deals tile")
             LB.calls["finder"] = 0
             ctx.close()
