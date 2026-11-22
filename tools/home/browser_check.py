@@ -98,6 +98,11 @@ def main():
             page.goto(f"http://127.0.0.1:{PORT}/edge/#today"); page.wait_for_selector(".hm-tile")
             dt = page.inner_text(".hm-tile[data-k=daily]").replace("\n", " | ")
             ok("2 leads" in dt and "7 worth a look" in dt and "not verified" in dt and "BUY" not in dt, f"{tag}: Daily deals tile after a visit ({dt})")
+            # the Sell tile scrolls to the holdings panel with its heading visible below the top bar
+            page.goto(f"http://127.0.0.1:{PORT}/edge/#today"); page.wait_for_selector(".hm-tile[data-k=sell]"); page.wait_for_timeout(400)
+            page.click(".hm-tile[data-k=sell]"); page.wait_for_timeout(1200)
+            vis = page.evaluate("() => { const h = document.querySelector('#t-adv h2'), r = h.getBoundingClientRect(), el = document.elementFromPoint(40, r.top + r.height / 2); return [Math.round(r.top), !!(el && el.closest('#t-adv'))]; }")
+            ok(vis[1] and 0 < vis[0] < 200, f"{tag}: Sell tile shows the holdings heading below the top bar {vis}")
             # check a buy: search → Show check with the card picked
             page.goto(f"http://127.0.0.1:{PORT}/edge/#today"); page.wait_for_selector("#hm-q")
             page.fill("#hm-q", LB.IRON[2]); page.wait_for_selector(f".hm-hit[data-id='{LB.IRON[0]}']", timeout=8000)

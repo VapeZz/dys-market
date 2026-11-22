@@ -621,3 +621,5 @@ a.row{text-decoration:none;color:inherit}
 .hm-cash{margin-top:8px;display:grid;gap:4px}.hm-cash .field{max-width:180px}.hm-cash small{font-size:11.5px;line-height:1.35}
 #d-seg2{margin-top:6px}.d-more-note{margin:0 0 6px}
 .hm-tiles>.hm-tile:last-child:nth-child(odd){grid-column:1/-1}
+/* the Sell tile scrolls to the holdings panel: land it below the sticky top bar */
+#t-adv{scroll-margin-top:calc(62px + env(safe-area-inset-top,0px))}
