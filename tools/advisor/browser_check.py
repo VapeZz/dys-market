@@ -121,7 +121,7 @@ def run(page, width, theme, mode):
     ok(page.inner_text("#t-adv .adv-go").strip() == f"Review my {len(HOLD)} holdings", f"{tag}: review button {page.inner_text('#t-adv .adv-go')!r}")
     ok(not page.query_selector("#t-adv .adv-row"), f"{tag}: no actions shown before a review (nothing guessed)")
     order = page.evaluate("() => [...document.querySelectorAll('#view > section')].map(s => s.id || s.className).slice(0, 3)")
-    ok(order[:2] == ["t-adv", "t-buy"], f"{tag}: action list and buying leads come first {order}")
+    ok(order[:3] == ["t-home", "t-adv", "t-buy"], f"{tag}: command center, then the action list and buying leads {order}")
     # what to consider buying: the watched card at its price, labelled as not checked against sold prices
     buy = page.inner_text("#t-buy")
     ok("What to consider buying" in buy and umb["n"].split(" - ")[0] in buy and "Not checked against sold prices yet" in buy, f"{tag}: buying lead labelled {buy[:200]!r}")

@@ -485,8 +485,69 @@
   window.addEventListener("hashchange", route);
 
   /* ---------- Today ---------- */
+  /* ---------- Command center (top of Today): one place to check a buy, plan, find leads, and see inventory and profit ----------
+     Each tile reads what Edge already has on this phone (Buy list, lots, watchlist, Ledger) or the free finder route; no sold
+     prices are read here and nothing costs credits. Tapping a tile opens the screen that does the work. */
+  async function drawHome(el) {
+    if (!el) return;
+    const n = ROUTE_N;
+    const [bl] = await Promise.all([BUYL, LEDGER]);
+    // counts read straight from the phone's storage: looking at Today never writes anything
+    const readJ = (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch { return null; } };
+    const now = Date.now(), blj = readJ("dys-edge-buylist"), lj = readJ("dys-edge-lots");
+    const items = blj && Array.isArray(blj.items) ? blj.items : [], lots = lj && Array.isArray(lj.lots) ? lj.lots : [];
+    const fresh = bl ? items.filter((x) => bl.ageState(x.est, now) === "fresh").length : 0;
+    // watch hits: today's lowest listing or market at or under the target (not sold-checked: the tile says so)
+    // (the same test as Today's "What to consider buying": the lower of the lowest listing and the market price)
+    const hitOf = await Promise.all(S.watch.map(async (w) => { const d = await detail(w.id, w.g, w.n).catch(() => null), it = d && d.it; if (!it) return 0; const v = Math.min(it.lo || Infinity, it.p || Infinity); return isFinite(v) && v <= w.target ? 1 : 0; }));
+    const hits = hitOf.reduce((a, b) => a + b, 0);
+    if (n !== ROUTE_N || !el.isConnected) return;
+    // Ledger: held and realized (the scorecard's own numbers; nothing estimated)
+    let held = null, prof = null;
+    const sc = SCM || await SCORE;
+    if (LG && LS && sc) { try { const C = sc.score(LG.compute(LS.T, { priceOf, today: localDay() }), { period: "d30", today: localDay() }); held = C.held; prof = C.total; } catch { held = null; } }
+    const conn = pkmnConn(), rules = `${money(S.set.buyLimit ?? 7500)} most per buy · keep ${money(S.set.cashReserve ?? 10000)} · ${money(S.set.minProfit)} and ${S.set.roi}% profit`;
+    const tile = (go, k, title, val, sub) => `<button type="button" class="hm-tile" data-go="${go}" data-k="${k}"><span class="hm-t">${title}</span><b class="hm-v">${val}</b><small class="muted">${sub}</small></button>`;
+    el.innerHTML = `<div class="sec-head"><h2>Command center</h2></div>
+      <div class="panel hm-check"><b>Check a buy</b><p class="small muted" style="margin:2px 0 6px">Find the card, then type the seller's price. Real eBay sold prices decide it.</p>
+        <div class="searchbox"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input id="hm-q" class="field" type="search" placeholder="Card name and number" autocomplete="off" aria-label="Find a card to check"></div>
+        <div id="hm-res"></div></div>
+      <div class="hm-tiles">
+        ${tile("deals:list", "buylist", "Buy list", items.length ? `${items.length} card${items.length === 1 ? "" : "s"}` : "Plan a show", items.length ? `${fresh} with fresh prices` : "add cards before you go")}
+        ${tile("deals:lot", "lots", "Lot offers", lots.length ? `${lots.length} lot${lots.length === 1 ? "" : "s"}` : "Binder or stack", lots.length ? "open to price or verify" : "price several cards at once")}
+        ${tile("deals:daily", "daily", "Daily deals", conn ? `<span class="hm-dd">…</span>` : "Not set up", conn ? `<span class="hm-dds">finder leads · not verified</span>` : "pair this phone in Settings")}
+        ${tile("mine:watch", "watch", "Watchlist", S.watch.length ? `${hits} at target` : "No cards", S.watch.length ? `of ${S.watch.length} watched · not sold-checked` : "watch a card's price")}
+        ${tile(LS ? "mine:ledger" : "mine:inv", "held", "Inventory", held ? `${held.units} item${held.units === 1 ? "" : "s"}` : `${S.inv.length} item${S.inv.length === 1 ? "" : "s"}`, held ? `${money(held.cost)} cost` : "on this phone")}
+        ${tile(LS ? "mine:score" : "mine:set", "profit", "Profit · 30 days", prof && prof.sales ? `<span class="${cls(prof.profit)}">${signed(prof.profit)}</span>` : "No sales yet", prof && prof.sales ? `${prof.sales} sale${prof.sales === 1 ? "" : "s"} · realized` : LS ? "record sales in the Ledger" : "connect the Ledger")}
+      </div>
+      <p class="small muted hm-rules">Your rules: ${rules}. <a href="#mine" class="hm-set">Change</a></p>`;
+    $$(".hm-tile", el).forEach((b) => { b.onclick = () => { const [tab, sub] = b.dataset.go.split(":"); if (tab === "deals") SUB.deals = sub; else SUB.mine = sub; location.hash = tab; }; });
+    $(".hm-set", el).onclick = (e) => { e.preventDefault(); SUB.mine = "set"; location.hash = "mine"; };
+    // the search: a picked card opens Show check with it
+    const q = $("#hm-q", el), res = $("#hm-res", el);
+    const results = () => {
+      const t = q.value.trim().toLowerCase();
+      if (!t || !ROWS) { res.innerHTML = ""; return; }
+      const hits2 = findCards(t, (r) => gameOk(gameOfSet(r[2])));
+      if (!hits2.length) { res.innerHTML = `<p class="small muted">Nothing found. Try the card number or fewer words.</p>`; return; }
+      pagedList(res, hits2, 6, (r) => `<button type="button" class="sc-hit hm-hit" data-id="${r[0]}" data-g="${r[2]}" data-n="${esc(r[1])}">${img(r[0])}<span class="sc-hn"><b>${esc(cleanN(r[1]))}</b><small class="muted">${esc(setName(r[2]))} · ${esc(printingOf(r[1]))}</small></span><span class="sc-hp"><b>Check</b><small class="muted">${money(r[4])}</small></span></button>`,
+        (nodes) => nodes.forEach((b) => { b.onclick = () => {
+          SC.pick = { id: +b.dataset.id, g: +b.dataset.g, n: b.dataset.n, q: cleanN(b.dataset.n).toLowerCase() }; SC.q = cleanN(b.dataset.n); SC.ask = ""; SC.cond = "NM"; SC.auto = true;
+          SUB.deals = "check"; location.hash = "deals";
+        }; }));
+    };
+    let tm; q.addEventListener("input", () => { clearTimeout(tm); tm = setTimeout(results, 140); });
+    // Daily deals: counts only once the finder's results were opened this visit (Today itself calls nothing); never a BUY
+    const v = $(".hm-dd", el), s = $(".hm-dds", el), d = DD.data;
+    if (v && s) {
+      if (!d) { v.textContent = "Latest run"; s.textContent = "tap to see the finder's leads"; }
+      else { const cand = (d.cards || []).filter((x) => x.label === "CANDIDATE").length, look = (d.cards || []).filter((x) => x.label === "UNCERTAIN").length;
+        v.textContent = `${cand} lead${cand === 1 ? "" : "s"}`; s.textContent = `${look} worth a look · run ${fmtDay(d.data_day)} · not verified`; }
+    }
+  }
   async function viewToday(v) {
-    v.innerHTML = `<section class="sec" id="t-adv"></section>
+    v.innerHTML = `<section class="sec" id="t-home"></section>
+      <section class="sec" id="t-adv"></section>
       <section class="sec" id="t-buy"></section>
       <section class="brief" id="t-brief"><span class="lab">Market brief</span><h1>Loading…</h1></section>
       <section class="sec" id="t-port"></section>
@@ -499,6 +560,7 @@
     const [intel, buyer] = await Promise.all([getJSON("intel.json").catch(() => null), getJSON("buyer.json").catch(() => null)]);
     await loadIndex();
     if (n !== ROUTE_N) return;      // he moved to another tab while this loaded (slow connection)
+    drawHome($("#t-home"));
     drawAdvisor($("#t-adv"));
     drawBuy($("#t-buy"));
     if (intel) {
@@ -963,7 +1025,7 @@
       if (!it) { box.innerHTML = `<div class="empty">No TCGplayer listing for this one: Edge can't match it to sold prices.</div>`; return; }
       box.innerHTML = `<div class="sc-head">${img(it.id)}<div><b>${esc(cleanN(it.n))}</b><small class="muted">${esc(set.n)}${it.p ? ` · TCGplayer market ${money(it.p)}` : ""}</small></div></div>
         <div class="sc-deal" id="sc-deal"></div>
-        <div class="btns sc-acts"><button type="button" class="btn sm sc-open">Open full card</button><button type="button" class="btn sm sc-watch">Watch at max to pay</button><button type="button" class="btn sm sc-blist">${BLS && BLS.has(keyOf(it.id, it.n)) ? "On your buy list" : "Add to buy list"}</button>${LS ? `<button type="button" class="btn sm sc-buy">Bought it</button>` : ""}</div>`;
+        <div class="btns sc-acts"><button type="button" class="btn sm sc-open">Open full card</button><button type="button" class="btn sm sc-watch">Watch at max to pay</button><button type="button" class="btn sm sc-blist">${BLS && BLS.has(keyOf(it.id, it.n)) ? "On your buy list" : "Add to buy list"}</button>${it.t !== "s" ? `<button type="button" class="btn sm sc-lot">Add to a lot</button>` : ""}${LS ? `<button type="button" class="btn sm sc-buy">Bought it</button>` : ""}</div>`;
       const item = { id: it.id, n: it.n, name: it.n, t: it.t, r: it.r, setN: set.n, tcg: it.p, tcgDay: dayNum(set.dates?.[set.dates.length - 1]) };
       const had = pkmn && conn ? pkmn._mem.get(pkmn.memKey(it)) : null, first = had ? await had : null;
       const offer = { ask: SC.ask === "" ? 0 : Math.round(parseFloat(SC.ask) * 100) || 0, cond: it.t === "s" ? "NM" : SC.cond, shipIn: 0, taxIn: 0 };
@@ -985,6 +1047,7 @@
       if (askBox()) askBox().focus({ preventScroll: true });
       if (load && lb && !(first && first.ok)) { lb.click(); const a = askBox(); if (a) a.focus({ preventScroll: true }); }      // picking a card reads its sold prices once (memory only for this visit)
       $(".sc-open", box).onclick = () => openCard(it.id, x.g, it.n);
+      const lotB = $(".sc-lot", box); if (lotB) lotB.onclick = () => scToLot({ id: it.id, g: x.g, n: it.n, t: it.t, r: it.r, setN: set.n, p: it.p, tcgDay: item.tcgDay }, offer.cond || "NM", item);
       $(".sc-blist", box).onclick = (e) => { if (blAdd({ id: it.id, g: x.g, n: it.n, t: it.t, r: it.r, setN: set.n })) e.target.textContent = "On your buy list"; };
       $(".sc-watch", box).onclick = () => {
         const F = lastR && lastR.routes.flip, tgt = F && F.max ? F.max : null;
@@ -2089,6 +2152,23 @@
     seg($("#m-seg"), [["inv", "Inventory"], ...(LS ? [["ledger", "Ledger"], ["score", "Scorecard"]] : []), ["watch", "Watchlist"], ["set", "Settings"]], SUB.mine, (k) => { SUB.mine = k; draw(); });
     ledgerSync().then((r) => { if (r && r.ok && SUB.mine === "ledger" && LMOUNT) LMOUNT.redraw(); if (r && r.ok && SUB.mine === "score" && TAB === "mine") draw(); });
     draw();
+  }
+  // Show check → a lot: the newest lot (or a new one) gets the card in this condition; the sold prices Show check already read
+  // this visit (in memory) are reused, so no credits are spent again
+  async function scToLot(c, cond, item) {
+    const { lt, bl } = await lotMods(); if (!lt || !bl) { toast("Lot offers didn't load"); return; }
+    await loadIndex().catch(() => null);
+    let L0 = LOTS.all()[0];
+    if (!L0) { const id = LOTS.create(`Lot ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}`); L0 = id && LOTS.get(id); }
+    if (!L0) { toast("Too many lots saved"); return; }
+    const k = keyOf(c.id, c.n), b = BLS && BLS.get(k);
+    const est = b && b.est && bl.ageState(b.est) !== "expired" ? b.est : undefined;
+    if (!LOTS.addLine(L0.id, { id: c.id, g: c.g, n: c.n, setN: c.setN, t: c.t || "c", r: c.r || "", cond, qty: 1, alts: lotPrintings(c.id, c.n), tcg: c.p, tcgDay: c.tcgDay, est })) { toast("This lot is full (40 cards)"); return; }
+    const pkmn = await PKMN, had = pkmn ? pkmn._mem.get(pkmn.memKey(item)) : null, res = had ? await had.catch(() => null) : null;
+    if (res && res.ok) LIVE.set(k, { data: res.data, tcg: c.p, tcgDay: c.tcgDay });
+    toast(`Added to ${L0.name || "your lot"}`);
+    LV.id = L0.id; LV.adding = false; LV.confirm = null; SUB.deals = "lot"; location.hash = "deals";
+    if (TAB === "deals") { const btn = [...document.querySelectorAll("#d-seg button")].find((x) => x.textContent === "Lot offer"); if (btn) btn.click(); }
   }
   /* ---------- Real-profit scorecard (edge-score.js): what the Ledger's recorded sales actually made ---------- */
   const SCV = { book: "All", period: "all", open: null };

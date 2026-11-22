@@ -22,8 +22,11 @@ for f in os.listdir(os.path.join(ROOT, "site/assets")):   # the current Edge cod
     if f.startswith("edge") and f.endswith((".js", ".css", ".json")):
         shutil.copy(os.path.join(ROOT, "site/assets", f), os.path.join(OUT, "assets", f))
 shutil.copy(os.path.join(SITE, "mock-relay.json"), os.path.join(OUT, "mock-relay.json"))
-if os.path.exists(os.path.join(SITE, "finder-phone.json")):
-    shutil.copy(os.path.join(SITE, "finder-phone.json"), os.path.join(OUT, "finder-phone.json"))
+# Daily deals in the preview: a real finder phone extract when given as the 4th argument (it is private: never commit it);
+# otherwise the site copy's file, which in a test copy is a synthetic fixture (the banner then must not claim a real run)
+FINDER = sys.argv[4] if len(sys.argv) > 4 else os.path.join(SITE, "finder-phone.json")
+if os.path.exists(FINDER):
+    shutil.copy(FINDER, os.path.join(OUT, "finder-phone.json"))
 
 names = {}
 for g in (23821, 23237, 604):
@@ -84,7 +87,7 @@ LOTS = {"v": 1, "lots": [{"id": "lotdemo", "name": "Sample binder page", "create
 
 DEMO = """/* Edge demo shim: sample ledger + synthetic sold-price relay answered in the page. Nothing real is called. */
 (() => {
-  const V = "score-demo-1", SEED = %s, LEDGER = %s, BUYLIST = %s, LOTS = %s;
+  const V = "home-demo-1", SEED = %s, LEDGER = %s, BUYLIST = %s, LOTS = %s;
   const seed = (paired) => { try { localStorage.clear(); localStorage.setItem("dys-theme", "dark"); localStorage.setItem("dys-edge-v1", JSON.stringify(SEED)); localStorage.setItem("dys-edge-buylist", JSON.stringify(BUYLIST)); localStorage.setItem("dys-edge-lots", JSON.stringify(LOTS));
     localStorage.setItem("dys-edge-ledger", JSON.stringify(LEDGER)); if (paired) localStorage.setItem("dys-edge-relay", JSON.stringify({ relay: "https://relay.test", pass: "sample" }));
     localStorage.setItem("dys-demo", V); } catch (e) {} };
@@ -112,7 +115,7 @@ DEMO = """/* Edge demo shim: sample ledger + synthetic sold-price relay answered
   addEventListener("DOMContentLoaded", () => {
     const paired = (() => { try { return !!localStorage.getItem("dys-edge-relay"); } catch (e) { return true; } })();
     const b = document.createElement("div"); b.className = "demo-bar";
-    b.innerHTML = `<b>Preview · sample cards, made-up sales.</b> Try Mine → Scorecard (sample sales) and Deals → Lot offer. Daily deals shows the real Nov 19 finder run. Nothing real is called and no credits are spent.
+    b.innerHTML = `<b>Preview · sample cards, made-up sales.</b> Today opens on the new Command center. Mine → Scorecard has sample sales. Daily deals shows the real Nov 19 finder run. Nothing real is called and no credits are spent.
       <span><button type="button" data-d="pair">${paired ? "Unpair this phone" : "Pair again"}</button><button type="button" data-d="reset">Reset preview</button></span>`;
     b.onclick = (e) => { const d = e.target.dataset.d; if (!d) return; seed(d === "reset" ? true : !paired); location.hash = "#deals"; location.reload(); };
     document.body.prepend(b);
@@ -123,7 +126,7 @@ open(os.path.join(OUT, "assets/demo.js"), "w").write(DEMO)
 
 html = open(os.path.join(SITE, "edge/index.html")).read()
 html = html.replace("../assets/", "assets/").replace('href="manifest.webmanifest"', 'href="data:,"')
-html = html.replace("<title>DYS Edge</title>", "<title>DYS Edge preview: Scorecard (sample data)</title>")
+html = html.replace("<title>DYS Edge</title>", "<title>DYS Edge preview: Command center (sample data)</title>")
 html = html.replace("</head>", """<style>.demo-bar{padding:8px 12px;font:13px/1.4 Inter,system-ui,sans-serif;background:#3b2a05;color:#ffd77a;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
 .demo-bar span{display:flex;gap:6px}.demo-bar button{font:inherit;font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid #ffd77a66;background:transparent;color:#ffd77a}</style>
 <script src="assets/demo.js"></script>
