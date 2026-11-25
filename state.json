@@ -4,16 +4,16 @@
   "dragon-ball-fusion-world|Starter Deck 13: The Saiyan Raised on Earth": "2027-01-22",
   "dragon-ball-fusion-world|Starter Deck 14: The Prince of Saiyan": "2027-01-22",
   "gundam|Blazing Fist": "2027-01-29",
-  "gundam|Cosmic Crisis": "2027-02-26",
   "lorcana|Into the Inkdark": "2027-02-05",
   "one-piece|Extra Booster: East Blue": "2027-01-29",
+  "one-piece|ST-37: Starter Deck 37 The Desert Princess and the Pirates": "2026-12-18",
+  "one-piece|ST-38: Starter Deck 38 Baroque Works": "2026-12-18",
   "palworld|BP03: Eternal Ascent": "2027-01-29",
   "pokemon-jp|Aura Seeker": "2026-11-27",
   "pokemon|ME07: Flowing Fists": "2027-02-06",
   "riftbound|Gift of the Rift Bundle": "2026-12-04",
   "riftbound|Legacy": "2027-01-29",
   "union-arena|UE25BT: My Hero Academia Special Booster": "2026-12-11",
-  "union-arena|UE27BT: Umamusume: Pretty Derby": "2027-02-12",
   "union-arena|UE27ST: Umamusume: Pretty Derby Starter Deck": "2027-02-05",
   "yugioh|Glorious Victors": "2026-12-04"
  },
@@ -86,7 +86,7 @@
    "available": true,
    "handle": "30th-celebration-knock-out-collection",
    "image": "https://cdn.shopify.com/s/files/1/0733/4635/1331/files/704152_in_1000x1000_199f8b6b-8ec7-484b-ad57-6c2db7cb75f0.jpg?v=1792032056",
-   "price": 19.42,
+   "price": 20.4,
    "title": "30th Celebration Knock Out Collection",
    "type": "Pok\u00e9mon Sealed"
   },
@@ -659,5 +659,5 @@
    "type": "Collectible"
   }
  },
- "updated": "2026-11-25T04:07:04Z"
+ "updated": "2026-11-25T14:20:22Z"
 }
