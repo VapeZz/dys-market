@@ -1,0 +1,87 @@
+{
+ "date": "2026-11-15",
+ "span": "Nov 8–Nov 15",
+ "caption": "📈📉 $100 in Aarune - 139/103 a week ago is worth $187 today\nPrices: TCGplayer market\n\nWinners Nov 8–Nov 15:\n1. Aarune - 139/103 (Delta Reign): $21.54, up 87%\n2. Raikou ex (Delta Reign): $122.52, up 54%\n3. Hitmonchan (Trading Card Game Classic): $12.24, up 41%\n\nLosers:\n1. Ditto - 106 (30th Celebration) (Mega Evolution Promo): $16.56, down 40%\n2. Espeon ex - 108 (30th Celebration) (Mega Evolution Promo): $40.69, down 37%\n\nBuy the dip or chase the pump? 👇\n\nPrices are TCGplayer market prices we track every night. Look up any card free at market.driveyourstyle.net (link in bio).\n\n#pokemontcg #pokemoncards #pokemon #pokemontcgcommunity #pokemoncollection #tcg #tradingcards #cardcollector #pokemoncollector #lasvegas #vegaspokemon #driveyourstyle",
+ "caption_tiktok": "$100 in this Pokémon card a week ago = $187 today 📈 …and one lost 40% 📉\nPrices: TCGplayer market\n\nWinner or loser, which would you buy? 👇 Free prices at market.driveyourstyle.net (link in bio)\n\n#pokemon #pokemoncards #pokemontcg #cardcollecting #tcg",
+ "cards": [
+  {
+   "id": 726575,
+   "name": "Aarune - 139/103",
+   "set": "Delta Reign",
+   "gid": 24831,
+   "game": "pokemon",
+   "now": 2154,
+   "old": 1152,
+   "pct": 87.0
+  },
+  {
+   "id": 726574,
+   "name": "Raikou ex",
+   "set": "Delta Reign",
+   "gid": 24831,
+   "game": "pokemon",
+   "now": 12252,
+   "old": 7977,
+   "pct": 53.6
+  },
+  {
+   "id": 527899,
+   "name": "Hitmonchan",
+   "set": "Trading Card Game Classic",
+   "gid": 23323,
+   "game": "pokemon",
+   "now": 1224,
+   "old": 869,
+   "pct": 40.9
+  },
+  {
+   "id": 713287,
+   "name": "Ditto - 106 (30th Celebration)",
+   "set": "Mega Evolution Promo",
+   "gid": 24451,
+   "game": "pokemon",
+   "now": 1656,
+   "old": 2755,
+   "pct": -39.9
+  },
+  {
+   "id": 713258,
+   "name": "Espeon ex - 108 (30th Celebration)",
+   "set": "Mega Evolution Promo",
+   "gid": 24451,
+   "game": "pokemon",
+   "now": 4069,
+   "old": 6469,
+   "pct": -37.1
+  }
+ ],
+ "winners": [
+  726575,
+  726574,
+  527899
+ ],
+ "losers": [
+  713287,
+  713258
+ ],
+ "slides": [
+  "https://market.driveyourstyle.net/social/2026-11-15/slide-1.jpg",
+  "https://market.driveyourstyle.net/social/2026-11-15/slide-2.jpg",
+  "https://market.driveyourstyle.net/social/2026-11-15/slide-3.jpg",
+  "https://market.driveyourstyle.net/social/2026-11-15/slide-4.jpg",
+  "https://market.driveyourstyle.net/social/2026-11-15/slide-5.jpg",
+  "https://market.driveyourstyle.net/social/2026-11-15/slide-6.jpg",
+  "https://market.driveyourstyle.net/social/2026-11-15/slide-7.jpg"
+ ],
+ "slides_tiktok": [
+  "https://market.driveyourstyle.net/social/2026-11-15/tt-1.jpg",
+  "https://market.driveyourstyle.net/social/2026-11-15/tt-2.jpg",
+  "https://market.driveyourstyle.net/social/2026-11-15/tt-3.jpg",
+  "https://market.driveyourstyle.net/social/2026-11-15/tt-4.jpg",
+  "https://market.driveyourstyle.net/social/2026-11-15/tt-5.jpg",
+  "https://market.driveyourstyle.net/social/2026-11-15/tt-6.jpg",
+  "https://market.driveyourstyle.net/social/2026-11-15/tt-7.jpg"
+ ],
+ "short": "https://market.driveyourstyle.net/social/2026-11-15/short.mp4",
+ "short_title": "$100 in this Pokémon card a week ago is now $187 📈 Winners & losers #pokemon"
+}

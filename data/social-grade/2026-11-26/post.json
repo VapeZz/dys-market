@@ -1,0 +1,82 @@
+{
+ "date": "2026-11-26",
+ "game": "pokemon",
+ "post": true,
+ "first": "This $9 Pokémon card sells for ??? in a PSA 10 👀 Guess before you swipe",
+ "caption": "This $9 Pokémon card sells for ??? in a PSA 10 👀 Guess before you swipe\n\nGuess the PSA 10 price of all 4 cheap Pokémon cards, then swipe for the answers. How close were you? 👇\n\nAnswers (no peeking 🙈):\n#1 Kingdra TG03/TG30 (Astral Radiance Trainer Gallery): $9.37 raw → $339 PSA 10 (36×)\n#2 Keldeo GG07/GG70 (Crown Zenith: Galarian Gallery): $14.78 raw → $330 PSA 10 (22×)\n#3 Lampent 102/086 (White Flare): $12.55 raw → $270 PSA 10 (22×)\n#4 Quaxly 206/193 (Paldea Evolved): $14.41 raw → $223 PSA 10 (15×)\n\nPSA 10 = median eBay sold price over the last 60 days. Raw = TCGplayer market price. Not every card grades a 10, so check centering first (free centering tool at market.driveyourstyle.net).\n\n🛒 eBay links for all 4 (affiliate links): market.driveyourstyle.net/social-grade (link in bio)\n\n#pokemon #pokemoncards #pokemontcg #psa #psagrading #cardgrading #tcg",
+ "caption_tiktok": "Guess the PSA 10 👀 This $9 Pokémon card sells for how much graded? Comment your guess before the reveal 👇 eBay links for all 4 in bio #pokemon #pokemoncards #pokemontcg #psa #psagrading #cardgrading #tcg",
+ "short_title": "Guess the PSA 10 price 👀 This $9 Pokémon card sells for how much? #pokemon",
+ "slides": [
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/slide-1.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/slide-2.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/slide-3.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/slide-4.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/slide-5.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/slide-6.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/slide-7.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/slide-8.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/slide-9.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/slide-10.jpg"
+ ],
+ "slides_tiktok": [
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/tt-1.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/tt-2.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/tt-3.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/tt-4.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/tt-5.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/tt-6.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/tt-7.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/tt-8.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/tt-9.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/tt-10.jpg"
+ ],
+ "slides_reveal": [
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/slide-1.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/slide-3.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/slide-5.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/slide-7.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/slide-9.jpg",
+  "https://market.driveyourstyle.net/social-grade/2026-11-26/slide-10.jpg"
+ ],
+ "story": "https://market.driveyourstyle.net/social-grade/2026-11-26/tt-1.jpg",
+ "short": "https://market.driveyourstyle.net/social-grade/2026-11-26/short.mp4",
+ "cards": [
+  {
+   "id": 272474,
+   "name": "Kingdra",
+   "no": "TG03/TG30",
+   "raw": 9.37,
+   "p10": 339.0,
+   "sold": "8",
+   "days": 60
+  },
+  {
+   "id": 478024,
+   "name": "Keldeo",
+   "no": "GG07/GG70",
+   "raw": 14.78,
+   "p10": 329.99,
+   "sold": "6",
+   "days": 30
+  },
+  {
+   "id": 642550,
+   "name": "Lampent",
+   "no": "102/086",
+   "raw": 12.55,
+   "p10": 270.0,
+   "sold": "4",
+   "days": 30
+  },
+  {
+   "id": 497609,
+   "name": "Quaxly",
+   "no": "206/193",
+   "raw": 14.41,
+   "p10": 222.96,
+   "sold": "4",
+   "days": 60
+  }
+ ],
+ "page": "https://market.driveyourstyle.net/social-grade/2026-11-26/"
+}

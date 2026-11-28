@@ -1,0 +1,88 @@
+{
+ "date": "2026-11-22",
+ "game": "riftbound",
+ "theme": "jumps",
+ "cards": [
+  {
+   "id": 653015,
+   "name": "Imperial Decree",
+   "set": "Origins",
+   "gid": 24344,
+   "game": "riftbound",
+   "now": 673,
+   "old": 314,
+   "pct": 114.3,
+   "rarity": "Uncommon"
+  },
+  {
+   "id": 684608,
+   "name": "Pyke, Returned (Alternate Art)",
+   "set": "Unleashed",
+   "gid": 24560,
+   "game": "riftbound",
+   "now": 1756,
+   "old": 986,
+   "pct": 78.1,
+   "rarity": "Showcase"
+  },
+  {
+   "id": 685589,
+   "name": "Sprite Fountain",
+   "set": "Unleashed",
+   "gid": 24560,
+   "game": "riftbound",
+   "now": 915,
+   "old": 605,
+   "pct": 51.2,
+   "rarity": "Uncommon"
+  },
+  {
+   "id": 652810,
+   "name": "Immortal Phoenix",
+   "set": "Origins",
+   "gid": 24344,
+   "game": "riftbound",
+   "now": 1197,
+   "old": 795,
+   "pct": 50.6,
+   "rarity": "Epic"
+  },
+  {
+   "id": 685001,
+   "name": "Edge of Night (Top 8)",
+   "set": "Riftbound Organized Play Promotional Cards",
+   "gid": 24528,
+   "game": "riftbound",
+   "now": 577,
+   "old": 408,
+   "pct": 41.4,
+   "rarity": "Promo"
+  }
+ ],
+ "card": {
+  "id": 653015,
+  "name": "Imperial Decree",
+  "set": "Origins",
+  "gid": 24344,
+  "game": "riftbound",
+  "now": 673,
+  "old": 314,
+  "pct": 114.3,
+  "rarity": "Uncommon"
+ },
+ "caption": "This Riftbound card jumped 114% this week 📈 Can you guess it before #1?\nPrices: TCGplayer market\n\n1. Imperial Decree (Origins): $6.73, up 114%\n2. Pyke, Returned (Alternate Art) (Unleashed): $17.56, up 78%\n3. Sprite Fountain (Unleashed): $9.15, up 51%\n4. Immortal Phoenix (Origins): $11.97, up 51%\n5. Edge of Night (Top 8) (Riftbound Organized Play Promotional Cards): $5.77, up 41%\n\nWhich one would you buy? 👇 Check your Riftbound cards free at market.driveyourstyle.net (link in bio)\n\n#riftbound #leagueoflegends #riftboundtcg #lol #tcg",
+ "slides": [
+  "https://market.driveyourstyle.net/social-daily-other/2026-11-22/slide-1.jpg",
+  "https://market.driveyourstyle.net/social-daily-other/2026-11-22/slide-2.jpg",
+  "https://market.driveyourstyle.net/social-daily-other/2026-11-22/slide-3.jpg",
+  "https://market.driveyourstyle.net/social-daily-other/2026-11-22/slide-4.jpg",
+  "https://market.driveyourstyle.net/social-daily-other/2026-11-22/slide-5.jpg",
+  "https://market.driveyourstyle.net/social-daily-other/2026-11-22/slide-6.jpg",
+  "https://market.driveyourstyle.net/social-daily-other/2026-11-22/slide-7.jpg"
+ ],
+ "short": "https://market.driveyourstyle.net/social-daily-other/2026-11-22/short.mp4",
+ "short_title": "This Riftbound card jumped 114% this week 📈 Can you guess it before #1? #riftbound",
+ "title": "Riftbound card up 114% 👀 Guess it",
+ "voice": "af_heart",
+ "seconds": 19.3
+}

@@ -1,0 +1,88 @@
+{
+ "date": "2026-11-20",
+ "game": "pokemon",
+ "theme": "jumps",
+ "cards": [
+  {
+   "id": 550209,
+   "name": "Unfair Stamp",
+   "set": "Twilight Masquerade",
+   "gid": 23473,
+   "game": "pokemon",
+   "now": 1893,
+   "old": 1527,
+   "pct": 24.0,
+   "rarity": "ACE SPEC Rare"
+  },
+  {
+   "id": 567472,
+   "name": "Hydrapple ex - 167/142",
+   "set": "Stellar Crown",
+   "gid": 23537,
+   "game": "pokemon",
+   "now": 4339,
+   "old": 3963,
+   "pct": 9.5,
+   "rarity": "Special Illustration Rare"
+  },
+  {
+   "id": 676090,
+   "name": "Mega Eelektross ex - 278/217",
+   "set": "Ascended Heroes",
+   "gid": 24541,
+   "game": "pokemon",
+   "now": 1666,
+   "old": 1569,
+   "pct": 6.2,
+   "rarity": "Special Illustration Rare"
+  },
+  {
+   "id": 712954,
+   "name": "Pikachu ex - 150/128",
+   "set": "30th Celebration",
+   "gid": 24722,
+   "game": "pokemon",
+   "now": 3833,
+   "old": 3616,
+   "pct": 6.0,
+   "rarity": "Special Illustration Rare"
+  },
+  {
+   "id": 535215,
+   "name": "Maushold - 210/091",
+   "set": "Paldean Fates",
+   "gid": 23353,
+   "game": "pokemon",
+   "now": 3130,
+   "old": 2964,
+   "pct": 5.6,
+   "rarity": "Shiny Rare"
+  }
+ ],
+ "card": {
+  "id": 550209,
+  "name": "Unfair Stamp",
+  "set": "Twilight Masquerade",
+  "gid": 23473,
+  "game": "pokemon",
+  "now": 1893,
+  "old": 1527,
+  "pct": 24.0,
+  "rarity": "ACE SPEC Rare"
+ },
+ "caption": "This Pokémon card jumped 24% this week 📈 Can you guess it before #1?\nPrices: TCGplayer market\n\n1. Unfair Stamp (Twilight Masquerade): $18.93, up 24%\n2. Hydrapple ex (Stellar Crown): $43.39, up 10%\n3. Mega Eelektross ex (Ascended Heroes): $16.66, up 6%\n4. Pikachu ex (30th Celebration): $38.33, up 6%\n5. Maushold (Paldean Fates): $31.30, up 6%\n\nWhich one would you buy? 👇 Check your Pokémon cards free at market.driveyourstyle.net (link in bio)\n\n#pokemon #pokemoncards #pokemontcg #cardcollecting #tcg",
+ "slides": [
+  "https://market.driveyourstyle.net/social-daily/2026-11-20/slide-1.jpg",
+  "https://market.driveyourstyle.net/social-daily/2026-11-20/slide-2.jpg",
+  "https://market.driveyourstyle.net/social-daily/2026-11-20/slide-3.jpg",
+  "https://market.driveyourstyle.net/social-daily/2026-11-20/slide-4.jpg",
+  "https://market.driveyourstyle.net/social-daily/2026-11-20/slide-5.jpg",
+  "https://market.driveyourstyle.net/social-daily/2026-11-20/slide-6.jpg",
+  "https://market.driveyourstyle.net/social-daily/2026-11-20/slide-7.jpg"
+ ],
+ "short": "https://market.driveyourstyle.net/social-daily/2026-11-20/short.mp4",
+ "short_title": "This Pokémon card jumped 24% this week 📈 Can you guess it before #1? #pokemon",
+ "title": "Pokémon card up 24% 👀 Guess it",
+ "voice": "af_heart",
+ "seconds": 23.5
+}
