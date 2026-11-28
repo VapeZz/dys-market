@@ -1,0 +1,67 @@
+{
+ "at": "2026-11-27T17:39Z",
+ "from": "2026-11-28",
+ "to": "2026-11-28",
+ "pairs": [
+  {
+   "c": "JA7720-001",
+   "n": "Jason Williams x SLAM x Nike Zoom Hyperflight \"Platinum\"",
+   "d": "2026-11-28",
+   "r": 170,
+   "b": "Nike",
+   "h": 1,
+   "n_ask": 0
+  },
+  {
+   "c": "IX8456-479",
+   "n": "Jordan 6 Rings Winterized \"Cobalt Blue\"",
+   "d": "2026-11-28",
+   "r": 200,
+   "b": "Jordan",
+   "h": 1,
+   "n_ask": 3,
+   "low": 175.0,
+   "p25": 175.0,
+   "med": 199.45
+  },
+  {
+   "c": "HF7545-003",
+   "n": "Kyle Wilson x Nike SB Air Max 95",
+   "d": "2026-11-28",
+   "r": 190,
+   "b": "Nike",
+   "h": 2,
+   "n_ask": 0
+  },
+  {
+   "c": "IQ6605-001",
+   "n": "Nike Air Max Plus \"Cool Grey Diffused Blue\"",
+   "d": "2026-11-28",
+   "r": 190,
+   "b": "Nike",
+   "h": 1,
+   "n_ask": 0
+  },
+  {
+   "c": "IH7423-700",
+   "n": "Nike Caitlin 1 \"Warning Code\"",
+   "d": "2026-11-28",
+   "r": 140,
+   "b": "Nike",
+   "h": 1,
+   "n_ask": 63,
+   "low": 120.61,
+   "p25": 160.0,
+   "med": 180.0
+  },
+  {
+   "c": "JA7806-001",
+   "n": "Victory Lap x Nike Air Force 1 Mid",
+   "d": "2026-11-28",
+   "r": 140,
+   "b": "Nike",
+   "h": 1,
+   "n_ask": 0
+  }
+ ]
+}
